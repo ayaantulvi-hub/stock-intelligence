@@ -55,9 +55,45 @@ def test_quoted_effects_have_a_link():
 
 
 def test_factors_that_need_missing_data_are_marked_and_not_used():
-    assert "value" not in factors.LIVE_IDS
-    assert "insider" not in factors.LIVE_IDS
+    assert "news_sentiment" not in factors.LIVE_IDS
     assert "implied_move" not in factors.LIVE_IDS
+    assert "value" in factors.LIVE_IDS
+
+
+def test_filing_is_not_used_before_it_was_public():
+    frame = stock(3, 500).assign(raw_close=lambda f: f["close"])
+    filed = pd.Timestamp(frame["market_date"].iloc[300]) + pd.Timedelta(days=1)
+    company = {
+        "filings": pd.DataFrame(
+            {
+                "available": [filed],
+                "equity": [1000.0],
+                "profitability": [0.4],
+                "investment": [0.1],
+                "accruals": [0.0],
+                "income_change": [0.1],
+            }
+        ),
+        "shares": pd.DataFrame({"available": [filed], "shares": [10.0]}),
+        "trades": pd.DataFrame(),
+    }
+    table = pd.DataFrame(index=frame.index)
+    forecast.add_company_data(table, frame, company)
+    assert table["profitability"].iloc[:301].isna().all()
+    assert table["profitability"].iloc[302] == 0.4
+    assert table["value"].iloc[302] == pytest.approx(1000 / (frame["close"].iloc[302] * 10))
+
+
+def test_insider_net_value_counts_buys_as_positive():
+    trades = pd.DataFrame(
+        {
+            "filed": [date(2026, 1, 2), date(2026, 1, 3)],
+            "code": ["P", "S"],
+            "shares": [10.0, 4.0],
+            "price": [2.0, 5.0],
+        }
+    )
+    assert list(forecast.insider_values(trades)["net_value"]) == [20.0, -20.0]
 
 
 def test_factors_do_not_look_ahead():
@@ -196,6 +232,12 @@ def test_stale_prices_block_forecasts(engine, panel):
     seed_security(engine)
     with pytest.raises(RuntimeError, match="blocked as stale"):
         forecast.write_forecasts(engine, panel, datetime(2026, 8, 4, 12, tzinfo=UTC))
+
+
+def test_no_forecast_once_the_market_has_opened(engine, panel):
+    seed_security(engine)
+    with pytest.raises(RuntimeError, match="already open"):
+        forecast.write_forecasts(engine, panel, datetime(2026, 7, 8, 15, tzinfo=UTC))
 
 
 def test_ideas_name_no_stocks_without_an_edge(engine, panel):

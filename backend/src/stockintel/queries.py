@@ -5,13 +5,15 @@ from datetime import UTC, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import backtest, charts, explain, signals
+from stockintel import backtest, charts, explain, longterm, signals
 from stockintel.market import is_stale, latest_expected_session
 
 FEEDS = {
     "universe": "SEC EDGAR",
     "prices": "Tiingo",
     "filings": "SEC EDGAR",
+    "facts": "SEC EDGAR",
+    "insiders": "SEC EDGAR",
     "economic": "FRED",
 }
 PROVENANCE = "d.name AS source, f.source_url, f.retrieved_at, f.data_status"
@@ -316,3 +318,47 @@ def latest_evaluations(engine: Engine) -> dict[str, dict]:
     query = "SELECT DISTINCT ON (model) * FROM model_evaluations ORDER BY model, id DESC"
     with engine.connect() as conn:
         return {row.model: dict(row._mapping) for row in conn.execute(text(query))}
+
+
+def load_facts(engine: Engine, security_id: int) -> pd.DataFrame:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """SELECT tag, unit, period_start, period_end, value, accession_number,
+                     fiscal_period, form, filed, document_url
+                   FROM company_facts WHERE security_id = :id"""
+            ),
+            {"id": security_id},
+        ).all()
+    return pd.DataFrame([row._mapping for row in rows])
+
+
+def valuation(engine: Engine, ticker: str, changes: dict) -> dict | None:
+    with engine.connect() as conn:
+        security = conn.execute(
+            text("SELECT id, ticker FROM securities WHERE ticker = :t"), {"t": ticker.upper()}
+        ).first()
+        if security is None:
+            return None
+        price = conn.execute(
+            text(
+                """SELECT close, market_date FROM price_bars WHERE security_id = :id
+                   ORDER BY market_date DESC, id DESC LIMIT 1"""
+            ),
+            {"id": security.id},
+        ).first()
+        trades = _rows(
+            conn.execute(
+                text(
+                    """SELECT owner, title, transaction_date, filed, code, shares, price,
+                         planned_sale, document_url FROM insider_transactions
+                       WHERE security_id = :id AND code IN ('P', 'S')
+                       ORDER BY transaction_date DESC, id DESC LIMIT 20"""
+                ),
+                {"id": security.id},
+            )
+        )
+    report = longterm.report(
+        load_facts(engine, security.id), price.close if price else None, changes
+    )
+    return {**report, "ticker": security.ticker, "insider_trades": trades}

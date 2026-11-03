@@ -29,6 +29,7 @@ from stockintel.worker import record_heartbeat
 log = logging.getLogger("stockintel.ingest")
 
 EXCHANGES = {"NYSE", "Nasdaq"}
+INSIDER_LOOKBACK = timedelta(days=730)
 ECONOMIC_SERIES = ("DGS2", "DGS10", "FEDFUNDS", "CPIAUCSL", "UNRATE", "GDPC1")
 # FRED rejects full version history for these daily series.
 CURRENT_VALUES_ONLY = {"DGS2", "DGS10"}
@@ -279,6 +280,125 @@ def run_filings(engine: Engine, provider: FilingsProvider, now: datetime) -> str
     return run.finish()
 
 
+def run_facts(engine: Engine, provider) -> str:
+    run = Run(engine, "facts")
+    with engine.connect() as conn:
+        securities = conn.execute(
+            text("SELECT id, ticker, cik FROM securities ORDER BY universe_rank")
+        ).all()
+    for security in securities:
+        run.attempted += 1
+        try:
+            facts, provenance = provider.company_facts(security.cik)
+        except RateLimited as exc:
+            run.errors.append(str(exc))
+            break
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        with engine.begin() as conn:
+            known = set(
+                conn.execute(
+                    text(
+                        """SELECT tag, period_start, period_end, accession_number
+                           FROM company_facts WHERE security_id = :id"""
+                    ),
+                    {"id": security.id},
+                ).all()
+            )
+            new, seen = [], set()
+            for fact in facts:
+                key = (fact.tag, fact.period_start, fact.period_end, fact.accession_number)
+                if key not in known and key not in seen:
+                    seen.add(key)
+                    new.append(fact)
+            if new:
+                fetch_id = add_fetch(conn, provenance)
+                conn.execute(
+                    text(
+                        """INSERT INTO company_facts (security_id, fetch_id, tag, unit,
+                             period_start, period_end, value, accession_number, fiscal_period,
+                             form, filed, document_url)
+                           VALUES (:security_id, :fetch_id, :tag, :unit, :period_start,
+                             :period_end, :value, :accession_number, :fiscal_period, :form,
+                             :filed, :document_url)"""
+                    ),
+                    [
+                        {**fact.__dict__, "security_id": security.id, "fetch_id": fetch_id}
+                        for fact in new
+                    ],
+                )
+        run.added += len(new)
+        run.ok += 1
+    return run.finish()
+
+
+def run_insiders(engine: Engine, provider, now: datetime, limit: int) -> str:
+    """Read Form 4 documents, newest companies' backlog first, up to `limit` a run."""
+    run = Run(engine, "insiders")
+    since = now.date() - INSIDER_LOOKBACK
+    with engine.connect() as conn:
+        securities = conn.execute(
+            text("SELECT id, ticker, cik FROM securities ORDER BY universe_rank")
+        ).all()
+        read = set(conn.execute(text("SELECT accession_number FROM insider_documents")).scalars())
+    for security in securities:
+        if run.attempted >= limit:
+            break
+        try:
+            documents = provider.insider_documents(security.cik, since)
+        except RateLimited as exc:
+            run.errors.append(str(exc))
+            break
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        for document in documents:
+            if document.accession_number in read or run.attempted >= limit:
+                continue
+            run.attempted += 1
+            try:
+                trades, provenance = provider.insider_trades(document.url)
+            except RateLimited as exc:
+                run.errors.append(str(exc))
+                return run.finish()
+            except FeedError as exc:
+                run.errors.append(str(exc))
+                continue
+            with engine.begin() as conn:
+                if trades:
+                    fetch_id = add_fetch(conn, provenance)
+                    conn.execute(
+                        text(
+                            """INSERT INTO insider_transactions (security_id, fetch_id,
+                                 accession_number, line, owner, title, transaction_date, filed,
+                                 code, shares, price, planned_sale, document_url)
+                               VALUES (:security_id, :fetch_id, :accession, :line, :owner, :title,
+                                 :transaction_date, :filed, :code, :shares, :price, :planned_sale,
+                                 :url)"""
+                        ),
+                        [
+                            {
+                                **trade.__dict__,
+                                "security_id": security.id,
+                                "fetch_id": fetch_id,
+                                "accession": document.accession_number,
+                                "filed": document.filed,
+                                "url": document.url,
+                            }
+                            for trade in trades
+                        ],
+                    )
+                conn.execute(
+                    text("INSERT INTO insider_documents (accession_number) VALUES (:a)"),
+                    {"a": document.accession_number},
+                )
+            read.add(document.accession_number)
+            run.added += len(trades)
+            run.ok += 1
+    return run.finish()
+
+
 def run_economic(engine: Engine, provider: EconomicProvider) -> str:
     run = Run(engine, "economic")
     for series_id in ECONOMIC_SERIES:
@@ -334,8 +454,10 @@ def run_economic(engine: Engine, provider: EconomicProvider) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("feed", choices=["universe", "prices", "filings", "economic"])
-    parser.add_argument("--limit", type=int, default=45, help="stocks per price run")
+    parser.add_argument(
+        "feed", choices=["universe", "prices", "filings", "economic", "facts", "insiders"]
+    )
+    parser.add_argument("--limit", type=int, default=45, help="stocks or documents per run")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -355,6 +477,10 @@ def main() -> None:
                 args.limit,
                 now,
             )
+        elif args.feed == "facts":
+            status = run_facts(engine, SecProvider(settings.sec_contact_email))
+        elif args.feed == "insiders":
+            status = run_insiders(engine, SecProvider(settings.sec_contact_email), now, args.limit)
         elif args.feed == "filings":
             status = run_filings(engine, SecProvider(settings.sec_contact_email), now)
         else:

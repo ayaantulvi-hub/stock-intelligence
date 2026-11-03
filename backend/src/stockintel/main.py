@@ -113,6 +113,32 @@ def story(ticker: str) -> list[dict]:
     return result
 
 
+@app.get("/api/stocks/{ticker}/valuation")
+def valuation(
+    ticker: str,
+    bear_growth: float | None = None,
+    base_growth: float | None = None,
+    bull_growth: float | None = None,
+    discount_rate: float | None = None,
+    terminal_growth: float | None = None,
+) -> dict:
+    changes = {
+        key: value
+        for key, value in {
+            "bear_growth": bear_growth,
+            "base_growth": base_growth,
+            "bull_growth": bull_growth,
+            "discount_rate": discount_rate,
+            "terminal_growth": terminal_growth,
+        }.items()
+        if value is not None
+    }
+    result = queries.valuation(get_engine(), ticker, changes)
+    if result is None:
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return result
+
+
 @app.get("/api/ideas")
 def ideas() -> dict:
     return queries.ideas(get_engine())

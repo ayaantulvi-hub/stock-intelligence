@@ -51,6 +51,39 @@ class Observation:
 
 
 @dataclass(frozen=True)
+class Fact:
+    tag: str
+    unit: str
+    period_start: date | None
+    period_end: date
+    value: float
+    accession_number: str
+    fiscal_period: str | None
+    form: str
+    filed: date
+    document_url: str
+
+
+@dataclass(frozen=True)
+class InsiderDocument:
+    accession_number: str
+    filed: date
+    url: str
+
+
+@dataclass(frozen=True)
+class InsiderTrade:
+    line: int
+    owner: str
+    title: str | None
+    transaction_date: date
+    code: str
+    shares: float
+    price: float | None
+    planned_sale: bool
+
+
+@dataclass(frozen=True)
 class Listing:
     ticker: str
     cik: int

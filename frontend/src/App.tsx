@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
+import LongTermPanel from "./LongTermPanel";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 type Status = {
@@ -140,7 +141,7 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
-const TABS = ["Simple view", "Chart", "All factors", "Filings and prices"];
+const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
 function StockView({ stock }: { stock: Stock }) {
   const [tab, setTab] = useState(TABS[0]);
@@ -169,6 +170,7 @@ function StockView({ stock }: { stock: Stock }) {
           <ChartReading ticker={stock.ticker} />
         </>
       )}
+      {tab === "Long-term" && <LongTermPanel ticker={stock.ticker} />}
       {tab === "All factors" && <FactorsPanel ticker={stock.ticker} />}
       {tab === "Filings and prices" && <RecordsView stock={stock} />}
     </section>

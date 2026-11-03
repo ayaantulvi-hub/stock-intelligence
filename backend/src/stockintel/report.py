@@ -17,6 +17,8 @@ def main() -> None:
             "price_bars",
             "filings",
             "economic_observations",
+            "company_facts",
+            "insider_transactions",
             "validation_issues",
         ):
             count = conn.execute(text(f"SELECT count(*) FROM {table}")).scalar()

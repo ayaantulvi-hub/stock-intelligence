@@ -46,7 +46,8 @@ def engine(migrated, database_url):
                 """TRUNCATE worker_heartbeats, feed_runs, validation_issues, securities,
                    fetches, price_bars, filings, economic_observations, backtest_runs,
                    backtest_results, model_evaluations, forecasts,
-                   forecast_scores RESTART IDENTITY CASCADE"""
+                   forecast_scores, company_facts, insider_transactions,
+                   insider_documents RESTART IDENTITY CASCADE"""
             )
         )
     yield engine

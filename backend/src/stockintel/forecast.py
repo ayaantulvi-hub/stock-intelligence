@@ -17,11 +17,17 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sqlalchemy import Engine, text
 
+from stockintel import longterm
 from stockintel.backtest import MIN_Z
 from stockintel.charts import adjust
 from stockintel.db import get_engine
 from stockintel.factors import LIVE_IDS, MARKET_WIDE, NAMES, stock_factors
-from stockintel.market import latest_expected_session, session_close, sessions_between
+from stockintel.market import (
+    latest_expected_session,
+    session_close,
+    session_open,
+    sessions_between,
+)
 
 FLAT_BAND = 0.001
 RANK_HORIZON = 20
@@ -44,7 +50,70 @@ def model(seed: int = 0) -> HistGradientBoostingClassifier:
     )
 
 
-def build_panel(frames: dict[str, pd.DataFrame], slope: pd.Series | None) -> pd.DataFrame:
+def usable(frame: pd.DataFrame) -> list[str]:
+    """Factors with at least one value. A wholly missing factor cannot be learned from."""
+    return [item for item in LIVE_IDS if frame[item].notna().any()]
+
+
+def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict | None) -> None:
+    """Add filing-based factors, using only what had been filed by each date."""
+    for item in (
+        "value",
+        "size",
+        "profitability",
+        "investment",
+        "accruals",
+        "issuance",
+        "earnings_drift",
+        "insider",
+    ):
+        factors[item] = np.nan
+    if not company or "raw_close" not in frame:
+        return
+    dates = pd.DataFrame({"date": pd.to_datetime(frame["market_date"]).astype("datetime64[ns]")})
+
+    def by_date(table: pd.DataFrame) -> pd.DataFrame:
+        return table.assign(available=table["available"].astype("datetime64[ns]"))
+
+    filings, shares = company.get("filings"), company.get("shares")
+    held = None
+    if shares is not None and not shares.empty:
+        merged = pd.merge_asof(dates, by_date(shares), left_on="date", right_on="available")
+        held = merged["shares"].to_numpy()
+        earlier = pd.merge_asof(
+            dates.assign(date=dates["date"] - pd.Timedelta(days=365)),
+            by_date(shares),
+            left_on="date",
+            right_on="available",
+        )["shares"].to_numpy()
+        worth = frame["raw_close"].to_numpy() * held
+        factors["size"] = np.log(np.where(worth > 0, worth, np.nan))
+        factors["issuance"] = held / earlier - 1
+    if filings is not None and not filings.empty:
+        merged = pd.merge_asof(dates, by_date(filings), left_on="date", right_on="available")
+        factors["profitability"] = merged["profitability"].to_numpy()
+        factors["investment"] = merged["investment"].to_numpy()
+        factors["accruals"] = merged["accruals"].to_numpy()
+        recent = (dates["date"] - merged["available"]).dt.days <= 60
+        factors["earnings_drift"] = merged["income_change"].where(recent).to_numpy()
+        if held is not None:
+            worth = frame["raw_close"].to_numpy() * held
+            factors["value"] = merged["equity"].to_numpy() / np.where(worth > 0, worth, np.nan)
+    trades = company.get("trades")
+    if trades is not None and not trades.empty:
+        dollars = (frame["raw_close"] * frame["volume"]).rolling(90, min_periods=20).sum()
+        daily = trades.groupby("available")["net_value"].sum()
+        window = (
+            daily.reindex(dates["date"].unique(), fill_value=0.0).rolling(90, min_periods=1).sum()
+        )
+        factors["insider"] = dates["date"].map(window).to_numpy() / dollars.to_numpy()
+
+
+def build_panel(
+    frames: dict[str, pd.DataFrame],
+    slope: pd.Series | None,
+    company: dict[str, dict] | None = None,
+) -> pd.DataFrame:
     """Combine stocks into one table, with factors ranked 0 to 1 across each day."""
     closes = pd.DataFrame(
         {
@@ -57,6 +126,7 @@ def build_panel(frames: dict[str, pd.DataFrame], slope: pd.Series | None) -> pd.
     for ticker, frame in frames.items():
         dates = pd.to_datetime(frame["market_date"])
         factors = stock_factors(frame, market.reindex(dates))
+        add_company_data(factors, frame, (company or {}).get(ticker))
         factors["ticker"] = ticker
         factors["date"] = dates.to_numpy()
         following = frame["close"].shift(-1) / frame["close"] - 1
@@ -137,8 +207,9 @@ def walk_forward(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list
         test = data[data["date"].dt.year == year]
         if len(train) < 5000 or test.empty:
             continue
-        fitted = model().fit(train[LIVE_IDS], train["target_day"])
-        probabilities = fitted.predict_proba(test[LIVE_IDS])
+        columns = usable(train)
+        fitted = model().fit(train[columns], train["target_day"])
+        probabilities = fitted.predict_proba(test[columns])
         base = (
             train["target_day"]
             .value_counts(normalize=True)
@@ -161,8 +232,9 @@ def walk_forward(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list
         rank_test = test[test["date"].isin(pd.to_datetime(spaced))].dropna(subset=["excess_20d"])
         if len(rank_train) < 5000 or rank_test.empty:
             continue
-        ranker = model().fit(rank_train[LIVE_IDS], rank_train["excess_20d"] > 0)
-        chance = ranker.predict_proba(rank_test[LIVE_IDS])[:, 1]
+        columns = usable(rank_train)
+        ranker = model().fit(rank_train[columns], rank_train["excess_20d"] > 0)
+        chance = ranker.predict_proba(rank_test[columns])[:, 1]
         labels = rank_test["excess_20d"].to_numpy() > 0
         rank_dates.append(rank_test["date"].to_numpy())
         rank_model.append(-np.log(np.clip(np.where(labels, chance, 1 - chance), 1e-9, 1)))
@@ -215,8 +287,54 @@ def load_frames(engine: Engine) -> dict[str, pd.DataFrame]:
                 {"id": security.id},
             ).all()
             if len(rows) >= 300:
-                frames[security.ticker] = adjust(pd.DataFrame([row._mapping for row in rows]))
+                raw = pd.DataFrame([row._mapping for row in rows])
+                frames[security.ticker] = adjust(raw).assign(raw_close=raw["close"])
     return frames
+
+
+def load_company(engine: Engine) -> dict[str, dict]:
+    """Filing data per stock, each row dated from when it became public."""
+    output: dict[str, dict] = {}
+    with engine.connect() as conn:
+        securities = conn.execute(text("SELECT id, ticker FROM securities")).all()
+        for security in securities:
+            rows = conn.execute(
+                text(
+                    """SELECT tag, unit, period_start, period_end, value, accession_number,
+                         fiscal_period, form, filed, document_url
+                       FROM company_facts WHERE security_id = :id"""
+                ),
+                {"id": security.id},
+            ).all()
+            trades = conn.execute(
+                text(
+                    """SELECT filed, code, shares, price FROM insider_transactions
+                       WHERE security_id = :id AND price IS NOT NULL
+                         AND (code = 'P' OR (code = 'S' AND NOT planned_sale))"""
+                ),
+                {"id": security.id},
+            ).all()
+            if not rows and not trades:
+                continue
+            facts = pd.DataFrame([row._mapping for row in rows])
+            output[security.ticker] = {
+                "filings": longterm.point_in_time(facts),
+                "shares": longterm.shares_history(facts),
+                "trades": insider_values(pd.DataFrame([row._mapping for row in trades])),
+            }
+    return output
+
+
+def insider_values(trades: pd.DataFrame) -> pd.DataFrame:
+    if trades.empty:
+        return trades
+    sign = np.where(trades["code"] == "P", 1.0, -1.0)
+    return pd.DataFrame(
+        {
+            "available": pd.to_datetime(trades["filed"]) + pd.Timedelta(days=1),
+            "net_value": sign * trades["shares"].to_numpy() * trades["price"].to_numpy(),
+        }
+    )
 
 
 def load_slope(engine: Engine) -> pd.Series | None:
@@ -236,7 +354,7 @@ def evaluate(engine: Engine) -> list[Evaluation]:
     frames = load_frames(engine)
     if not frames:
         raise RuntimeError("no stock has enough price history to evaluate")
-    results = walk_forward(build_panel(frames, load_slope(engine)))
+    results = walk_forward(build_panel(frames, load_slope(engine), load_company(engine)))
     with engine.begin() as conn:
         for item in results:
             conn.execute(
@@ -289,18 +407,22 @@ def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
     evaluations = latest_evaluations(engine)
     expected = latest_expected_session(now)
     target = next_session(expected)
+    if now >= session_open(target):
+        raise RuntimeError(f"market already open on {target}: forecast not written")
     latest = panel[panel["date"] == pd.Timestamp(expected)].dropna(subset=["recent_low"])
     if latest.empty:
         raise RuntimeError(f"no prices for {expected}: forecasts blocked as stale")
     train = panel.dropna(subset=["next_change"])
-    fitted = model().fit(train[LIVE_IDS], train["target_day"])
+    columns = usable(train)
+    fitted = model().fit(train[columns], train["target_day"])
     base = train["target_day"].value_counts(normalize=True).to_dict()
     probabilities = pd.DataFrame(
-        fitted.predict_proba(latest[LIVE_IDS]), columns=fitted.classes_, index=latest.index
+        fitted.predict_proba(latest[columns]), columns=fitted.classes_, index=latest.index
     )
     rank_train = panel.dropna(subset=["excess_20d"])
-    ranker = model().fit(rank_train[LIVE_IDS], rank_train["excess_20d"] > 0)
-    ranks = pd.Series(ranker.predict_proba(latest[LIVE_IDS])[:, 1], index=latest.index).rank(
+    rank_columns = usable(rank_train)
+    ranker = model().fit(rank_train[rank_columns], rank_train["excess_20d"] > 0)
+    ranks = pd.Series(ranker.predict_proba(latest[rank_columns])[:, 1], index=latest.index).rank(
         pct=True
     )
     day_edge = bool(evaluations.get("next_day", {}).get("edge", False))
@@ -389,7 +511,8 @@ def score_forecasts(engine: Engine) -> int:
 def daily(engine: Engine, now: datetime) -> None:
     print("scored", score_forecasts(engine))
     frames = load_frames(engine)
-    print("written", write_forecasts(engine, build_panel(frames, load_slope(engine)), now))
+    panel = build_panel(frames, load_slope(engine), load_company(engine))
+    print("written", write_forecasts(engine, panel, now))
 
 
 if __name__ == "__main__":

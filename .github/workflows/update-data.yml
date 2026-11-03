@@ -6,14 +6,18 @@ on:
         description: Update prices
         type: boolean
         default: true
+      forecasts:
+        description: Write forecasts (only works before the US market opens)
+        type: boolean
+        default: false
       filings_and_economic:
         description: Also update filings and economic data
         type: boolean
         default: false
   schedule:
-    # Prices: hourly. 45 stocks a run stays under Tiingo's 50 an hour, and a run with
-    # nothing due finishes straight away.
-    - cron: "20 * * * *"
+    # Prices: 12 runs after each US close. 45 stocks a run stays under Tiingo's 50 an hour.
+    - cron: "20 22-23 * * 1-5"
+    - cron: "20 0-9 * * 2-6"
     # Filings and economic data: once a day.
     - cron: "50 10 * * 2-6"
 permissions:
@@ -24,7 +28,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       TIINGO_API_TOKEN: ${{ secrets.TIINGO_API_TOKEN }}
@@ -46,12 +50,18 @@ jobs:
         # Runs even if prices failed: one feed's failure must not stop the others.
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest filings
+      - name: Company facts
+        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.ingest facts
+      - name: Insider trades
+        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.ingest insiders --limit 2500
       - name: Economic data
         # Runs even if prices failed: one feed's failure must not stop the others.
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest economic
       - name: Forecasts
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.forecasts) }}
         run: uv run --no-dev python -m stockintel.forecast daily
       - name: Report
         if: always()

@@ -73,6 +73,17 @@ needs at least 30 tested cases that beat the baseline.
 - Yahoo Finance is excluded: no licensed plan was found, and it is the lowest-ranked source.
 - News, options and insider data are in the register but not connected.
 
+## Long-term analysis
+
+- Figures come from SEC company facts and link to their filing. Foreign filers using IFRS
+  are not covered, so their figures show Not verified.
+- A figure counts from the day after it was filed, and its first-reported version is used.
+- DCF: 10 years, growth fading to the terminal rate. Default base growth is the 3-year
+  revenue growth, limited to 0 to 15%. Bear and Bull sit 5 points either side. The 9%
+  required return and 2.5% terminal growth are assumptions, and users can change them all.
+- The insider factor is a simpler measure than Cohen, Malloy & Pomorski: net open-market
+  buying, ignoring planned sales. Their published figure does not apply to it directly.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

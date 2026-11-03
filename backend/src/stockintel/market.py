@@ -22,6 +22,10 @@ def session_close(day: date) -> datetime:
     return calendar().session_close(pd.Timestamp(day)).to_pydatetime().astimezone(UTC)
 
 
+def session_open(day: date) -> datetime:
+    return calendar().session_open(pd.Timestamp(day)).to_pydatetime().astimezone(UTC)
+
+
 def is_session(day: date) -> bool:
     return bool(calendar().is_session(pd.Timestamp(day)))
 

@@ -169,7 +169,7 @@ def probe_sec_shapes() -> None:
 
 
 def main() -> None:
-    probe_sec_shapes()
+    check_adjustment()
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,
