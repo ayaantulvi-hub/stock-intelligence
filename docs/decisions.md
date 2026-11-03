@@ -39,6 +39,18 @@ As suggested in the brief, with one change: plain PostgreSQL 16 instead of Times
 - Cost of reversing: low, since it is a PostgreSQL extension.
 - If it is added: Community Edition is free to self-host. Apache 2 Edition lacks continuous aggregates.
 
+## Indicator accuracy
+
+| Check | Independent reference | Tolerance | Result |
+|---|---|---|---|
+| SMA, EMA, RSI, MACD | TA-Lib, on a fixed test series | 0.000001 | Pass, in `tests/test_charts.py` |
+| Adjusted close | Tiingo `adjClose`, on real AAPL, NVDA, JPM, WMT and XOM | 0.25% | Worst 0.16% (XOM), about 4,234 bars each |
+
+Run the second check with **Actions → Live access check**. It uses 5 Tiingo requests.
+
+Signals show as Unproven until Milestone 4 gives them a tested record. Bullish or Bearish
+needs at least 30 tested cases that beat the baseline.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

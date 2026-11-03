@@ -3,8 +3,8 @@
 A web app for verified market data, chart signals, forecasts and long-term cases.
 It never places trades and never claims certainty.
 
-**Status: Milestone 2 of 8.** The app collects and shows verified data with its source
-and timestamps. Signals and forecasts do not exist yet.
+**Status: Milestone 3 of 8.** The app collects verified data and shows charts and
+rule-based signals. Signals stay Unproven until backtesting exists. No forecasts yet.
 See [docs/decisions.md](docs/decisions.md).
 
 ## How it runs online
