@@ -1,6 +1,6 @@
 """Ingestion against a real test database. All provider data here is a labelled TEST FIXTURE."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 import pytest
@@ -88,10 +88,20 @@ class FixturePrices:
 class FixtureFred:
     def __init__(self, error=None):
         self.error = error
+        self.fetches = 0
+        self.revision = 0.0
 
-    def observations(self, series_id, start):
+    def observations(self, series_id, start, all_versions=True):
         if self.error:
             raise self.error
+        if not all_versions:
+            day = (NOW.date() - date(2026, 1, 1)).days + self.fetches
+            self.fetches += 1
+            published = date(2026, 1, 1) + timedelta(days=day)
+            value = 4.0 + self.revision
+            return [Observation(date(2026, 1, 1), published, value)], provenance(
+                "FRED", "https://fixture.test/fred"
+            )
         return [
             Observation(date(2026, 1, 1), date(2026, 2, 1), 1.0),
             Observation(date(2026, 1, 1), date(2026, 3, 1), 1.1),
@@ -285,16 +295,27 @@ def test_economic_keeps_every_version_and_missing_stays_missing(engine):
         scalar(
             engine,
             "SELECT count(DISTINCT value) FROM economic_observations "
-            "WHERE series_id = 'DGS10' AND observation_date = '2026-01-01'",
+            "WHERE series_id = 'UNRATE' AND observation_date = '2026-01-01'",
         )
         == 2
     )
-    latest = next(row for row in queries.economic(engine) if row["series_id"] == "DGS10")
+    latest = next(row for row in queries.economic(engine) if row["series_id"] == "CPIAUCSL")
     assert latest["value"] is None
     assert latest["source"] == "FRED"
     count = scalar(engine, "SELECT count(*) FROM economic_observations")
     run_economic(engine, FixtureFred())
     assert scalar(engine, "SELECT count(*) FROM economic_observations") == count
+
+
+def test_daily_series_stores_a_new_row_only_when_a_value_changes(engine):
+    provider = FixtureFred()
+    run_economic(engine, provider)
+    run_economic(engine, provider)
+    daily = "SELECT count(*) FROM economic_observations WHERE series_id = 'DGS10'"
+    assert scalar(engine, daily) == 1
+    provider.revision = 0.1
+    run_economic(engine, provider)
+    assert scalar(engine, daily) == 2
 
 
 def test_failed_economic_feed_reports_error(engine):

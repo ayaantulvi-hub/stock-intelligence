@@ -1,6 +1,8 @@
 """FRED economic data. Docs: https://fred.stlouisfed.org/docs/api/fred/series_observations.html
 
-Requests every past version of each value, so history shows what was known at the time.
+Requests every past version of each value where FRED allows it, so history shows what was
+known at the time. Daily series have too many versions for one request (HTTP 400), so
+those use current values, and later changes are kept by comparing with what is stored.
 """
 
 from datetime import UTC, date, datetime
@@ -21,14 +23,16 @@ class FredProvider:
         self.api_key = api_key
         self.client = client or httpx.Client(timeout=60)
 
-    def observations(self, series_id: str, start: date) -> tuple[list[Observation], Provenance]:
+    def observations(
+        self, series_id: str, start: date, all_versions: bool = True
+    ) -> tuple[list[Observation], Provenance]:
         query = {
             "series_id": series_id,
             "observation_start": start.isoformat(),
-            "realtime_start": "1776-07-04",
-            "realtime_end": "9999-12-31",
             "file_type": "json",
         }
+        if all_versions:
+            query |= {"realtime_start": "1776-07-04", "realtime_end": "9999-12-31"}
         url = f"{BASE}?{urlencode({**query, 'api_key': self.api_key})}"
         data = get_json(self.client, url, f"FRED {series_id}")
         retrieved = datetime.now(UTC)

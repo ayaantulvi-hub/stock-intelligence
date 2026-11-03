@@ -3,8 +3,24 @@
 A web app for verified market data, chart signals, forecasts and long-term cases.
 It never places trades and never claims certainty.
 
-**Status: Milestone 1 of 8.** The app starts and reports its own health. No market
-data, signals or forecasts exist yet. See [docs/decisions.md](docs/decisions.md).
+**Status: Milestone 2 of 8.** The app collects and shows verified data with its source
+and timestamps. Signals and forecasts do not exist yet.
+See [docs/decisions.md](docs/decisions.md).
+
+## How it runs online
+
+| Part | Where | Notes |
+|---|---|---|
+| Scheduled data updates | GitHub Actions, `update-data.yml` | Prices after each US close, filings and economic data daily |
+| Database | Neon | `DATABASE_URL` |
+| Dashboard | Render, `render.yaml` and `Dockerfile` | Sign in with any username and `DASHBOARD_PASSWORD` |
+
+GitHub secrets: `DATABASE_URL`, `TIINGO_API_TOKEN`, `FRED_API_KEY`, `SEC_CONTACT_EMAIL`.
+
+To run an update by hand, open **Actions → Update data → Run workflow**. A failed feed
+shows on the dashboard, and the run log ends with a report of what is stored.
+
+## Run it on your own computer (optional)
 
 ## What you need
 
@@ -14,7 +30,7 @@ data, signals or forecasts exist yet. See [docs/decisions.md](docs/decisions.md)
 
 ## Run it
 
-Run each of the last three steps in its own terminal. Commands start in the repository root.
+Run the API and the dashboard each in their own terminal. Commands start in the repository root.
 
 1. Set up configuration. Open `.env` and change `change-me` in both places.
 
@@ -43,11 +59,14 @@ Run each of the last three steps in its own terminal. Commands start in the repo
    uv run uvicorn stockintel.main:app --port 8000
    ```
 
-5. Start the worker.
+5. Load data. Add your keys to `.env` first.
 
    ```
    cd backend
-   uv run python -m stockintel.worker
+   uv run python -m stockintel.ingest universe
+   uv run python -m stockintel.ingest prices --limit 45
+   uv run python -m stockintel.ingest filings
+   uv run python -m stockintel.ingest economic
    ```
 
 6. Start the dashboard, then open http://localhost:5173.
@@ -58,8 +77,7 @@ Run each of the last three steps in its own terminal. Commands start in the repo
    npm run dev
    ```
 
-The dashboard should show OK for Database, Database schema and Worker.
-If you stop the worker, it shows Stale after three minutes.
+The dashboard should show OK for Database, Database schema and Scheduled updates.
 
 ## Run the tests
 
@@ -84,7 +102,8 @@ npm test
 
 | Path | Purpose |
 |---|---|
-| `backend/src/stockintel/` | API, worker, configuration and database code |
+| `backend/src/stockintel/` | API, ingestion, validation and database code |
+| `backend/src/stockintel/providers/` | Replaceable connectors for each data source |
 | `backend/migrations/` | Database schema changes |
 | `backend/tests/` | Backend tests. Fixtures stay here, out of production code |
 | `frontend/src/` | React dashboard |

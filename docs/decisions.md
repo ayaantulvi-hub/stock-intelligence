@@ -42,14 +42,14 @@ As suggested in the brief, with one change: plain PostgreSQL 16 instead of Times
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.
-- Tiingo's delisted coverage is unconfirmed. Backtests need it to avoid survivorship
-  bias. Massive states it keeps delisted tickers. Test this in Milestone 2.
+- Tiingo's delisted coverage is partial. TWTR (left the market in 2022) has prices, but
+  LEHMQ (2008) has none. The stock list also comes from today's SEC file, so it contains
+  no companies that have since failed. Milestone 4 must handle this survivorship bias.
+- The SEC ticker file looks ordered by company size, but the SEC does not promise that.
+- Daily FRED series (DGS2, DGS10) reject full version history, so only later changes are kept.
+- Conflict detection needs a second price source, so it cannot run yet.
+- Adjusted prices are not stored. Milestone 3 derives them from dividends and splits.
 - Options data for the implied move is undecided. Decide at Milestone 5.
-- The build workspace cannot reach Tiingo, SEC or FRED, and has no Docker. Live
-  checks must run on the owner's computer.
-
-## Needed for Milestone 2
-
-- A Tiingo API token, in `.env`
-- A FRED API key, in `.env`
-- A contact email for the SEC User-Agent
+- The build workspace cannot reach Tiingo, SEC or FRED directly. Live checks run on
+  GitHub Actions and are read from their logs.
+- Render's free dashboard sleeps after 15 minutes idle and takes about a minute to wake.

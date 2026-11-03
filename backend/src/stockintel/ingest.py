@@ -30,6 +30,8 @@ log = logging.getLogger("stockintel.ingest")
 
 EXCHANGES = {"NYSE", "Nasdaq"}
 ECONOMIC_SERIES = ("DGS2", "DGS10", "FEDFUNDS", "CPIAUCSL", "UNRATE", "GDPC1")
+# FRED rejects full version history for these daily series.
+CURRENT_VALUES_ONLY = {"DGS2", "DGS10"}
 ECONOMIC_START = date(2005, 1, 1)
 # Re-read recent days, because Tiingo publishes corrections through the evening.
 CORRECTION_WINDOW = timedelta(days=5)
@@ -282,11 +284,34 @@ def run_economic(engine: Engine, provider: EconomicProvider) -> str:
     for series_id in ECONOMIC_SERIES:
         run.attempted += 1
         try:
-            observations, provenance = provider.observations(series_id, ECONOMIC_START)
+            all_versions = series_id not in CURRENT_VALUES_ONLY
+            observations, provenance = provider.observations(
+                series_id, ECONOMIC_START, all_versions
+            )
         except FeedError as exc:
             run.errors.append(str(exc))
             continue
         with engine.begin() as conn:
+            if not all_versions:
+                current = dict(
+                    conn.execute(
+                        text(
+                            """SELECT DISTINCT ON (observation_date) observation_date, value
+                               FROM economic_observations WHERE series_id = :id
+                               ORDER BY observation_date, realtime_start DESC"""
+                        ),
+                        {"id": series_id},
+                    ).all()
+                )
+                observations = [
+                    item
+                    for item in observations
+                    if item.observation_date not in current
+                    or current[item.observation_date] != item.value
+                ]
+            if not observations:
+                run.ok += 1
+                continue
             fetch_id = add_fetch(conn, provenance)
             result = conn.execute(
                 text(
