@@ -3,9 +3,9 @@
 from sqlalchemy import text
 
 from stockintel import queries
+from stockintel.config import get_settings
 from stockintel.db import get_engine
 from stockintel.status import get_status
-from stockintel.config import get_settings
 
 
 def main() -> None:
