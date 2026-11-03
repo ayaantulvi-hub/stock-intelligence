@@ -1,0 +1,1 @@
+"""Stock Intelligence Platform backend."""
