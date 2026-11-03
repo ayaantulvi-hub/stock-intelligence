@@ -51,7 +51,11 @@ def verdict_lines(forecast: dict | None, evaluations: dict[str, dict]) -> list[d
 
 
 def story(
-    summary: dict | None, chart_signals: list[dict], blocked: bool, forecast: dict | None
+    summary: dict | None,
+    chart_signals: list[dict],
+    blocked: bool,
+    forecast: dict | None,
+    evaluations: dict[str, dict] | None = None,
 ) -> list[dict]:
     if summary is None:
         return []
