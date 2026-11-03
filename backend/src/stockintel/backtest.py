@@ -22,7 +22,9 @@ HORIZONS = (5, 20)
 PRIMARY_HORIZON = 20
 COST_BPS = 10.0
 MIN_SAMPLE = 30
-MIN_Z = 2.0
+# 8 rules over 2 holding periods is 16 tests, so some would pass by luck at the usual 2.0.
+# 3.0 allows for that, and for trades that overlap in time.
+MIN_Z = 3.0
 SURVIVORSHIP_NOTE = (
     "Survivorship bias: the stock list is today's largest companies, so companies that "
     "failed are missing and results look better than they really were."

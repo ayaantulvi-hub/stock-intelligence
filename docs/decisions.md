@@ -51,6 +51,16 @@ Run the second check with **Actions → Live access check**. It uses 5 Tiingo re
 Signals show as Unproven until Milestone 4 gives them a tested record. Bullish or Bearish
 needs at least 30 tested cases that beat the baseline.
 
+## Backtesting
+
+- Trades enter at the next open and pay 0.10% round-trip costs. That cost is an assumption.
+- Each year counts only if earlier years alone had already shown an edge.
+- An edge needs 30 tested cases, a higher average return than the baseline, and a win rate
+  at least 3 standard errors above it. The higher bar allows for testing 16 combinations.
+- The baseline holds the same stocks through the same years.
+- Weekly, monthly, Breakout and Breakdown signals are not tested yet, so they stay Unproven.
+- Results are overstated by survivorship bias, and the dashboard says so.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

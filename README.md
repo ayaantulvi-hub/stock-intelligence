@@ -3,8 +3,8 @@
 A web app for verified market data, chart signals, forecasts and long-term cases.
 It never places trades and never claims certainty.
 
-**Status: Milestone 3 of 8.** The app collects verified data and shows charts and
-rule-based signals. Signals stay Unproven until backtesting exists. No forecasts yet.
+**Status: Milestone 4 of 8.** The app collects verified data, shows charts and signals,
+and backtests the signals against a baseline. No forecasts yet.
 See [docs/decisions.md](docs/decisions.md).
 
 ## How it runs online
@@ -16,6 +16,8 @@ See [docs/decisions.md](docs/decisions.md).
 | Dashboard | Render, `render.yaml` and `Dockerfile` | Sign in with any username and `DASHBOARD_PASSWORD` |
 
 GitHub secrets: `DATABASE_URL`, `TIINGO_API_TOKEN`, `FRED_API_KEY`, `SEC_CONTACT_EMAIL`.
+
+Backtests run weekly, or by hand with **Actions → Backtest → Run workflow**.
 
 To run an update by hand, open **Actions → Update data → Run workflow**. A failed feed
 shows on the dashboard, and the run log ends with a report of what is stored.
