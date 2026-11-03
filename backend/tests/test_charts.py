@@ -11,7 +11,7 @@ import pytest
 import talib
 
 from stockintel import charts
-from stockintel.charts import Pattern, adjust, detect_patterns, levels, resample
+from stockintel.charts import Level, Pattern, adjust, detect_patterns, levels, resample, summary
 from stockintel.market import sessions_between
 from stockintel.signals import TestedRecord, build_signals, label
 
@@ -258,3 +258,22 @@ def test_signal_shows_record_sample_and_cancellation():
     assert signal["sample_size"] == 0
     assert signal["win_rate"] is None
     assert signal["cancellation_level"] == 95.0
+
+
+def test_summary_states_plain_facts():
+    frame = frame_of([100.0 + i for i in range(250)])
+    result = summary(frame, [Level("resistance", 349 * 1.1, 2), Level("support", 349 * 0.9, 2)])
+    assert result["close"] == 349
+    assert result["change_percent"] == pytest.approx(1 / 348 * 100)
+    assert result["above_50"] is True
+    assert result["above_200"] is True
+    assert result["rsi_state"] == "Overbought"
+    assert result["percent_to_resistance"] == pytest.approx(10)
+    assert result["percent_to_support"] == pytest.approx(-10)
+
+
+def test_summary_leaves_unknown_values_blank():
+    result = summary(frame_of([100.0, 101.0]), [])
+    assert result["above_200"] is None
+    assert result["rsi_state"] is None
+    assert result["percent_to_resistance"] is None

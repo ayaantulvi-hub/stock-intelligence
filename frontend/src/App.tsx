@@ -105,10 +105,10 @@ function StockView({ stock }: { stock: Stock }) {
               {stock.bars.map((bar) => (
                 <tr key={bar.market_date}>
                   <td>{bar.market_date}</td>
-                  <td>{bar.open}</td>
-                  <td>{bar.high}</td>
-                  <td>{bar.low}</td>
-                  <td>{bar.close}</td>
+                  <td>{bar.open.toFixed(2)}</td>
+                  <td>{bar.high.toFixed(2)}</td>
+                  <td>{bar.low.toFixed(2)}</td>
+                  <td>{bar.close.toFixed(2)}</td>
                   <td>{bar.volume.toLocaleString()}</td>
                   <td>{when(bar.market_timestamp)}</td>
                   <td>{when(bar.retrieved_at)}</td>

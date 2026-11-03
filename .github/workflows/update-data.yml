@@ -11,9 +11,9 @@ on:
         type: boolean
         default: false
   schedule:
-    # Prices: 12 runs after each US close. 45 stocks a run stays under Tiingo's 50 an hour.
-    - cron: "20 23 * * 1-5"
-    - cron: "20 0-10 * * 2-6"
+    # Prices: hourly. 45 stocks a run stays under Tiingo's 50 an hour, and a run with
+    # nothing due finishes straight away.
+    - cron: "20 * * * *"
     # Filings and economic data: once a day.
     - cron: "50 10 * * 2-6"
 permissions:

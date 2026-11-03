@@ -4,6 +4,7 @@ import {
   HistogramSeries,
   LineSeries,
   createChart,
+  LineStyle,
   type IChartApi,
   type Time,
 } from "lightweight-charts";
@@ -34,7 +35,18 @@ type Signal = {
   sample_size: number;
   win_rate: number | null;
 };
+type Summary = {
+  close: number;
+  change_percent: number | null;
+  above_50: boolean | null;
+  above_200: boolean | null;
+  rsi: number | null;
+  rsi_state: string | null;
+  percent_to_resistance: number | null;
+  percent_to_support: number | null;
+};
 export type Chart = {
+  summary: Summary | null;
   stale: boolean;
   signals_blocked: boolean;
   latest_bar: string | null;
@@ -45,6 +57,14 @@ export type Chart = {
 };
 
 const TIMEFRAMES = ["daily", "weekly", "monthly"];
+const RANGES: [string, number][] = [
+  ["3M", 3],
+  ["6M", 6],
+  ["1Y", 12],
+  ["5Y", 60],
+  ["All", 0],
+];
+const NOT_VERIFIED = "Not verified";
 const COLORS = { up: "#1a8a4f", down: "#c43c3c", a: "#c8872e", b: "#2f7fc1", c: "#8a5cc2" };
 
 function line(candles: Candle[], key: keyof Candle) {
@@ -67,14 +87,27 @@ function theme() {
   };
 }
 
-function Plot({ data }: { data: Chart }) {
+function startIndex(candles: Candle[], months: number) {
+  if (!months || candles.length === 0) return 0;
+  const start = new Date(candles[candles.length - 1].market_date);
+  start.setMonth(start.getMonth() - months);
+  const day = start.toISOString().slice(0, 10);
+  const index = candles.findIndex((candle) => candle.market_date >= day);
+  return index < 0 ? 0 : index;
+}
+
+function Plot({ data, months }: { data: Chart; months: number }) {
   const price = useRef<HTMLDivElement>(null);
-  const momentum = useRef<HTMLDivElement>(null);
+  const macdPanel = useRef<HTMLDivElement>(null);
+  const rsiPanel = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState<Candle | null>(null);
+  const shown = hovered ?? data.candles[data.candles.length - 1];
 
   useEffect(() => {
-    if (!price.current || !momentum.current) return;
-    const charts: IChartApi[] = [createChart(price.current, theme())];
-    const main = charts[0];
+    if (!price.current || !macdPanel.current || !rsiPanel.current) return;
+    const main = createChart(price.current, theme());
+    const macdChart = createChart(macdPanel.current, theme());
+    const rsiChart = createChart(rsiPanel.current, theme());
     const candles = main.addSeries(CandlestickSeries, {
       upColor: COLORS.up,
       downColor: COLORS.down,
@@ -91,21 +124,27 @@ function Plot({ data }: { data: Chart }) {
         close: candle.close,
       })),
     );
-    const overlays: [keyof Candle, string, string][] = [
-      ["sma20", COLORS.a, "20 average"],
-      ["sma50", COLORS.b, "50 average"],
-      ["sma200", COLORS.c, "200 average"],
+    const overlays: [keyof Candle, string][] = [
+      ["sma20", COLORS.a],
+      ["sma50", COLORS.b],
+      ["sma200", COLORS.c],
     ];
-    for (const [key, color, title] of overlays) {
+    for (const [key, color] of overlays) {
       main
-        .addSeries(LineSeries, { color, lineWidth: 1, title, priceLineVisible: false })
+        .addSeries(LineSeries, {
+          color,
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+        })
         .setData(line(data.candles, key));
     }
     for (const level of data.levels) {
       candles.createPriceLine({
         price: level.price,
         color: level.kind === "resistance" ? COLORS.down : COLORS.up,
-        lineStyle: 2,
+        lineStyle: LineStyle.Dashed,
         lineWidth: 1,
         title: level.kind,
       });
@@ -113,55 +152,159 @@ function Plot({ data }: { data: Chart }) {
     const volume = main.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
       priceScaleId: "volume",
-      color: "#8a8a82",
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
     main.priceScale("volume").applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
     volume.setData(
       data.candles.map((candle) => ({
         time: candle.market_date as Time,
         value: candle.volume,
+        color: candle.close >= candle.open ? `${COLORS.up}66` : `${COLORS.down}66`,
       })),
     );
 
-    const lower = createChart(momentum.current, theme());
-    charts.push(lower);
-    lower
-      .addSeries(HistogramSeries, { color: "#8a8a82", title: "MACD histogram" })
-      .setData(line(data.candles, "macd_histogram"));
-    lower
-      .addSeries(LineSeries, { color: COLORS.b, lineWidth: 1, title: "MACD" })
-      .setData(line(data.candles, "macd"));
-    lower
-      .addSeries(LineSeries, { color: COLORS.a, lineWidth: 1, title: "Signal" })
-      .setData(line(data.candles, "macd_signal"));
-    lower
+    macdChart
+      .addSeries(HistogramSeries, { lastValueVisible: false, priceLineVisible: false })
+      .setData(
+        line(data.candles, "macd_histogram").map((point) => ({
+          ...point,
+          color: point.value >= 0 ? `${COLORS.up}99` : `${COLORS.down}99`,
+        })),
+      );
+    macdChart
       .addSeries(LineSeries, {
-        color: COLORS.c,
-        lineWidth: 1,
-        title: "RSI",
-        priceScaleId: "rsi",
+        color: COLORS.b,
+        lineWidth: 2,
+        lastValueVisible: false,
+        priceLineVisible: false,
       })
-      .setData(line(data.candles, "rsi"));
+      .setData(line(data.candles, "macd"));
+    macdChart
+      .addSeries(LineSeries, {
+        color: COLORS.a,
+        lineWidth: 2,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
+      .setData(line(data.candles, "macd_signal"));
 
-    const visible = Math.min(data.candles.length, 180);
-    const range = { from: data.candles.length - visible, to: data.candles.length };
-    main.timeScale().setVisibleLogicalRange(range);
-    main.timeScale().subscribeVisibleLogicalRangeChange((next) => {
-      if (next) lower.timeScale().setVisibleLogicalRange(next);
+    const rsi = rsiChart.addSeries(LineSeries, {
+      color: COLORS.c,
+      lineWidth: 2,
+      autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+      priceLineVisible: false,
     });
-    return () => charts.forEach((chart) => chart.remove());
-  }, [data]);
+    rsi.setData(line(data.candles, "rsi"));
+    for (const [level, color] of [
+      [70, COLORS.down],
+      [30, COLORS.up],
+    ] as [number, string][]) {
+      rsi.createPriceLine({
+        price: level,
+        color,
+        lineStyle: LineStyle.Dashed,
+        lineWidth: 1,
+        axisLabelVisible: true,
+      });
+    }
+
+    const byDate = new Map(data.candles.map((candle) => [candle.market_date, candle]));
+    main.subscribeCrosshairMove((event) => {
+      setHovered(event.time ? (byDate.get(String(event.time)) ?? null) : null);
+    });
+
+    const range = {
+      from: startIndex(data.candles, months),
+      to: data.candles.length + 2,
+    };
+    const panels = [main, macdChart, rsiChart];
+    panels.forEach((chart) => chart.timeScale().setVisibleLogicalRange(range));
+    // Moving any panel moves the others, so all three always show the same dates.
+    const followers: IChartApi[][] = panels.map((chart) => panels.filter((p) => p !== chart));
+    panels.forEach((chart, index) => {
+      chart.timeScale().subscribeVisibleLogicalRangeChange((next) => {
+        if (next) followers[index].forEach((p) => p.timeScale().setVisibleLogicalRange(next));
+      });
+    });
+    return () => panels.forEach((chart) => chart.remove());
+  }, [data, months]);
 
   return (
     <>
+      <div className="readout">
+        <strong>{shown.market_date}</strong>
+        <span>Open {shown.open.toFixed(2)}</span>
+        <span>High {shown.high.toFixed(2)}</span>
+        <span>Low {shown.low.toFixed(2)}</span>
+        <span>Close {shown.close.toFixed(2)}</span>
+        <span>Volume {Math.round(shown.volume).toLocaleString()}</span>
+      </div>
+      <div className="key">
+        <span style={{ color: COLORS.a }}>━ 20 average</span>
+        <span style={{ color: COLORS.b }}>━ 50 average</span>
+        <span style={{ color: COLORS.c }}>━ 200 average</span>
+        <span className="ok">┅ support</span>
+        <span className="bad">┅ resistance</span>
+      </div>
       <div className="chart" ref={price} />
-      <div className="chart lower" ref={momentum} />
+      <h4>
+        MACD <span style={{ color: COLORS.b }}>━ line</span>{" "}
+        <span style={{ color: COLORS.a }}>━ signal</span>
+      </h4>
+      <div className="chart lower" ref={macdPanel} />
+      <h4>RSI (above 70 overbought, below 30 oversold)</h4>
+      <div className="chart lower" ref={rsiPanel} />
     </>
+  );
+}
+
+function yesNo(value: boolean | null, yes: string, no: string) {
+  return value === null ? NOT_VERIFIED : value ? yes : no;
+}
+
+function percent(value: number | null) {
+  return value === null ? NOT_VERIFIED : `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+}
+
+function Glance({ summary }: { summary: Summary }) {
+  const tone = (good: boolean | null) => (good === null ? "" : good ? "ok" : "bad");
+  const cards: [string, string, string][] = [
+    ["Last close", summary.close.toFixed(2), ""],
+    [
+      "Change",
+      percent(summary.change_percent),
+      tone(summary.change_percent === null ? null : summary.change_percent >= 0),
+    ],
+    ["50 average", yesNo(summary.above_50, "Price above", "Price below"), tone(summary.above_50)],
+    [
+      "200 average",
+      yesNo(summary.above_200, "Price above", "Price below"),
+      tone(summary.above_200),
+    ],
+    [
+      "RSI",
+      summary.rsi === null ? NOT_VERIFIED : `${summary.rsi.toFixed(0)}, ${summary.rsi_state}`,
+      "",
+    ],
+    ["To resistance", percent(summary.percent_to_resistance), ""],
+    ["To support", percent(summary.percent_to_support), ""],
+  ];
+  return (
+    <div className="glance">
+      {cards.map(([name, value, className]) => (
+        <div key={name}>
+          <small>{name}</small>
+          <strong className={className}>{value}</strong>
+        </div>
+      ))}
+    </div>
   );
 }
 
 export default function ChartPanel({ ticker }: { ticker: string }) {
   const [timeframe, setTimeframe] = useState("daily");
+  const [months, setMonths] = useState(12);
   const [data, setData] = useState<Chart | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -189,17 +332,21 @@ export default function ChartPanel({ ticker }: { ticker: string }) {
             {name}
           </button>
         ))}
+        <span className="spacer" />
+        {RANGES.map(([name, value]) => (
+          <button key={name} aria-pressed={value === months} onClick={() => setMonths(value)}>
+            {name}
+          </button>
+        ))}
       </div>
       {failed && <p className="bad">Chart failed to load. Data is not verified.</p>}
       {!failed && !data && <p>Loading chart…</p>}
       {data && data.candles.length === 0 && <p>Not verified: no complete prices stored yet.</p>}
       {data && data.candles.length > 0 && (
         <>
-          <Plot data={data} />
-          <small>
-            Prices adjusted for splits and dividends. Top: candles, averages, volume, support and
-            resistance. Bottom: MACD and RSI.
-          </small>
+          {data.summary && <Glance summary={data.summary} />}
+          <Plot data={data} months={months} />
+          <small>Prices adjusted for splits and dividends. These are facts, not predictions.</small>
         </>
       )}
       {data && (

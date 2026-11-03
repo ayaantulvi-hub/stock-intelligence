@@ -168,6 +168,7 @@ def chart(engine: Engine, ticker: str, timeframe: str) -> dict | None:
         "latest_expected_session": latest_expected_session(now),
         "candles": [],
         "levels": [],
+        "summary": None,
         "signals": [],
         "signals_blocked": stale,
     }
@@ -188,7 +189,9 @@ def chart(engine: Engine, ticker: str, timeframe: str) -> dict | None:
     # Blank warm-up values stay blank. They are never filled.
     records = computed.astype(object).where(computed.notna(), None).to_dict("records")
     result["candles"] = records
-    result["levels"] = [level.__dict__ for level in charts.levels(frame)]
+    found = charts.levels(frame)
+    result["levels"] = [level.__dict__ for level in found]
+    result["summary"] = charts.summary(frame, found)
     if not stale:
         result["signals"] = signals.build_signals(charts.detect_patterns(frame), {})
     return result

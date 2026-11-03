@@ -154,6 +154,44 @@ def _cluster(prices: list[float]) -> list[tuple[float, int]]:
     return [(sum(group) / len(group), len(group)) for group in groups]
 
 
+def summary(frame: pd.DataFrame, found: list[Level]) -> dict | None:
+    """Plain facts about the newest candle. Descriptions only, never predictions."""
+    if frame.empty:
+        return None
+    close = frame["close"]
+    latest = float(close.iloc[-1])
+    previous = float(close.iloc[-2]) if len(close) > 1 else None
+    average_50 = sma(close, 50).iloc[-1]
+    average_200 = sma(close, 200).iloc[-1]
+    strength = rsi(close).iloc[-1]
+
+    def above(value: float) -> bool | None:
+        return None if np.isnan(value) else bool(latest > value)
+
+    def percent_to(kind: str) -> float | None:
+        level = next((item.price for item in found if item.kind == kind), None)
+        return None if level is None else (level / latest - 1) * 100
+
+    if np.isnan(strength):
+        rsi_state = None
+    elif strength >= 70:
+        rsi_state = "Overbought"
+    elif strength <= 30:
+        rsi_state = "Oversold"
+    else:
+        rsi_state = "Middle range"
+    return {
+        "close": latest,
+        "change_percent": (latest / previous - 1) * 100 if previous else None,
+        "above_50": above(average_50),
+        "above_200": above(average_200),
+        "rsi": None if np.isnan(strength) else float(strength),
+        "rsi_state": rsi_state,
+        "percent_to_resistance": percent_to("resistance"),
+        "percent_to_support": percent_to("support"),
+    }
+
+
 @dataclass(frozen=True)
 class Pattern:
     name: str

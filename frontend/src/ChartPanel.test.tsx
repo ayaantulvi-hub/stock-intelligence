@@ -8,6 +8,7 @@ vi.mock("lightweight-charts", () => {
   const series = { setData: vi.fn(), createPriceLine: vi.fn() };
   const chart = {
     addSeries: () => series,
+    subscribeCrosshairMove: vi.fn(),
     priceScale: () => ({ applyOptions: vi.fn() }),
     timeScale: () => ({
       setVisibleLogicalRange: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock("lightweight-charts", () => {
     CandlestickSeries: {},
     HistogramSeries: {},
     LineSeries: {},
+    LineStyle: { Dashed: 2 },
   };
 });
 
@@ -33,6 +35,7 @@ const base = {
   signals_blocked: false,
   latest_bar: "2026-07-07",
   latest_expected_session: "2026-07-07",
+  summary: null,
   candles: [],
   levels: [],
   signals: [],
@@ -83,4 +86,42 @@ test("shows Not verified when no prices are stored", async () => {
   respond(200, base);
   render(<ChartPanel ticker="AAA" />);
   expect(await screen.findByText(/Not verified: no complete prices/)).toBeTruthy();
+});
+
+test("shows plain facts and Not verified for unknown ones", async () => {
+  respond(200, {
+    ...base,
+    candles: [
+      {
+        market_date: "2026-07-07",
+        open: 99,
+        high: 101,
+        low: 98,
+        close: 100,
+        volume: 1000,
+        sma20: null,
+        sma50: null,
+        sma200: null,
+        rsi: null,
+        macd: null,
+        macd_signal: null,
+        macd_histogram: null,
+      },
+    ],
+    summary: {
+      close: 100,
+      change_percent: 1.5,
+      above_50: true,
+      above_200: null,
+      rsi: null,
+      rsi_state: null,
+      percent_to_resistance: null,
+      percent_to_support: -4,
+    },
+  });
+  render(<ChartPanel ticker="AAA" />);
+  expect(await screen.findByText("Price above")).toBeTruthy();
+  expect(screen.getByText("+1.5%")).toBeTruthy();
+  expect(screen.getByText("-4.0%")).toBeTruthy();
+  expect(screen.getAllByText("Not verified").length).toBe(3);
 });

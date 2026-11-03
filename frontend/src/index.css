@@ -48,3 +48,14 @@ th, td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); text-ali
 .tabs button { padding: 6px 12px; text-transform: capitalize; }
 .tabs button[aria-pressed="true"] { font-weight: 700; }
 @media (max-width: 600px) { .chart { height: 300px; } }
+h4 { font-size: 0.85rem; font-weight: 600; margin: 14px 0 2px; color: var(--muted); }
+.chart { height: 420px; }
+.chart.lower { height: 130px; margin-top: 0; }
+.tabs { flex-wrap: wrap; }
+.spacer { flex: 1; }
+.glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 14px 0; }
+.glance div { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.glance strong { display: block; margin-top: 2px; }
+.readout, .key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; }
+.readout { margin-top: 12px; font-variant-numeric: tabular-nums; }
+.key { margin-top: 4px; font-weight: 600; }
