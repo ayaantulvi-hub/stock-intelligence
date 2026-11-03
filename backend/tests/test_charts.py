@@ -239,17 +239,17 @@ def pattern(state="confirmed", direction="bullish"):
 
 def test_untested_signal_is_unproven_never_bullish():
     assert label(pattern(), None) == "Unproven"
-    assert label(pattern(), TestedRecord(10, 0.9, 0.5)) == "Unproven"
+    assert label(pattern(), TestedRecord(10, 0.9, 0.5, True)) == "Unproven"
 
 
 def test_forming_label():
-    assert label(pattern("forming"), TestedRecord(100, 0.9, 0.5)) == "Forming"
+    assert label(pattern("forming"), TestedRecord(100, 0.9, 0.5, True)) == "Forming"
 
 
 def test_labels_follow_the_tested_record():
-    assert label(pattern(), TestedRecord(100, 0.6, 0.5)) == "Bullish"
-    assert label(pattern(direction="bearish"), TestedRecord(100, 0.6, 0.5)) == "Bearish"
-    assert label(pattern(), TestedRecord(100, 0.5, 0.5)) == "Neutral"
+    assert label(pattern(), TestedRecord(100, 0.6, 0.5, True)) == "Bullish"
+    assert label(pattern(direction="bearish"), TestedRecord(100, 0.6, 0.5, True)) == "Bearish"
+    assert label(pattern(), TestedRecord(100, 0.6, 0.5, False)) == "Neutral"
 
 
 def test_signal_shows_record_sample_and_cancellation():

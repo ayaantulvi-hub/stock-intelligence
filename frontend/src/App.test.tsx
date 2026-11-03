@@ -49,6 +49,7 @@ test("shows a failed feed and its message", async () => {
       ],
     ],
     "/api/economic": [200, []],
+    "/api/backtest": [200, null],
   });
   render(<App />);
   expect(await screen.findByText("Error")).toBeTruthy();
@@ -77,7 +78,48 @@ test("shows Not verified for a value the source did not publish", async () => {
         },
       ],
     ],
+    "/api/backtest": [200, null],
   });
   render(<App />);
   expect(await screen.findByText("Not verified")).toBeTruthy();
+});
+
+test("says No reliable edge when a tested signal has none", async () => {
+  stub({
+    "/api/status": [
+      200,
+      { database: { state: "ok" }, migrations: { state: "ok" }, worker: { state: "ok" } },
+    ],
+    "/api/feeds": [200, []],
+    "/api/economic": [200, []],
+    "/api/backtest": [
+      200,
+      {
+        finished_at: "fixture",
+        stocks: 2,
+        first_date: "2020-01-02",
+        last_date: "2026-07-07",
+        cost_bps: 10,
+        note: "Fixture warning about bias.",
+        results: [
+          {
+            signal: "Golden cross",
+            direction: "bullish",
+            horizon: 20,
+            sample_size: 100,
+            win_rate: 0.5,
+            oos_sample_size: 0,
+            oos_win_rate: null,
+            oos_baseline_win_rate: 0.5,
+            oos_avg_return: null,
+            oos_baseline_avg_return: 0.01,
+            edge: false,
+          },
+        ],
+      },
+    ],
+  });
+  render(<App />);
+  expect(await screen.findByText("No reliable edge")).toBeTruthy();
+  expect(screen.getByText("Fixture warning about bias.")).toBeTruthy();
 });

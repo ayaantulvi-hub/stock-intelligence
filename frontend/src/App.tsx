@@ -39,6 +39,27 @@ type Stock = {
   bars: Bar[];
   filings: Filing[];
 };
+type Backtest = {
+  finished_at: string;
+  stocks: number;
+  first_date: string;
+  last_date: string;
+  cost_bps: number;
+  note: string;
+  results: {
+    signal: string;
+    direction: string;
+    horizon: number;
+    sample_size: number;
+    win_rate: number | null;
+    oos_sample_size: number;
+    oos_win_rate: number | null;
+    oos_baseline_win_rate: number | null;
+    oos_avg_return: number | null;
+    oos_baseline_avg_return: number | null;
+    edge: boolean;
+  }[];
+};
 type Economic = Provenance & {
   series_id: string;
   observation_date: string;
@@ -63,6 +84,54 @@ async function getJson<T>(url: string, allowed: number[] = [200]): Promise<T> {
   const response = await fetch(url);
   if (!allowed.includes(response.status)) throw new Error(String(response.status));
   return response.json();
+}
+
+const pct = (value: number | null) =>
+  value === null ? NOT_VERIFIED : `${(value * 100).toFixed(1)}%`;
+
+function BacktestView({ backtest }: { backtest: Backtest }) {
+  return (
+    <section>
+      <h2>Do the signals work?</h2>
+      <p>
+        Tested on {backtest.stocks} stocks, {backtest.first_date} to {backtest.last_date}, after{" "}
+        {backtest.cost_bps / 100}% trading costs. Each year is judged only on earlier years.
+      </p>
+      <p className="bad">{backtest.note}</p>
+      <div className="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Signal</th>
+              <th>Leans</th>
+              <th>Days held</th>
+              <th>Verdict</th>
+              <th>Win rate</th>
+              <th>Baseline</th>
+              <th>Avg return</th>
+              <th>Baseline</th>
+              <th>Tested cases</th>
+            </tr>
+          </thead>
+          <tbody>
+            {backtest.results.map((row) => (
+              <tr key={`${row.signal}${row.direction}${row.horizon}`}>
+                <td>{row.signal}</td>
+                <td>{row.direction}</td>
+                <td>{row.horizon}</td>
+                <td className={row.edge ? "ok" : ""}>{row.edge ? "Edge" : "No reliable edge"}</td>
+                <td>{pct(row.oos_win_rate ?? row.win_rate)}</td>
+                <td>{pct(row.oos_baseline_win_rate)}</td>
+                <td>{pct(row.oos_avg_return)}</td>
+                <td>{pct(row.oos_baseline_avg_return)}</td>
+                <td>{row.oos_sample_size}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function State({ state }: { state: string }) {
@@ -143,6 +212,7 @@ export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [economic, setEconomic] = useState<Economic[]>([]);
+  const [backtest, setBacktest] = useState<Backtest | null>(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Listing[] | null>(null);
@@ -156,8 +226,10 @@ export default function App() {
         setStatus(await getJson<Status>("/api/status", [200, 503]));
         setFeeds(await getJson<Feed[]>("/api/feeds"));
         setEconomic(await getJson<Economic[]>("/api/economic"));
+        setBacktest(await getJson<Backtest | null>("/api/backtest"));
         setFailed(false);
       } catch {
+        setBacktest(null);
         setStatus(null);
         setFeeds([]);
         setEconomic([]);
@@ -222,6 +294,8 @@ export default function App() {
         </ul>
       )}
       {stock && <StockView stock={stock} />}
+
+      {backtest && <BacktestView backtest={backtest} />}
 
       {status && (
         <section>

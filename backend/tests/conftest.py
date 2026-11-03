@@ -44,7 +44,8 @@ def engine(migrated, database_url):
         conn.execute(
             text(
                 """TRUNCATE worker_heartbeats, feed_runs, validation_issues, securities,
-                   fetches, price_bars, filings, economic_observations RESTART IDENTITY CASCADE"""
+                   fetches, price_bars, filings, economic_observations, backtest_runs,
+                   backtest_results RESTART IDENTITY CASCADE"""
             )
         )
     yield engine

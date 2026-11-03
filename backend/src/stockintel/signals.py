@@ -12,6 +12,7 @@ class TestedRecord:
     sample_size: int
     win_rate: float
     baseline_win_rate: float
+    edge: bool
 
 
 def label(pattern: Pattern, record: TestedRecord | None) -> str:
@@ -19,7 +20,7 @@ def label(pattern: Pattern, record: TestedRecord | None) -> str:
         return "Forming"
     if record is None or record.sample_size < MIN_SAMPLE:
         return "Unproven"
-    if record.win_rate <= record.baseline_win_rate:
+    if not record.edge:
         return "Neutral"
     return "Bullish" if pattern.direction == "bullish" else "Bearish"
 

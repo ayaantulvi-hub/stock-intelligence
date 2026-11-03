@@ -202,6 +202,37 @@ class Pattern:
     detail: str
 
 
+def pattern_history(frame: pd.DataFrame) -> pd.DataFrame:
+    """Where each rule was confirmed on every candle, as one true/false column per rule.
+
+    The same rules as detect_patterns, without support and resistance, written for whole
+    price histories. A test holds the two in step.
+    """
+    close, open_ = frame["close"], frame["open"]
+    short, long = sma(close, 50), sma(close, 200)
+    lines = macd(close)["histogram"]
+    strength = rsi(close)
+    previous_close, previous_open = close.shift(1), open_.shift(1)
+    up = (close > open_) & (previous_close < previous_open)
+    down = (close < open_) & (previous_close > previous_open)
+    return pd.DataFrame(
+        {
+            ("Golden cross", "bullish"): (short.shift(1) <= long.shift(1)) & (short > long),
+            ("Death cross", "bearish"): (short.shift(1) >= long.shift(1)) & (short < long),
+            ("MACD cross", "bullish"): (lines.shift(1) <= 0) & (lines > 0),
+            ("MACD cross", "bearish"): (lines.shift(1) >= 0) & (lines < 0),
+            ("RSI recovery", "bullish"): (strength.shift(1) < 30) & (strength >= 30),
+            ("RSI rollover", "bearish"): (strength.shift(1) > 70) & (strength <= 70),
+            ("Bullish engulfing", "bullish"): up
+            & (open_ <= previous_close)
+            & (close >= previous_open),
+            ("Bearish engulfing", "bearish"): down
+            & (open_ >= previous_close)
+            & (close <= previous_open),
+        }
+    )
+
+
 def detect_patterns(frame: pd.DataFrame) -> list[Pattern]:
     """Apply fixed rules to the newest candle. Needs oldest-first adjusted candles."""
     if len(frame) < 2:

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import charts, signals
+from stockintel import backtest, charts, signals
 from stockintel.market import is_stale, latest_expected_session
 
 FEEDS = {
@@ -193,5 +193,43 @@ def chart(engine: Engine, ticker: str, timeframe: str) -> dict | None:
     result["levels"] = [level.__dict__ for level in found]
     result["summary"] = charts.summary(frame, found)
     if not stale:
-        result["signals"] = signals.build_signals(charts.detect_patterns(frame), {})
+        result["signals"] = signals.build_signals(
+            charts.detect_patterns(frame), records_for(engine, timeframe)
+        )
     return result
+
+
+def latest_backtest(engine: Engine) -> dict | None:
+    with engine.connect() as conn:
+        run = conn.execute(text("SELECT * FROM backtest_runs ORDER BY id DESC LIMIT 1")).first()
+        if run is None:
+            return None
+        results = _rows(
+            conn.execute(
+                text(
+                    """SELECT * FROM backtest_results WHERE run_id = :id
+                       ORDER BY edge DESC, horizon, signal, direction"""
+                ),
+                {"id": run.id},
+            )
+        )
+    return {**dict(run._mapping), "results": results}
+
+
+def records_for(engine: Engine, timeframe: str) -> dict[str, signals.TestedRecord]:
+    """Tested records for signals. Only daily signals have been tested."""
+    latest = latest_backtest(engine)
+    if latest is None or timeframe != "daily":
+        return {}
+    return {
+        f"{row['signal']}:{row['direction']}": signals.TestedRecord(
+            row["sample_size"],
+            row["oos_win_rate"] if row["oos_win_rate"] is not None else row["win_rate"],
+            row["oos_baseline_win_rate"]
+            if row["oos_baseline_win_rate"] is not None
+            else row["baseline_win_rate"],
+            row["edge"],
+        )
+        for row in latest["results"]
+        if row["horizon"] == backtest.PRIMARY_HORIZON
+    }

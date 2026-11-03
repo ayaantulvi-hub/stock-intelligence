@@ -34,6 +34,7 @@ type Signal = {
   cancellation_level: number;
   sample_size: number;
   win_rate: number | null;
+  baseline_win_rate: number | null;
 };
 type Summary = {
   close: number;
@@ -67,10 +68,12 @@ const RANGES: [string, number][] = [
 const NOT_VERIFIED = "Not verified";
 const COLORS = { up: "#1a8a4f", down: "#c43c3c", a: "#c8872e", b: "#2f7fc1", c: "#8a5cc2" };
 
+// Blank warm-up bars stay in as empty points, so every panel keeps the same dates.
 function line(candles: Candle[], key: keyof Candle) {
-  return candles
-    .filter((candle) => candle[key] !== null)
-    .map((candle) => ({ time: candle.market_date as Time, value: candle[key] as number }));
+  return candles.map((candle) => {
+    const time = candle.market_date as Time;
+    return candle[key] === null ? { time } : { time, value: candle[key] as number };
+  });
 }
 
 function theme() {
@@ -167,10 +170,14 @@ function Plot({ data, months }: { data: Chart; months: number }) {
     macdChart
       .addSeries(HistogramSeries, { lastValueVisible: false, priceLineVisible: false })
       .setData(
-        line(data.candles, "macd_histogram").map((point) => ({
-          ...point,
-          color: point.value >= 0 ? `${COLORS.up}99` : `${COLORS.down}99`,
-        })),
+        line(data.candles, "macd_histogram").map((point) =>
+          "value" in point
+            ? {
+                ...point,
+                color: (point.value as number) >= 0 ? `${COLORS.up}99` : `${COLORS.down}99`,
+              }
+            : point,
+        ),
       );
     macdChart
       .addSeries(LineSeries, {
@@ -377,12 +384,14 @@ export default function ChartPanel({ ticker }: { ticker: string }) {
                   {data.signals.map((signal) => (
                     <tr key={`${signal.name}${signal.direction}`}>
                       <td>{signal.name}</td>
-                      <td>{signal.label}</td>
+                      <td>{signal.label === "Neutral" ? "No reliable edge" : signal.label}</td>
                       <td>{signal.direction}</td>
                       <td>
                         {signal.win_rate === null
                           ? "Not tested yet"
-                          : `${(signal.win_rate * 100).toFixed(1)}%`}
+                          : `${(signal.win_rate * 100).toFixed(1)}% vs ${(
+                              (signal.baseline_win_rate ?? 0) * 100
+                            ).toFixed(1)}% baseline`}
                       </td>
                       <td>{signal.sample_size}</td>
                       <td>{signal.cancellation_level.toFixed(2)}</td>

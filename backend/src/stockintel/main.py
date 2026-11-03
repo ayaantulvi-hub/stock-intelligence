@@ -94,6 +94,11 @@ def economic() -> list[dict]:
     return queries.economic(get_engine())
 
 
+@app.get("/api/backtest")
+def backtest() -> dict | None:
+    return queries.latest_backtest(get_engine())
+
+
 @app.get("/api/issues")
 def issues() -> list[dict]:
     return queries.issues(get_engine())

@@ -1,0 +1,25 @@
+name: Backtest
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "40 12 * * 6"
+permissions:
+  contents: read
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --no-dev
+      - run: uv run --no-dev alembic upgrade head
+      - run: uv run --no-dev python -m stockintel.backtest
