@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
+import { ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 type Status = {
   database: { state: string };
@@ -149,6 +150,7 @@ function StockView({ stock }: { stock: Stock }) {
           Stale: expected prices for {stock.latest_expected_session}. Do not rely on this data.
         </p>
       )}
+      <ForecastPanel ticker={stock.ticker} />
       <ChartPanel ticker={stock.ticker} />
       <h3>Recent prices (raw, not adjusted)</h3>
       {stock.bars.length === 0 ? (
@@ -266,7 +268,7 @@ export default function App() {
   return (
     <main>
       <h1>Stock Intelligence</h1>
-      <p>Verified data and chart signals. Forecasts are not built yet.</p>
+      <p>Verified data, tested signals and scored forecasts. Not financial advice.</p>
       {failed && <p className="bad">Cannot reach the API. Status is not verified.</p>}
       {!failed && !status && <p>Checking…</p>}
 
@@ -295,6 +297,7 @@ export default function App() {
       )}
       {stock && <StockView stock={stock} />}
 
+      {!stock && !failed && <IdeasPanel />}
       {backtest && <BacktestView backtest={backtest} />}
 
       {status && (

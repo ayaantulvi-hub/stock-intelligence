@@ -13,6 +13,7 @@ from stockintel import queries
 from stockintel.charts import TIMEFRAMES
 from stockintel.config import get_settings
 from stockintel.db import get_engine
+from stockintel.factors import register
 from stockintel.status import get_status
 
 settings = get_settings()
@@ -97,6 +98,26 @@ def economic() -> list[dict]:
 @app.get("/api/backtest")
 def backtest() -> dict | None:
     return queries.latest_backtest(get_engine())
+
+
+@app.get("/api/stocks/{ticker}/forecast")
+def forecast(ticker: str) -> dict | None:
+    return queries.stock_forecast(get_engine(), ticker)
+
+
+@app.get("/api/ideas")
+def ideas() -> dict:
+    return queries.ideas(get_engine())
+
+
+@app.get("/api/track-record")
+def track_record() -> dict:
+    return queries.track_record(get_engine())
+
+
+@app.get("/api/factors")
+def factor_register() -> list[dict]:
+    return register()
 
 
 @app.get("/api/issues")

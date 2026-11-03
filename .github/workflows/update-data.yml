@@ -50,6 +50,9 @@ jobs:
         # Runs even if prices failed: one feed's failure must not stop the others.
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest economic
+      - name: Forecasts
+        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.forecast daily
       - name: Report
         if: always()
         run: uv run --no-dev python -m stockintel.report

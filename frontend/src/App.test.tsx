@@ -9,10 +9,14 @@ afterEach(() => {
 });
 
 function stub(routes: Record<string, [number, unknown]>) {
+  const empty: Record<string, [number, unknown]> = {
+    "/api/ideas": [200, { target_session: null, edge: false, buy: [], sell: [] }],
+    "/api/track-record": [200, { scored: 0, written: 0, brier: null, evaluations: [] }],
+  };
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
-      const [status, body] = routes[url.split("?")[0]];
+      const [status, body] = { ...empty, ...routes }[url.split("?")[0]];
       return { status, json: async () => body };
     }),
   );
@@ -81,7 +85,7 @@ test("shows Not verified for a value the source did not publish", async () => {
     "/api/backtest": [200, null],
   });
   render(<App />);
-  expect(await screen.findByText("Not verified")).toBeTruthy();
+  expect((await screen.findAllByText("Not verified")).length).toBeGreaterThan(0);
 });
 
 test("says No reliable edge when a tested signal has none", async () => {

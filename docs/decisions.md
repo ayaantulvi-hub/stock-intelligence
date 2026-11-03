@@ -61,6 +61,18 @@ needs at least 30 tested cases that beat the baseline.
 - Weekly, monthly, Breakout and Breakdown signals are not tested yet, so they stay Unproven.
 - Results are overstated by survivorship bias, and the dashboard says so.
 
+## Forecasts and factors
+
+- Papers decide which factors are included. The model learns the weights from past data.
+- Published effects are not used as weights. McLean & Pontiff (2016): returns 26% lower out
+  of sample and 58% lower after publication. Hou, Xue & Zhang (2020): 65% of 452 anomalies
+  fail t = 1.96, and 82% fail 2.78. Harvey, Liu & Zhu (2016): new factors need t above 3.0.
+- Effect sizes appear only when read from the paper. Other factors cite the paper only.
+- Flat means a next-day move within 0.10%. The 90% range uses the stock's last 250 days.
+- Buy or Sell candidate needs the 20-day ranking to pass walk-forward testing after costs.
+- Yahoo Finance is excluded: no licensed plan was found, and it is the lowest-ranked source.
+- News, options and insider data are in the register but not connected.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

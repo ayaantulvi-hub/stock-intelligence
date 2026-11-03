@@ -233,3 +233,67 @@ def records_for(engine: Engine, timeframe: str) -> dict[str, signals.TestedRecor
         for row in latest["results"]
         if row["horizon"] == backtest.PRIMARY_HORIZON
     }
+
+
+def stock_forecast(engine: Engine, ticker: str) -> dict | None:
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """SELECT f.* FROM forecasts f JOIN securities s ON s.id = f.security_id
+                   WHERE s.ticker = :ticker ORDER BY f.target_session DESC LIMIT 1"""
+            ),
+            {"ticker": ticker.upper()},
+        ).first()
+    return {**dict(row._mapping), "action": action(row.rank_edge, row.rank_20d)} if row else None
+
+
+def action(rank_edge: bool, rank: float | None) -> str:
+    """The call shown to the user. Named only when the ranking has passed testing."""
+    if not rank_edge or rank is None:
+        return "No reliable edge"
+    if rank >= 0.9:
+        return "Buy candidate"
+    return "Sell candidate" if rank <= 0.1 else "No action"
+
+
+def ideas(engine: Engine) -> dict:
+    """Stocks ranked for the next 20 days, only named if the ranking passed testing."""
+    with engine.connect() as conn:
+        target = conn.execute(text("SELECT max(target_session) FROM forecasts")).scalar()
+        if target is None:
+            return {"target_session": None, "edge": False, "buy": [], "sell": []}
+        rows = _rows(
+            conn.execute(
+                text(
+                    """SELECT s.ticker, s.name, f.rank_20d, f.rank_edge
+                       FROM forecasts f JOIN securities s ON s.id = f.security_id
+                       WHERE f.target_session = :target ORDER BY f.rank_20d DESC"""
+                ),
+                {"target": target},
+            )
+        )
+    edge = bool(rows and rows[0]["rank_edge"])
+    return {
+        "target_session": target,
+        "edge": edge,
+        "buy": [row for row in rows if row["rank_20d"] >= 0.9] if edge else [],
+        "sell": [row for row in rows if row["rank_20d"] <= 0.1] if edge else [],
+    }
+
+
+def track_record(engine: Engine) -> dict:
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """SELECT count(*) AS scored, avg(brier) AS brier,
+                     avg(baseline_brier) AS baseline_brier,
+                     avg(in_range::int) AS range_hit_rate FROM forecast_scores"""
+            )
+        ).first()
+        written = conn.execute(text("SELECT count(*) FROM forecasts")).scalar()
+        evaluations = _rows(
+            conn.execute(
+                text("SELECT DISTINCT ON (model) * FROM model_evaluations ORDER BY model, id DESC")
+            )
+        )
+    return {**dict(row._mapping), "written": written, "evaluations": evaluations}

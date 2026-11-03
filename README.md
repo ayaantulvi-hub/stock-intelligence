@@ -3,8 +3,9 @@
 A web app for verified market data, chart signals, forecasts and long-term cases.
 It never places trades and never claims certainty.
 
-**Status: Milestone 4 of 8.** The app collects verified data, shows charts and signals,
-and backtests the signals against a baseline. No forecasts yet.
+**Status: Milestone 5 of 8.** The app collects verified data, shows charts and signals,
+backtests them, and writes scored forecasts to a ledger that cannot be edited. It names a
+stock to buy or sell only if the model passed testing. This is not financial advice.
 See [docs/decisions.md](docs/decisions.md).
 
 ## How it runs online

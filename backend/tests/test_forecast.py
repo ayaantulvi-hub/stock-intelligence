@@ -1,0 +1,225 @@
+"""Forecasts and the ledger. All prices here are TEST FIXTURES, generated from fixed seeds."""
+
+from datetime import UTC, date, datetime, timedelta
+
+import numpy as np
+import pandas as pd
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+
+from stockintel import factors, forecast, queries
+from stockintel.backtest import assert_no_look_ahead
+from stockintel.market import session_close, sessions_between
+
+
+def stock(seed, length=1300, end=date(2026, 7, 7)):
+    rng = np.random.default_rng(seed)
+    days = sessions_between(end - timedelta(days=length * 2), end)[-length:]
+    closes = 100 * np.exp(np.cumsum(rng.normal(0.0004, 0.018, len(days))))
+    return pd.DataFrame(
+        {
+            "market_date": days,
+            "open": closes * 0.999,
+            "high": closes * 1.01,
+            "low": closes * 0.99,
+            "close": closes,
+            "volume": rng.uniform(5e5, 2e6, len(days)),
+        }
+    )
+
+
+@pytest.fixture(scope="module")
+def panel():
+    frames = {f"S{seed}": stock(seed) for seed in range(30)}
+    days = pd.date_range("2015-01-01", "2026-07-08", freq="D")
+    slope = pd.Series(np.random.default_rng(0).normal(0.5, 0.5, len(days)), index=days)
+    return forecast.build_panel(frames, slope)
+
+
+def test_missing_yield_data_blocks_forecasts():
+    with pytest.raises(RuntimeError, match="blocked"):
+        forecast.build_panel({"S1": stock(1, 400)}, None)
+
+
+def test_every_factor_names_a_source():
+    for item in factors.REGISTER:
+        assert item.source
+        assert item.status
+
+
+def test_quoted_effects_have_a_link():
+    for item in factors.REGISTER:
+        if item.effect:
+            assert item.url
+
+
+def test_factors_that_need_missing_data_are_marked_and_not_used():
+    assert "value" not in factors.LIVE_IDS
+    assert "insider" not in factors.LIVE_IDS
+    assert "implied_move" not in factors.LIVE_IDS
+
+
+def test_factors_do_not_look_ahead():
+    assert_no_look_ahead(lambda f: factors.stock_factors(f).round(10).fillna(-999), stock(1, 600))
+
+
+@pytest.mark.parametrize(
+    "change, expected",
+    [(0.002, "up"), (-0.002, "down"), (0.0005, "flat"), (-0.0005, "flat")],
+)
+def test_outcome_bands(change, expected):
+    assert forecast.outcome(change) == expected
+
+
+def test_random_prices_earn_no_edge(panel):
+    results = forecast.walk_forward(panel, first_year=2024)
+    assert {item.model for item in results} == {"next_day", "rank_20d"}
+    assert not any(item.edge for item in results)
+
+
+def test_training_never_includes_the_test_year(panel, monkeypatch):
+    seen = []
+    real = forecast.model
+
+    class Spy:
+        def __init__(self):
+            self.inner = real()
+
+        def fit(self, x, y):
+            seen.append(panel.loc[x.index, "date"].max())
+            self.inner.fit(x, y)
+            return self.inner
+
+    monkeypatch.setattr(forecast, "model", Spy)
+    forecast.walk_forward(panel, first_year=2025)
+    assert seen and max(seen) < pd.Timestamp(2026, 1, 1)
+    assert seen[0] < pd.Timestamp(2025, 1, 1)
+
+
+def seed_security(engine, ticker="S1"):
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """INSERT INTO securities (ticker, cik, name, exchange, universe_rank)
+                   VALUES (:t, 1, 'Fixture', 'NYSE', 1)"""
+            ),
+            {"t": ticker},
+        )
+
+
+LEDGER = """INSERT INTO forecasts (created_at, security_id, as_of_session, target_session,
+    target_close, last_close, p_up, p_flat, p_down, range_low, range_high, next_day_edge,
+    rank_edge, confidence, drivers)
+    VALUES (:created, 1, '2026-07-06', '2026-07-07', :close, 100, .5, .1, .4, 95, 105,
+    false, false, 'None', '[]')"""
+
+
+def add_row(engine, created):
+    with engine.begin() as conn:
+        conn.execute(text(LEDGER), {"created": created, "close": session_close(date(2026, 7, 7))})
+
+
+def test_forecast_after_the_outcome_is_refused(engine):
+    seed_security(engine)
+    with pytest.raises(DBAPIError, match="before its outcome"):
+        add_row(engine, datetime(2026, 7, 8, tzinfo=UTC))
+
+
+@pytest.mark.parametrize("statement", ["UPDATE forecasts SET p_up = 0.9", "DELETE FROM forecasts"])
+def test_ledger_cannot_be_edited(engine, statement):
+    seed_security(engine)
+    add_row(engine, datetime(2026, 7, 7, 1, tzinfo=UTC))
+    with pytest.raises(DBAPIError, match="append-only"), engine.begin() as conn:
+        conn.execute(text(statement))
+
+
+def add_bar(engine, day, close, split=1.0, dividend=0.0):
+    with engine.begin() as conn:
+        fetch = conn.execute(
+            text(
+                """INSERT INTO fetches (source_id, source_url, retrieved_at, data_status)
+                   SELECT id, 'https://fixture.test', now(), 'end_of_day' FROM data_sources
+                   WHERE name = 'Tiingo' RETURNING id"""
+            )
+        ).scalar()
+        conn.execute(
+            text(
+                """INSERT INTO price_bars (security_id, fetch_id, market_date, market_timestamp,
+                     open, high, low, close, volume, div_cash, split_factor)
+                   VALUES (1, :f, :d, now(), :c, :c, :c, :c, 1, :div, :split)"""
+            ),
+            {"f": fetch, "d": day, "c": close, "div": dividend, "split": split},
+        )
+
+
+def test_forecast_is_scored_when_the_close_arrives(engine):
+    seed_security(engine)
+    add_row(engine, datetime(2026, 7, 7, 1, tzinfo=UTC))
+    assert forecast.score_forecasts(engine) == 0
+    add_bar(engine, "2026-07-06", 100)
+    add_bar(engine, "2026-07-07", 102)
+    assert forecast.score_forecasts(engine) == 1
+    assert forecast.score_forecasts(engine) == 0
+    with engine.connect() as conn:
+        score = conn.execute(text("SELECT * FROM forecast_scores")).first()
+    assert score.outcome == "up"
+    assert score.in_range is True
+    assert score.brier == pytest.approx(0.25 + 0.01 + 0.16)
+
+
+def test_split_on_the_target_day_is_not_a_crash(engine):
+    seed_security(engine)
+    add_row(engine, datetime(2026, 7, 7, 1, tzinfo=UTC))
+    add_bar(engine, "2026-07-06", 100)
+    add_bar(engine, "2026-07-07", 51, split=2.0)
+    forecast.score_forecasts(engine)
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT outcome FROM forecast_scores")).scalar() == "up"
+
+
+def test_writes_no_edge_forecasts_with_real_range(engine, panel):
+    seed_security(engine)
+    now = datetime(2026, 7, 8, 12, tzinfo=UTC)
+    assert forecast.write_forecasts(engine, panel[panel["ticker"].isin(["S1", "S2"])], now) == 1
+    row = queries.stock_forecast(engine, "S1")
+    assert row["target_session"] == date(2026, 7, 8)
+    assert row["next_day_edge"] is False
+    assert row["confidence"] == "None"
+    assert row["p_up"] + row["p_flat"] + row["p_down"] == pytest.approx(1)
+    assert row["range_low"] < row["last_close"] < row["range_high"]
+    assert len(row["drivers"]) == 14
+    assert row["action"] == "No reliable edge"
+
+
+def test_stale_prices_block_forecasts(engine, panel):
+    seed_security(engine)
+    with pytest.raises(RuntimeError, match="blocked as stale"):
+        forecast.write_forecasts(engine, panel, datetime(2026, 8, 4, 12, tzinfo=UTC))
+
+
+def test_ideas_name_no_stocks_without_an_edge(engine, panel):
+    seed_security(engine)
+    forecast.write_forecasts(engine, panel, datetime(2026, 7, 8, 12, tzinfo=UTC))
+    result = queries.ideas(engine)
+    assert result["edge"] is False
+    assert result["buy"] == [] and result["sell"] == []
+
+
+def test_confidence_is_none_without_an_edge():
+    chances = {"up": 0.9, "flat": 0.05, "down": 0.05}
+    assert forecast.confidence(False, chances, chances) == "None"
+
+
+@pytest.mark.parametrize(
+    "edge, rank, expected",
+    [
+        (False, 0.99, "No reliable edge"),
+        (True, 0.95, "Buy candidate"),
+        (True, 0.05, "Sell candidate"),
+        (True, 0.5, "No action"),
+        (True, None, "No reliable edge"),
+    ],
+)
+def test_action_needs_a_tested_edge(edge, rank, expected):
+    assert queries.action(edge, rank) == expected
