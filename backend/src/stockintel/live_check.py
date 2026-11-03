@@ -125,8 +125,51 @@ def check_adjustment() -> None:
         )
 
 
+def probe_sec_shapes() -> None:
+    """Print field names of SEC company facts and a Form 4, needed to design the connectors."""
+    agent = f"stock-intelligence {os.environ['SEC_CONTACT_EMAIL']}"
+    status, body = fetch(
+        "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json", {"User-Agent": agent}
+    )
+    print("facts status", status, "bytes", len(body))
+    data = json.loads(body)
+    print("taxonomies", {key: len(value) for key, value in data["facts"].items()})
+    print("dei", sorted(data["facts"]["dei"]))
+    for tag in (
+        "Revenues",
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "NetIncomeLoss",
+        "Assets",
+        "StockholdersEquity",
+        "NetCashProvidedByUsedInOperatingActivities",
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "LongTermDebtNoncurrent",
+        "GrossProfit",
+        "CashAndCashEquivalentsAtCarryingValue",
+    ):
+        concept = data["facts"]["us-gaap"].get(tag)
+        if concept:
+            units = concept["units"]
+            first = next(iter(units.values()))
+            print(tag, list(units), len(first), first[-1])
+        else:
+            print(tag, "absent")
+    status, body = fetch(
+        "https://data.sec.gov/submissions/CIK0000320193.json", {"User-Agent": agent}
+    )
+    recent = json.loads(body)["filings"]["recent"]
+    index = recent["form"].index("4")
+    accession, document = recent["accessionNumber"][index], recent["primaryDocument"][index]
+    print("form4 document", document)
+    bare = document.rsplit("/", 1)[-1]
+    url = f"https://www.sec.gov/Archives/edgar/data/320193/{accession.replace('-', '')}/{bare}"
+    status, body = fetch(url, {"User-Agent": agent})
+    print("form4 status", status)
+    print(body[:2500].decode("utf8", "replace"))
+
+
 def main() -> None:
-    check_adjustment()
+    probe_sec_shapes()
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,
