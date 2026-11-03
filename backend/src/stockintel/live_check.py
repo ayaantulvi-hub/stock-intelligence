@@ -23,6 +23,19 @@ def fetch(url: str, headers: dict[str, str] | None = None) -> tuple[int, bytes]:
         return exc.code, b""
 
 
+def describe_database_url() -> str:
+    """Describe the address's shape without printing any of it."""
+    value = os.environ.get("DATABASE_URL", "")
+    return (
+        f"length {len(value)}, "
+        f"starts_with_postgres {value.startswith(('postgresql://', 'postgres://'))}, "
+        f"has_space {' ' in value.strip()}, "
+        f"outer_whitespace {value != value.strip()}, "
+        f"has_quote {chr(39) in value or chr(34) in value}, "
+        f"at_signs {value.count('@')}"
+    )
+
+
 def check_database() -> str:
     with create_engine(Settings().database_url).connect() as conn:
         conn.execute(text("SELECT 1"))
@@ -74,10 +87,12 @@ def main() -> None:
         "fred": check_fred,
     }
     failed = False
+    print(f"database address: {describe_database_url()}")
     for name, check in checks.items():
         try:
             result = check()
-        except Exception as exc:  # Class name only, as messages can contain URLs with keys.
+        # Class name only, as messages can contain URLs with keys.
+        except Exception as exc:  # noqa: BLE001
             result = f"failed: {type(exc).__name__}"
         print(f"{name}: {result}")
         if name != "tiingo_delisted" and result != "ok":
