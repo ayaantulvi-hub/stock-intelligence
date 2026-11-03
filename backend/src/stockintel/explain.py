@@ -24,8 +24,8 @@ def story(
                 "Up: the price is above its 200-day average."
                 if above_200
                 else "Down: the price is below its 200-day average.",
-                "The 200-day average smooths out about 10 months of prices, "
-                "so it shows the bigger direction.",
+                "The 200-day average is the mean closing price over about 10 months. "
+                "It shows the bigger direction by smoothing out daily noise.",
             )
         )
     if above_50 is not None:
@@ -36,7 +36,7 @@ def story(
                 "Up: the price is above its 50-day average."
                 if above_50
                 else "Down: the price is below its 50-day average.",
-                "The 50-day average covers about 2.5 months.",
+                "The 50-day average is the mean closing price over about 2.5 months.",
             )
         )
     if summary["rsi"] is not None:
@@ -51,7 +51,8 @@ def story(
                 "Momentum",
                 "neutral",
                 text.format(summary["rsi"]),
-                "RSI runs from 0 to 100. Stretched does not mean it must reverse.",
+                "RSI is a 0 to 100 score of how fast the price has moved lately. "
+                "Above 70 or below 30 is stretched, but it does not have to reverse.",
             )
         )
     to_resistance = summary["percent_to_resistance"]
@@ -59,15 +60,18 @@ def story(
     if to_resistance is not None or to_support is not None:
         parts = []
         if to_resistance is not None:
-            parts.append(f"{abs(to_resistance):.1f}% below a level where it has stalled before")
+            parts.append(
+                f"{abs(to_resistance):.1f}% below a ceiling, where it stopped rising before"
+            )
         if to_support is not None:
-            parts.append(f"{abs(to_support):.1f}% above a level where it has held before")
+            parts.append(f"{abs(to_support):.1f}% above a floor, where it stopped falling before")
         lines.append(
             _line(
                 "Key prices",
                 "neutral",
                 f"It sits {' and '.join(parts)}.",
-                "These are resistance and support. They are past turning points, not guarantees.",
+                "The ceiling is called resistance and the floor is called support. "
+                "Both come from past turning points, and either can break.",
             )
         )
     if forecast:
@@ -103,7 +107,7 @@ def story(
                 signal["name"],
                 "neutral",
                 f"{signal['detail']}. {tested}",
-                f"The idea is cancelled at {signal['cancellation_level']:.2f}.",
+                f"If the price passes {signal['cancellation_level']:.2f}, this idea has failed.",
             )
         )
     return lines

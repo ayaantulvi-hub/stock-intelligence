@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
+import Glossary from "./Glossary";
 import { FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 type Status = {
@@ -160,6 +161,7 @@ function StockView({ stock }: { stock: Stock }) {
           </button>
         ))}
       </div>
+      <Glossary />
       {tab === "Simple view" && <ForecastPanel ticker={stock.ticker} />}
       {tab === "Chart" && <ChartPanel ticker={stock.ticker} />}
       {tab === "All factors" && <FactorsPanel ticker={stock.ticker} />}

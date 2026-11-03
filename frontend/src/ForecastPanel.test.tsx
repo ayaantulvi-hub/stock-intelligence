@@ -1,6 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import Glossary from "./Glossary";
 import { FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 afterEach(() => {
@@ -90,4 +91,10 @@ test("names no stocks when the model has no edge", async () => {
   render(<IdeasPanel />);
   expect(await screen.findByText("No reliable edge")).toBeTruthy();
   expect(screen.queryByText("Buy candidates")).toBeNull();
+});
+
+test("explains support and resistance in everyday words", async () => {
+  render(<Glossary />);
+  expect(screen.getByText(/Think of a floor/)).toBeTruthy();
+  expect(screen.getByText(/Think of a ceiling/)).toBeTruthy();
 });

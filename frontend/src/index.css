@@ -73,3 +73,9 @@ td:nth-child(4) { white-space: normal; min-width: 180px; }
 .story span { color: var(--muted); font-size: 0.85rem; }
 .story .tone-good { border-left-color: var(--ok); }
 .story .tone-bad { border-left-color: var(--bad); }
+.glossary { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.glossary summary { cursor: pointer; font-weight: 600; }
+.glossary dl { border-top: 0; margin-top: 8px; }
+.glossary dl div { display: block; padding: 8px 0; }
+.glossary dt { font-weight: 600; }
+.glossary dd { margin: 2px 0 0; text-align: left; font-weight: 400; color: var(--muted); }

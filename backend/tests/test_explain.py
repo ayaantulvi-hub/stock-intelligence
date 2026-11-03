@@ -25,7 +25,7 @@ def test_states_facts_in_plain_english():
     assert "Down: the price is below its 200-day average." in result
     assert "Up: the price is above its 50-day average." in result
     assert "Stretched upward" in result
-    assert "1.6% below a level" in result
+    assert "1.6% below a ceiling" in result
 
 
 def test_unknown_values_are_left_out():
