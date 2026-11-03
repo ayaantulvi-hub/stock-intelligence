@@ -408,3 +408,30 @@ def test_sec_parses_listed_forms_only():
     )
     assert [row.form for row in rows] == ["10-K"]
     assert rows[0].document_url.endswith("/320193/000032019326000001/a.htm")
+
+
+def long_bars(count):
+    days = market.sessions_between(date(2025, 1, 2), date(2026, 7, 7))[-count:]
+    return [bar(day, close=100.0 + i * 0.1) for i, day in enumerate(days)]
+
+
+def test_chart_shows_candles_and_leaves_warm_up_blank(stocks):
+    run_prices(stocks, FixturePrices({"AAA": long_bars(260)}), START, 45, NOW)
+    result = queries.chart(stocks, "AAA", "daily")
+    assert len(result["candles"]) == 260
+    assert result["candles"][0]["sma20"] is None
+    assert result["candles"][-1]["sma200"] is not None
+    assert result["stale"] is True  # The fixture ends in the past, relative to the real clock.
+
+
+def test_stale_data_blocks_signals(stocks):
+    run_prices(stocks, FixturePrices({"AAA": long_bars(260)}), START, 45, NOW)
+    result = queries.chart(stocks, "AAA", "daily")
+    assert result["signals_blocked"] is True
+    assert result["signals"] == []
+
+
+def test_chart_with_no_bars_is_empty_not_filled(stocks):
+    result = queries.chart(stocks, "BBB", "daily")
+    assert result["candles"] == []
+    assert result["latest_bar"] is None

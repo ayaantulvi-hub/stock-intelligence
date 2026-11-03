@@ -2,8 +2,10 @@
 
 from datetime import UTC, datetime
 
+import pandas as pd
 from sqlalchemy import Engine, text
 
+from stockintel import charts, signals
 from stockintel.market import is_stale, latest_expected_session
 
 FEEDS = {
@@ -134,3 +136,59 @@ def issues(engine: Engine) -> list[dict]:
                 )
             )
         )
+
+
+def chart(engine: Engine, ticker: str, timeframe: str) -> dict | None:
+    """Candles, indicators, levels and signals, computed only from stored bars."""
+    with engine.connect() as conn:
+        security = conn.execute(
+            text("SELECT id, ticker, name FROM securities WHERE ticker = :ticker"),
+            {"ticker": ticker.upper()},
+        ).first()
+        if security is None:
+            return None
+        rows = conn.execute(
+            text(
+                """SELECT DISTINCT ON (market_date) market_date, open, high, low, close,
+                     volume, div_cash, split_factor
+                   FROM price_bars WHERE security_id = :id
+                   ORDER BY market_date, id DESC"""
+            ),
+            {"id": security.id},
+        ).all()
+    now = datetime.now(UTC)
+    latest = rows[-1].market_date if rows else None
+    stale = is_stale(latest, now)
+    result = {
+        "ticker": security.ticker,
+        "name": security.name,
+        "timeframe": timeframe,
+        "stale": stale,
+        "latest_bar": latest,
+        "latest_expected_session": latest_expected_session(now),
+        "candles": [],
+        "levels": [],
+        "signals": [],
+        "signals_blocked": stale,
+    }
+    if not rows:
+        return result
+    frame = charts.resample(charts.adjust(pd.DataFrame([row._mapping for row in rows])), timeframe)
+    close = frame["close"]
+    lines = charts.macd(close)
+    computed = frame.assign(
+        sma20=charts.sma(close, 20),
+        sma50=charts.sma(close, 50),
+        sma200=charts.sma(close, 200),
+        rsi=charts.rsi(close),
+        macd=lines["macd"],
+        macd_signal=lines["signal"],
+        macd_histogram=lines["histogram"],
+    )
+    # Blank warm-up values stay blank. They are never filled.
+    records = computed.astype(object).where(computed.notna(), None).to_dict("records")
+    result["candles"] = records
+    result["levels"] = [level.__dict__ for level in charts.levels(frame)]
+    if not stale:
+        result["signals"] = signals.build_signals(charts.detect_patterns(frame), {})
+    return result

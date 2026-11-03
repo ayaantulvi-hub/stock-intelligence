@@ -42,3 +42,9 @@ a { color: inherit; }
 .scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 th, td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.chart { height: 380px; width: 100%; margin-top: 10px; }
+.chart.lower { height: 160px; }
+.tabs { display: flex; gap: 6px; }
+.tabs button { padding: 6px 12px; text-transform: capitalize; }
+.tabs button[aria-pressed="true"] { font-weight: 700; }
+@media (max-width: 600px) { .chart { height: 300px; } }

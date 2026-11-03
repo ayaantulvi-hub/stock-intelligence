@@ -78,35 +78,55 @@ def check_fred() -> str:
     return "ok" if status == 200 and "observations" in json.loads(body) else f"http {status}"
 
 
-def probe_public_shapes() -> None:
-    """Print public field names and tickers needed to design the connectors."""
-    agent = f"stock-intelligence {os.environ['SEC_CONTACT_EMAIL']}"
-    status, body = fetch(
-        "https://www.sec.gov/files/company_tickers_exchange.json", {"User-Agent": agent}
-    )
-    print("sec tickers file:", status)
-    if status == 200:
-        data = json.loads(body)
-        print("sec fields:", data["fields"], "rows:", len(data["data"]))
-        print("sec first 25:", [row[2] for row in data["data"][:25]])
-        print("sec rows 480-490:", [row[2] for row in data["data"][480:490]])
+def check_adjustment() -> None:
+    """Compare adjusted closes with Tiingo's own, which is the independent reference."""
+    from datetime import date
+
+    import pandas as pd
+    from sqlalchemy import text as sql
+
+    from stockintel.charts import adjust
+
     headers = {"Authorization": f"Token {os.environ['TIINGO_API_TOKEN']}"}
-    for ticker in ("lehmq", "twtr", "aapl"):
-        for path in ("", "/prices?startDate=2008-01-02&endDate=2022-12-30&resampleFreq=monthly"):
-            status, body = fetch(f"https://api.tiingo.com/tiingo/daily/{ticker}{path}", headers)
-            parsed = json.loads(body) if body else None
-            if isinstance(parsed, list):
-                first = parsed[0] if parsed else {}
-                print(ticker, "prices", status, "rows", len(parsed), "fields", sorted(first))
-                print(
-                    ticker, "dates", first.get("date"), parsed[-1].get("date") if parsed else None
-                )
-            else:
-                print(ticker, "meta", status, sorted(parsed or {}), (parsed or {}).get("endDate"))
+    engine = create_engine(Settings().database_url)
+    for ticker in ("AAPL", "NVDA", "JPM", "WMT", "XOM"):
+        with engine.connect() as conn:
+            rows = conn.execute(
+                sql(
+                    """SELECT DISTINCT ON (market_date) market_date, open, high, low, close,
+                         volume, div_cash, split_factor
+                       FROM price_bars p JOIN securities s ON s.id = p.security_id
+                       WHERE s.ticker = :ticker ORDER BY market_date, p.id DESC"""
+                ),
+                {"ticker": ticker},
+            ).all()
+        if not rows:
+            print(f"adjustment {ticker}: no stored bars")
+            continue
+        first, last = rows[0].market_date, rows[-1].market_date
+        url = (
+            f"https://api.tiingo.com/tiingo/daily/{ticker.lower()}/prices"
+            f"?startDate={first}&endDate={last}"
+        )
+        status, body = fetch(url, headers)
+        if status != 200:
+            print(f"adjustment {ticker}: http {status}")
+            continue
+        reference = {date.fromisoformat(r["date"][:10]): r["adjClose"] for r in json.loads(body)}
+        ours = adjust(pd.DataFrame([row._mapping for row in rows]))
+        errors = [
+            abs(close / reference[day] - 1)
+            for day, close in zip(ours["market_date"], ours["close"], strict=True)
+            if day in reference
+        ]
+        print(
+            f"adjustment {ticker}: bars {len(errors)}, "
+            f"worst {max(errors):.4%}, average {sum(errors) / len(errors):.4%}"
+        )
 
 
 def main() -> None:
-    probe_public_shapes()
+    check_adjustment()
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,

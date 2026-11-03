@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from stockintel import queries
+from stockintel.charts import TIMEFRAMES
 from stockintel.config import get_settings
 from stockintel.db import get_engine
 from stockintel.status import get_status
@@ -73,6 +74,16 @@ def search(q: str = "") -> list[dict]:
 @app.get("/api/stocks/{ticker}")
 def stock(ticker: str) -> dict:
     result = queries.stock(get_engine(), ticker)
+    if result is None:
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return result
+
+
+@app.get("/api/stocks/{ticker}/chart")
+def chart(ticker: str, timeframe: str = "daily") -> dict:
+    if timeframe not in TIMEFRAMES:
+        raise HTTPException(422, "timeframe must be daily, weekly or monthly")
+    result = queries.chart(get_engine(), ticker, timeframe)
     if result is None:
         raise HTTPException(404, "Not verified: this stock is not in the covered list")
     return result
