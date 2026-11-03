@@ -78,7 +78,35 @@ def check_fred() -> str:
     return "ok" if status == 200 and "observations" in json.loads(body) else f"http {status}"
 
 
+def probe_public_shapes() -> None:
+    """Print public field names and tickers needed to design the connectors."""
+    agent = f"stock-intelligence {os.environ['SEC_CONTACT_EMAIL']}"
+    status, body = fetch(
+        "https://www.sec.gov/files/company_tickers_exchange.json", {"User-Agent": agent}
+    )
+    print("sec tickers file:", status)
+    if status == 200:
+        data = json.loads(body)
+        print("sec fields:", data["fields"], "rows:", len(data["data"]))
+        print("sec first 25:", [row[2] for row in data["data"][:25]])
+        print("sec rows 480-490:", [row[2] for row in data["data"][480:490]])
+    headers = {"Authorization": f"Token {os.environ['TIINGO_API_TOKEN']}"}
+    for ticker in ("lehmq", "twtr", "aapl"):
+        for path in ("", "/prices?startDate=2008-01-02&endDate=2022-12-30&resampleFreq=monthly"):
+            status, body = fetch(f"https://api.tiingo.com/tiingo/daily/{ticker}{path}", headers)
+            parsed = json.loads(body) if body else None
+            if isinstance(parsed, list):
+                first = parsed[0] if parsed else {}
+                print(ticker, "prices", status, "rows", len(parsed), "fields", sorted(first))
+                print(
+                    ticker, "dates", first.get("date"), parsed[-1].get("date") if parsed else None
+                )
+            else:
+                print(ticker, "meta", status, sorted(parsed or {}), (parsed or {}).get("endDate"))
+
+
 def main() -> None:
+    probe_public_shapes()
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,
