@@ -61,6 +61,8 @@ function theme() {
       vertLines: { color: dark ? "#2a2a27" : "#ecece6" },
       horzLines: { color: dark ? "#2a2a27" : "#ecece6" },
     },
+    // The same width on both panels keeps their dates lined up.
+    rightPriceScale: { minimumWidth: 90 },
     autoSize: true,
   };
 }
