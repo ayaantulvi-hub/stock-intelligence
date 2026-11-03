@@ -105,6 +105,14 @@ def forecast(ticker: str) -> dict | None:
     return queries.stock_forecast(get_engine(), ticker)
 
 
+@app.get("/api/stocks/{ticker}/story")
+def story(ticker: str) -> list[dict]:
+    result = queries.stock_story(get_engine(), ticker)
+    if result is None:
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return result
+
+
 @app.get("/api/ideas")
 def ideas() -> dict:
     return queries.ideas(get_engine())

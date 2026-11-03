@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { ForecastPanel, IdeasPanel } from "./ForecastPanel";
+import { FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 afterEach(() => {
   cleanup();
@@ -38,9 +38,7 @@ const factors = [
   },
 ];
 
-test("says No reliable edge and lists factors, with missing ones Not verified", async () => {
-  stub({
-    "/api/stocks/AAA/forecast": {
+const forecast = {
       action: "No reliable edge",
       target_session: "2026-07-08",
       as_of_session: "2026-07-07",
@@ -55,13 +53,26 @@ test("says No reliable edge and lists factors, with missing ones Not verified", 
       next_day_edge: false,
       confidence: "None",
       drivers: [{ factor: "mom_12_1", percentile: 91 }],
-    },
-    "/api/factors": factors,
+};
+
+test("lists every factor, with missing ones Not verified", async () => {
+  stub({ "/api/stocks/AAA/forecast": forecast, "/api/factors": factors });
+  render(<FactorsPanel ticker="AAA" />);
+  expect(await screen.findByText("91")).toBeTruthy();
+  expect(screen.getByText("Needs SEC company facts")).toBeTruthy();
+});
+
+test("simple view gives the call and explains the data in plain English", async () => {
+  stub({
+    "/api/stocks/AAA/forecast": forecast,
+    "/api/stocks/AAA/story": [
+      { topic: "Long-term trend", tone: "good", text: "Up: fixture.", why: "Fixture reason." },
+    ],
   });
   render(<ForecastPanel ticker="AAA" />);
-  expect(await screen.findByText("91")).toBeTruthy();
+  expect(await screen.findByText("Up: fixture.")).toBeTruthy();
+  expect(screen.getByText("Fixture reason.")).toBeTruthy();
   expect(screen.getAllByText("No reliable edge").length).toBe(2);
-  expect(screen.getByText("Needs SEC company facts")).toBeTruthy();
 });
 
 test("names no stocks when the model has no edge", async () => {

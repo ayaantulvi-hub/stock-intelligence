@@ -66,3 +66,10 @@ h4 { font-size: 0.85rem; font-weight: 600; margin: 14px 0 2px; color: var(--mute
 .action.sell { border-left-color: var(--bad); }
 td small { white-space: normal; }
 td:nth-child(4) { white-space: normal; min-width: 180px; }
+.pages { margin: 10px 0 4px; }
+.story { display: grid; gap: 8px; }
+.story div { padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 8px; }
+.story strong { display: block; margin: 2px 0; }
+.story span { color: var(--muted); font-size: 0.85rem; }
+.story .tone-good { border-left-color: var(--ok); }
+.story .tone-bad { border-left-color: var(--bad); }

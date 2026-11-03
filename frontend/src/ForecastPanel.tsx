@@ -111,13 +111,14 @@ function FactorTable({ forecast, factors }: { forecast: Forecast | null; factors
   );
 }
 
-export function ForecastPanel({ ticker }: { ticker: string }) {
+type Line = { topic: string; tone: string; text: string; why: string };
+
+export function FactorsPanel({ ticker }: { ticker: string }) {
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [factors, setFactors] = useState<Factor[]>([]);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    setFailed(false);
     Promise.all([
       getJson<Forecast | null>(`/api/stocks/${encodeURIComponent(ticker)}/forecast`),
       getJson<Factor[]>("/api/factors"),
@@ -125,6 +126,28 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
       .then(([nextForecast, nextFactors]) => {
         setForecast(nextForecast);
         setFactors(nextFactors);
+      })
+      .catch(() => setFailed(true));
+  }, [ticker]);
+
+  if (failed) return <p className="bad">Factors failed to load. Not verified.</p>;
+  return <FactorTable forecast={forecast} factors={factors} />;
+}
+
+export function ForecastPanel({ ticker }: { ticker: string }) {
+  const [forecast, setForecast] = useState<Forecast | null>(null);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+    Promise.all([
+      getJson<Forecast | null>(`/api/stocks/${encodeURIComponent(ticker)}/forecast`),
+      getJson<Line[]>(`/api/stocks/${encodeURIComponent(ticker)}/story`),
+    ])
+      .then(([nextForecast, nextLines]) => {
+        setForecast(nextForecast);
+        setLines(nextLines);
       })
       .catch(() => setFailed(true));
   }, [ticker]);
@@ -141,9 +164,23 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
             : "Forecasts are written once a day before the US market opens."}
         </p>
       </div>
+      {lines.length > 0 && (
+        <>
+          <h3>What the data says</h3>
+          <div className="story">
+            {lines.map((line) => (
+              <div key={line.topic} className={`tone-${line.tone}`}>
+                <small>{line.topic}</small>
+                <strong>{line.text}</strong>
+                <span>{line.why}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
       {forecast && (
         <>
-          <h3>Forecast for {forecast.target_session}</h3>
+          <h3>Tomorrow's forecast ({forecast.target_session})</h3>
           <div className="glance">
             <div>
               <small>Up</small>
@@ -178,7 +215,6 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
           </small>
         </>
       )}
-      <FactorTable forecast={forecast} factors={factors} />
     </div>
   );
 }

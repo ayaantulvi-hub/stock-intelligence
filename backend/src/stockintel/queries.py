@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import backtest, charts, signals
+from stockintel import backtest, charts, explain, signals
 from stockintel.market import is_stale, latest_expected_session
 
 FEEDS = {
@@ -297,3 +297,15 @@ def track_record(engine: Engine) -> dict:
             )
         )
     return {**dict(row._mapping), "written": written, "evaluations": evaluations}
+
+
+def stock_story(engine: Engine, ticker: str) -> list[dict] | None:
+    data = chart(engine, ticker, "daily")
+    if data is None:
+        return None
+    return explain.story(
+        data["summary"],
+        data["signals"],
+        data["signals_blocked"],
+        stock_forecast(engine, ticker),
+    )

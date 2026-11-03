@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
-import { ForecastPanel, IdeasPanel } from "./ForecastPanel";
+import { FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 type Status = {
   database: { state: string };
@@ -139,7 +139,10 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
+const TABS = ["Simple view", "Chart", "All factors", "Filings and prices"];
+
 function StockView({ stock }: { stock: Stock }) {
+  const [tab, setTab] = useState(TABS[0]);
   return (
     <section>
       <h2>
@@ -150,8 +153,24 @@ function StockView({ stock }: { stock: Stock }) {
           Stale: expected prices for {stock.latest_expected_session}. Do not rely on this data.
         </p>
       )}
-      <ForecastPanel ticker={stock.ticker} />
-      <ChartPanel ticker={stock.ticker} />
+      <div className="tabs pages" role="group" aria-label="Stock page">
+        {TABS.map((name) => (
+          <button key={name} aria-pressed={name === tab} onClick={() => setTab(name)}>
+            {name}
+          </button>
+        ))}
+      </div>
+      {tab === "Simple view" && <ForecastPanel ticker={stock.ticker} />}
+      {tab === "Chart" && <ChartPanel ticker={stock.ticker} />}
+      {tab === "All factors" && <FactorsPanel ticker={stock.ticker} />}
+      {tab === "Filings and prices" && <RecordsView stock={stock} />}
+    </section>
+  );
+}
+
+function RecordsView({ stock }: { stock: Stock }) {
+  return (
+    <section>
       <h3>Recent prices (raw, not adjusted)</h3>
       {stock.bars.length === 0 ? (
         <p>{NOT_VERIFIED}</p>
