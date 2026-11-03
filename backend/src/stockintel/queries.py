@@ -308,4 +308,11 @@ def stock_story(engine: Engine, ticker: str) -> list[dict] | None:
         data["signals"],
         data["signals_blocked"],
         stock_forecast(engine, ticker),
+        latest_evaluations(engine),
     )
+
+
+def latest_evaluations(engine: Engine) -> dict[str, dict]:
+    query = "SELECT DISTINCT ON (model) * FROM model_evaluations ORDER BY model, id DESC"
+    with engine.connect() as conn:
+        return {row.model: dict(row._mapping) for row in conn.execute(text(query))}

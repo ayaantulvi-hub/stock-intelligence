@@ -111,7 +111,49 @@ function FactorTable({ forecast, factors }: { forecast: Forecast | null; factors
   );
 }
 
-type Line = { topic: string; tone: string; text: string; why: string };
+type Line = {
+  topic: string;
+  tone: string;
+  text: string;
+  why: string;
+  evidence: string;
+  on_chart: string;
+};
+
+function Story({ lines, chartFirst = false }: { lines: Line[]; chartFirst?: boolean }) {
+  return (
+    <div className="story">
+      {lines.map((line) => (
+        <div key={line.topic} className={`tone-${line.tone}`}>
+          <small>{line.topic}</small>
+          <strong>{line.text}</strong>
+          <span>{line.why}</span>
+          <details open={chartFirst}>
+            <summary>How we know</summary>
+            <p>{line.evidence}</p>
+            <p>{line.on_chart}</p>
+          </details>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ChartReading({ ticker }: { ticker: string }) {
+  const [lines, setLines] = useState<Line[]>([]);
+  useEffect(() => {
+    getJson<Line[]>(`/api/stocks/${encodeURIComponent(ticker)}/story`)
+      .then(setLines)
+      .catch(() => setLines([]));
+  }, [ticker]);
+  if (lines.length === 0) return null;
+  return (
+    <>
+      <h3>What this chart is showing</h3>
+      <Story lines={lines.filter((line) => line.topic !== "Why this call")} chartFirst />
+    </>
+  );
+}
 
 export function FactorsPanel({ ticker }: { ticker: string }) {
   const [forecast, setForecast] = useState<Forecast | null>(null);
@@ -167,15 +209,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
       {lines.length > 0 && (
         <>
           <h3>What the data says</h3>
-          <div className="story">
-            {lines.map((line) => (
-              <div key={line.topic} className={`tone-${line.tone}`}>
-                <small>{line.topic}</small>
-                <strong>{line.text}</strong>
-                <span>{line.why}</span>
-              </div>
-            ))}
-          </div>
+          <Story lines={lines} />
         </>
       )}
       {forecast && (

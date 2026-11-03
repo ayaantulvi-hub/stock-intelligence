@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
-import { FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
+import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 type Status = {
   database: { state: string };
@@ -163,7 +163,12 @@ function StockView({ stock }: { stock: Stock }) {
       </div>
       <Glossary />
       {tab === "Simple view" && <ForecastPanel ticker={stock.ticker} />}
-      {tab === "Chart" && <ChartPanel ticker={stock.ticker} />}
+      {tab === "Chart" && (
+        <>
+          <ChartPanel ticker={stock.ticker} />
+          <ChartReading ticker={stock.ticker} />
+        </>
+      )}
       {tab === "All factors" && <FactorsPanel ticker={stock.ticker} />}
       {tab === "Filings and prices" && <RecordsView stock={stock} />}
     </section>

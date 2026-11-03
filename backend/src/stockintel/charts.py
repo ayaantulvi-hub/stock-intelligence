@@ -180,8 +180,16 @@ def summary(frame: pd.DataFrame, found: list[Level]) -> dict | None:
         rsi_state = "Oversold"
     else:
         rsi_state = "Middle range"
+
+    def level_price(kind: str) -> float | None:
+        return next((item.price for item in found if item.kind == kind), None)
+
     return {
         "close": latest,
+        "average_50": None if np.isnan(average_50) else float(average_50),
+        "average_200": None if np.isnan(average_200) else float(average_200),
+        "resistance": level_price("resistance"),
+        "support": level_price("support"),
         "change_percent": (latest / previous - 1) * 100 if previous else None,
         "above_50": above(average_50),
         "above_200": above(average_200),

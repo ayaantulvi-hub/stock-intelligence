@@ -67,12 +67,21 @@ test("simple view gives the call and explains the data in plain English", async 
   stub({
     "/api/stocks/AAA/forecast": forecast,
     "/api/stocks/AAA/story": [
-      { topic: "Long-term trend", tone: "good", text: "Up: fixture.", why: "Fixture reason." },
+      {
+        topic: "Long-term trend",
+        tone: "good",
+        text: "Up: fixture.",
+        why: "Fixture reason.",
+        evidence: "Fixture numbers.",
+        on_chart: "Fixture chart note.",
+      },
     ],
   });
   render(<ForecastPanel ticker="AAA" />);
   expect(await screen.findByText("Up: fixture.")).toBeTruthy();
   expect(screen.getByText("Fixture reason.")).toBeTruthy();
+  expect(screen.getByText("Fixture numbers.")).toBeTruthy();
+  expect(screen.getByText("Fixture chart note.")).toBeTruthy();
   expect(screen.getAllByText("No reliable edge").length).toBe(2);
 });
 
