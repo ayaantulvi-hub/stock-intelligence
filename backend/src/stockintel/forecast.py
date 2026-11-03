@@ -311,15 +311,16 @@ def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
             chances = {key: float(probabilities.loc[index, key]) for key in ("up", "flat", "down")}
             written += conn.execute(
                 text(
-                    """INSERT INTO forecasts (security_id, as_of_session, target_session,
+                    """INSERT INTO forecasts (created_at, security_id, as_of_session, target_session,
                          target_close, last_close, p_up, p_flat, p_down, range_low, range_high,
                          rank_20d, next_day_edge, rank_edge, confidence, drivers)
-                       SELECT id, :as_of, :target, :target_close, :close, :up, :flat, :down,
+                       SELECT :now, id, :as_of, :target, :target_close, :close, :up, :flat, :down,
                          :low, :high, :rank, :day_edge, :rank_edge, :confidence, :drivers
                        FROM securities WHERE ticker = :ticker
                        ON CONFLICT (security_id, target_session) DO NOTHING"""
                 ),
                 {
+                    "now": now,
                     "ticker": row["ticker"],
                     "as_of": expected,
                     "target": target,
