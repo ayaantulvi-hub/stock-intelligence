@@ -1,0 +1,49 @@
+name: Update data
+on:
+  workflow_dispatch:
+    inputs:
+      filings_and_economic:
+        description: Also update filings and economic data
+        type: boolean
+        default: false
+  schedule:
+    # Prices: 12 runs after each US close. 45 stocks a run stays under Tiingo's 50 an hour.
+    - cron: "20 23 * * 1-5"
+    - cron: "20 0-10 * * 2-6"
+    # Filings and economic data: once a day.
+    - cron: "50 10 * * 2-6"
+permissions:
+  contents: read
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TIINGO_API_TOKEN: ${{ secrets.TIINGO_API_TOKEN }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --no-dev
+      - run: uv run --no-dev alembic upgrade head
+      - run: uv run --no-dev python -m stockintel.ingest universe
+      - name: Prices
+        if: github.event.schedule != '50 10 * * 2-6'
+        run: uv run --no-dev python -m stockintel.ingest prices --limit 45
+      - name: Filings
+        if: github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic
+        run: uv run --no-dev python -m stockintel.ingest filings
+      - name: Economic data
+        if: github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic
+        run: uv run --no-dev python -m stockintel.ingest economic
+      - name: Report
+        if: always()
+        run: uv run --no-dev python -m stockintel.report

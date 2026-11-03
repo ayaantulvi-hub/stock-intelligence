@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: stock-intelligence
+    runtime: docker
+    plan: free
+    region: virginia
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false

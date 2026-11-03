@@ -59,9 +59,7 @@ def get_status(engine: Engine, stale_after_seconds: int) -> dict:
 
 
 def _result(now: datetime, database: dict, migrations: dict, worker: dict) -> dict:
-    healthy = (
-        database["state"] == "ok" and migrations["state"] == "ok" and worker["state"] == "ok"
-    )
+    healthy = database["state"] == "ok" and migrations["state"] == "ok" and worker["state"] == "ok"
     return {
         "healthy": healthy,
         "checked_at": now.isoformat(),

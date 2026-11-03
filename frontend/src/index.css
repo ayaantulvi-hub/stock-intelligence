@@ -27,3 +27,18 @@ dl div { display: flex; justify-content: space-between; gap: 16px; padding: 12px
 dd { margin: 0; font-weight: 600; text-align: right; }
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }
+main { max-width: 900px; }
+section { margin-top: 28px; }
+h2 { font-size: 1.1rem; margin: 0 0 10px; }
+h3 { font-size: 1rem; margin: 20px 0 8px; }
+small { display: block; color: var(--muted); font-weight: 400; margin-top: 2px; }
+form { display: flex; gap: 8px; }
+input { flex: 1; min-width: 0; padding: 10px; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 6px; }
+button { padding: 10px 14px; font: inherit; cursor: pointer; }
+button.link { padding: 0; background: none; border: 0; color: inherit; font-weight: 600; text-decoration: underline; }
+ul { padding-left: 18px; }
+li { margin: 6px 0; }
+a { color: inherit; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+th, td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }

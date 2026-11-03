@@ -43,3 +43,21 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t stock-intelligence .
+      - name: Refuses to start in production without a password
+        run: |
+          if docker run --rm -e DATABASE_URL=postgresql://x:y@127.0.0.1/z stock-intelligence; then
+            exit 1
+          fi
+      - name: Serves the dashboard behind the password
+        run: |
+          docker run -d --name app -p 8000:8000 -e DATABASE_URL=postgresql://x:y@127.0.0.1/z \
+            -e DASHBOARD_PASSWORD=ci-only stock-intelligence
+          sleep 8
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/api/health)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/)" = 401
+          curl -sf -u owner:ci-only localhost:8000/ | grep -q "Stock Intelligence"

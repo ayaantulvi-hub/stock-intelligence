@@ -41,6 +41,11 @@ def migrated(database_url):
 def engine(migrated, database_url):
     engine = create_engine(database_url)
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE worker_heartbeats, data_sources RESTART IDENTITY"))
+        conn.execute(
+            text(
+                """TRUNCATE worker_heartbeats, feed_runs, validation_issues, securities,
+                   fetches, price_bars, filings, economic_observations RESTART IDENTITY CASCADE"""
+            )
+        )
     yield engine
     engine.dispose()
