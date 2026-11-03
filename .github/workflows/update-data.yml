@@ -2,6 +2,10 @@ name: Update data
 on:
   workflow_dispatch:
     inputs:
+      prices:
+        description: Update prices
+        type: boolean
+        default: true
       filings_and_economic:
         description: Also update filings and economic data
         type: boolean
@@ -36,13 +40,15 @@ jobs:
       - run: uv run --no-dev alembic upgrade head
       - run: uv run --no-dev python -m stockintel.ingest universe
       - name: Prices
-        if: github.event.schedule != '50 10 * * 2-6'
+        if: github.event_name == 'schedule' && github.event.schedule != '50 10 * * 2-6' || inputs.prices
         run: uv run --no-dev python -m stockintel.ingest prices --limit 45
       - name: Filings
-        if: github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic
+        # Runs even if prices failed: one feed's failure must not stop the others.
+        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest filings
       - name: Economic data
-        if: github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic
+        # Runs even if prices failed: one feed's failure must not stop the others.
+        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest economic
       - name: Report
         if: always()
