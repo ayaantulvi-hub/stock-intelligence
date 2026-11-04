@@ -265,3 +265,9 @@ def test_confidence_is_none_without_an_edge():
 )
 def test_action_needs_a_tested_edge(edge, rank, expected):
     assert queries.action(edge, rank) == expected
+
+
+def test_factor_tests_report_spread_and_strength(panel):
+    results = forecast.test_factors(panel)
+    assert {"vol_20", "reversal_5d"} <= {row["factor"] for row in results}
+    assert not any(abs(row["t_stat"]) > 6 for row in results)  # Random fixture data.

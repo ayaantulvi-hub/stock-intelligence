@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import backtest, charts, explain, longterm, signals
+from stockintel import advice, backtest, charts, explain, longterm, signals
 from stockintel.market import is_stale, latest_expected_session
 
 FEEDS = {
@@ -362,3 +362,76 @@ def valuation(engine: Engine, ticker: str, changes: dict) -> dict | None:
         load_facts(engine, security.id), price.close if price else None, changes
     )
     return {**report, "ticker": security.ticker, "insider_trades": trades}
+
+
+def latest_factor_tests(engine: Engine) -> dict[str, dict]:
+    query = "SELECT DISTINCT ON (factor) * FROM factor_tests ORDER BY factor, id DESC"
+    with engine.connect() as conn:
+        return {row.factor: dict(row._mapping) for row in conn.execute(text(query))}
+
+
+def stock_leans(engine: Engine, ticker: str) -> dict | None:
+    forecast = stock_forecast(engine, ticker)
+    if forecast is None:
+        return None
+    return advice.factor_leans(forecast["drivers"], latest_factor_tests(engine))
+
+
+def get_position(engine: Engine, ticker: str) -> dict | None:
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """SELECT p.shares, p.buy_price, p.target_price, p.stop_price, p.updated_at,
+                     s.id AS security_id
+                   FROM positions p JOIN securities s ON s.id = p.security_id
+                   WHERE s.ticker = :t"""
+            ),
+            {"t": ticker.upper()},
+        ).first()
+        if row is None:
+            return None
+        price = conn.execute(
+            text(
+                """SELECT close FROM price_bars WHERE security_id = :id
+                   ORDER BY market_date DESC, id DESC LIMIT 1"""
+            ),
+            {"id": row.security_id},
+        ).scalar()
+    position = {
+        key: getattr(row, key) for key in ("shares", "buy_price", "target_price", "stop_price")
+    }
+    if price is None:
+        return {**position, "price": None}
+    forecast = stock_forecast(engine, ticker)
+    action_name = forecast["action"] if forecast else "No reliable edge"
+    report = valuation(engine, ticker, {}) or {}
+    return advice.position_view(position, price, action_name, report.get("cases", []))
+
+
+def save_position(engine: Engine, ticker: str, values: dict) -> bool:
+    with engine.begin() as conn:
+        return bool(
+            conn.execute(
+                text(
+                    """INSERT INTO positions (security_id, shares, buy_price, target_price,
+                         stop_price)
+                       SELECT id, :shares, :buy_price, :target_price, :stop_price
+                       FROM securities WHERE ticker = :t
+                       ON CONFLICT (security_id) DO UPDATE SET shares = EXCLUDED.shares,
+                         buy_price = EXCLUDED.buy_price, target_price = EXCLUDED.target_price,
+                         stop_price = EXCLUDED.stop_price, updated_at = now()"""
+                ),
+                {**values, "t": ticker.upper()},
+            ).rowcount
+        )
+
+
+def delete_position(engine: Engine, ticker: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """DELETE FROM positions WHERE security_id =
+                   (SELECT id FROM securities WHERE ticker = :t)"""
+            ),
+            {"t": ticker.upper()},
+        )

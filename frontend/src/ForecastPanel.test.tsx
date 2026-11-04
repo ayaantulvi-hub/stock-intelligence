@@ -2,6 +2,8 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import Glossary from "./Glossary";
+
+vi.mock("./PositionPanel", () => ({ default: () => null }));
 import { FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 afterEach(() => {
@@ -66,6 +68,22 @@ test("lists every factor, with missing ones Not verified", async () => {
 test("simple view gives the call and explains the data in plain English", async () => {
   stub({
     "/api/stocks/AAA/forecast": forecast,
+    "/api/stocks/AAA/leans": {
+      factors: [
+        {
+          factor: "insider",
+          name: "Insider trades",
+          percentile: 95,
+          lean: "Buy",
+          evidence: "Paper only: not tested in this app yet",
+          proven: false,
+        },
+      ],
+      proven_buy: 0,
+      proven_sell: 0,
+      paper_buy: 1,
+      paper_sell: 0,
+    },
     "/api/stocks/AAA/story": [
       {
         topic: "Long-term trend",
@@ -81,6 +99,8 @@ test("simple view gives the call and explains the data in plain English", async 
   expect(await screen.findByText("Up: fixture.")).toBeTruthy();
   expect(screen.getByText("Fixture reason.")).toBeTruthy();
   expect(screen.getByText("Fixture numbers.")).toBeTruthy();
+  expect(screen.getByText("Insider trades")).toBeTruthy();
+  expect(screen.getByText("Buy")).toBeTruthy();
   expect(screen.getByText("Fixture chart note.")).toBeTruthy();
   expect(screen.getAllByText("No reliable edge").length).toBe(2);
 });

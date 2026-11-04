@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import PositionPanel from "./PositionPanel";
 
 const NOT_VERIFIED = "Not verified";
 type Driver = { factor: string; percentile: number };
@@ -111,6 +112,76 @@ function FactorTable({ forecast, factors }: { forecast: Forecast | null; factors
   );
 }
 
+type Lean = {
+  factor: string;
+  name: string;
+  percentile: number;
+  lean: string;
+  evidence: string;
+  proven: boolean;
+};
+type Leans = {
+  factors: Lean[];
+  proven_buy: number;
+  proven_sell: number;
+  paper_buy: number;
+  paper_sell: number;
+};
+
+function LeanTable({ leans }: { leans: Leans }) {
+  return (
+    <>
+      <h3>Which factors lean buy or sell</h3>
+      <div className="glance">
+        <div>
+          <small>Proven, lean buy</small>
+          <strong className="ok">{leans.proven_buy}</strong>
+        </div>
+        <div>
+          <small>Proven, lean sell</small>
+          <strong className="bad">{leans.proven_sell}</strong>
+        </div>
+        <div>
+          <small>Unproven, lean buy</small>
+          <strong>{leans.paper_buy}</strong>
+        </div>
+        <div>
+          <small>Unproven, lean sell</small>
+          <strong>{leans.paper_sell}</strong>
+        </div>
+      </div>
+      <small>
+        Proven means the factor passed testing in this app. Unproven only reflects what a paper
+        found, so don't count it the same way. These are not added up into a call.
+      </small>
+      <div className="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Factor</th>
+              <th>Percentile</th>
+              <th>Leans</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leans.factors.map((row) => (
+              <tr key={row.factor}>
+                <td>{row.name}</td>
+                <td>{row.percentile}</td>
+                <td className={row.lean === "Buy" ? "ok" : row.lean === "Sell" ? "bad" : ""}>
+                  {row.lean}
+                </td>
+                <td>{row.evidence}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 type Line = {
   topic: string;
   tone: string;
@@ -179,6 +250,7 @@ export function FactorsPanel({ ticker }: { ticker: string }) {
 export function ForecastPanel({ ticker }: { ticker: string }) {
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
+  const [leans, setLeans] = useState<Leans | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -186,10 +258,12 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
     Promise.all([
       getJson<Forecast | null>(`/api/stocks/${encodeURIComponent(ticker)}/forecast`),
       getJson<Line[]>(`/api/stocks/${encodeURIComponent(ticker)}/story`),
+      getJson<Leans | null>(`/api/stocks/${encodeURIComponent(ticker)}/leans`),
     ])
-      .then(([nextForecast, nextLines]) => {
+      .then(([nextForecast, nextLines, nextLeans]) => {
         setForecast(nextForecast);
         setLines(nextLines);
+        setLeans(nextLeans);
       })
       .catch(() => setFailed(true));
   }, [ticker]);
@@ -206,6 +280,8 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
             : "Forecasts are written once a day before the US market opens."}
         </p>
       </div>
+      <PositionPanel ticker={ticker} />
+      {leans && <LeanTable leans={leans} />}
       {lines.length > 0 && (
         <>
           <h3>What the data says</h3>

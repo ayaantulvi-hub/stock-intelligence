@@ -270,6 +270,35 @@ def walk_forward(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list
     return output
 
 
+def test_factors(panel: pd.DataFrame) -> list[dict]:
+    """Did stocks ranking high on each factor beat those ranking low over the next 20 days?"""
+    data = panel.dropna(subset=["excess_20d"])
+    if data.empty:
+        return []
+    days = sorted(data["date"].unique())[::RANK_HORIZON]
+    spaced = data[data["date"].isin(days)]
+    output = []
+    for factor in LIVE_IDS:
+        if factor in MARKET_WIDE or spaced[factor].notna().sum() == 0:
+            continue
+        rows = spaced.dropna(subset=[factor])
+        high = rows[rows[factor] >= 0.7].groupby("date")["excess_20d"].mean()
+        low = rows[rows[factor] <= 0.3].groupby("date")["excess_20d"].mean()
+        spreads = (high - low).dropna()
+        if len(spreads) < MIN_TEST_DAYS:
+            continue
+        t_stat = spreads.mean() / (spreads.std(ddof=1) / np.sqrt(len(spreads)))
+        output.append(
+            {
+                "factor": factor,
+                "spread": float(spreads.mean()),
+                "t_stat": float(t_stat),
+                "dates": len(spreads),
+            }
+        )
+    return output
+
+
 def load_frames(engine: Engine) -> dict[str, pd.DataFrame]:
     frames = {}
     with engine.connect() as conn:
@@ -354,8 +383,20 @@ def evaluate(engine: Engine) -> list[Evaluation]:
     frames = load_frames(engine)
     if not frames:
         raise RuntimeError("no stock has enough price history to evaluate")
-    results = walk_forward(build_panel(frames, load_slope(engine), load_company(engine)))
+    panel = build_panel(frames, load_slope(engine), load_company(engine))
+    results = walk_forward(panel)
+    tests = test_factors(panel)
     with engine.begin() as conn:
+        if tests:
+            conn.execute(
+                text(
+                    """INSERT INTO factor_tests (factor, spread, t_stat, dates)
+                       VALUES (:factor, :spread, :t_stat, :dates)"""
+                ),
+                tests,
+            )
+            for row in tests:
+                print(row)
         for item in results:
             conn.execute(
                 text(

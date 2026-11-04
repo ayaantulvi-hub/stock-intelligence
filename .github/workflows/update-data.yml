@@ -15,9 +15,10 @@ on:
         type: boolean
         default: false
   schedule:
-    # Prices: 12 runs after each US close. 45 stocks a run stays under Tiingo's 50 an hour.
-    - cron: "20 22-23 * * 1-5"
-    - cron: "20 0-9 * * 2-6"
+    # Prices: after each US close. GitHub often skips scheduled runs, so there are two an
+    # hour. 24 stocks a run stays under Tiingo's 50 an hour even when both fire.
+    - cron: "17,47 22-23 * * 1-5"
+    - cron: "17,47 0-9 * * 2-6"
     # Filings and economic data: once a day.
     - cron: "50 10 * * 2-6"
 permissions:
@@ -45,7 +46,7 @@ jobs:
       - run: uv run --no-dev python -m stockintel.ingest universe
       - name: Prices
         if: github.event_name == 'schedule' && github.event.schedule != '50 10 * * 2-6' || inputs.prices
-        run: uv run --no-dev python -m stockintel.ingest prices --limit 45
+        run: uv run --no-dev python -m stockintel.ingest prices --limit 24
       - name: Filings
         # Runs even if prices failed: one feed's failure must not stop the others.
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}

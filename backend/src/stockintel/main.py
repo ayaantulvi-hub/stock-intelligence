@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from stockintel import queries
 from stockintel.charts import TIMEFRAMES
@@ -137,6 +138,35 @@ def valuation(
     if result is None:
         raise HTTPException(404, "Not verified: this stock is not in the covered list")
     return result
+
+
+class Position(BaseModel):
+    shares: float = Field(gt=0)
+    buy_price: float = Field(gt=0)
+    target_price: float | None = Field(default=None, gt=0)
+    stop_price: float | None = Field(default=None, gt=0)
+
+
+@app.get("/api/stocks/{ticker}/leans")
+def leans(ticker: str) -> dict | None:
+    return queries.stock_leans(get_engine(), ticker)
+
+
+@app.get("/api/stocks/{ticker}/position")
+def get_position(ticker: str) -> dict | None:
+    return queries.get_position(get_engine(), ticker)
+
+
+@app.put("/api/stocks/{ticker}/position")
+def put_position(ticker: str, position: Position) -> dict | None:
+    if not queries.save_position(get_engine(), ticker, position.model_dump()):
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return queries.get_position(get_engine(), ticker)
+
+
+@app.delete("/api/stocks/{ticker}/position")
+def delete_position(ticker: str) -> None:
+    queries.delete_position(get_engine(), ticker)
 
 
 @app.get("/api/ideas")
