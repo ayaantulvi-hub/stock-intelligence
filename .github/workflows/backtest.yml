@@ -25,3 +25,4 @@ jobs:
       - run: uv run --no-dev python -m stockintel.backtest
       - run: uv run --no-dev python -m stockintel.forecast evaluate
       - run: uv run --no-dev python -m stockintel.compare
+      - run: uv run --no-dev python -m stockintel.stops

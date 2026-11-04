@@ -18,8 +18,112 @@ export function sharesForRisk(account: number, riskPercent: number, price: numbe
   return { shares, cost: shares * price, loss: shares * (price - stop), limited: byLimit < byRisk };
 }
 
-function Sizer() {
+type Suggested = {
+  price: number;
+  stop: number;
+  target: number;
+  risk_percent: number;
+  target_percent: number;
+  stop_reason: string;
+  target_reason: string;
+  ceiling_warning: string | null;
+};
+type Tested = {
+  stop_multiple: number | null;
+  trades: number;
+  avg_return: number;
+  win_rate: number;
+  worst_return: number;
+  stopped_share: number;
+};
+
+function Levels({ data, tested }: { data: Suggested | null; tested: Tested[] }) {
+  return (
+    <>
+      <h3>Suggested exit prices</h3>
+      <small>
+        A stop is a price where you sell to limit a loss. A target is a price where you take a
+        profit. Neither can be known to be best in advance. These follow a rule, not a prediction.
+      </small>
+      {!data ? (
+        <p>Not verified: not enough price history.</p>
+      ) : (
+        <>
+          <div className="glance">
+            <div>
+              <small>Suggested stop</small>
+              <strong className="bad">{data.stop.toFixed(2)}</strong>
+              <small>{data.risk_percent.toFixed(1)}% below the price</small>
+            </div>
+            <div>
+              <small>Suggested target</small>
+              <strong className="ok">{data.target.toFixed(2)}</strong>
+              <small>{data.target_percent.toFixed(1)}% above the price</small>
+            </div>
+          </div>
+          <p>
+            <strong>Why this stop:</strong> {data.stop_reason}
+          </p>
+          <p>
+            <strong>Why this target:</strong> {data.target_reason}
+            {data.ceiling_warning && ` ${data.ceiling_warning}`}
+          </p>
+        </>
+      )}
+      {tested.length > 0 && (
+        <>
+          <h3>How different stops would have done</h3>
+          <small>
+            Buying regularly and holding up to 60 trading days, after costs. Results on past data,
+            and not on any one stock.
+          </small>
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Stop distance</th>
+                  <th>Average return</th>
+                  <th>Won</th>
+                  <th>Worst trade</th>
+                  <th>Stop was hit</th>
+                  <th>Trades</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tested.map((row) => (
+                  <tr key={row.stop_multiple ?? 0}>
+                    <td>
+                      {row.stop_multiple === null
+                        ? "No stop"
+                        : `${row.stop_multiple} times daily range`}
+                    </td>
+                    <td>{(row.avg_return * 100).toFixed(1)}%</td>
+                    <td>{(row.win_rate * 100).toFixed(0)}%</td>
+                    <td>{(row.worst_return * 100).toFixed(0)}%</td>
+                    <td>{(row.stopped_share * 100).toFixed(0)}%</td>
+                    <td>{row.trades.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function Sizer({ suggested }: { suggested: Suggested | null }) {
   const [values, setValues] = useState({ account: "", risk: "1", price: "", stop: "" });
+  useEffect(() => {
+    if (suggested) {
+      setValues((current) => ({
+        ...current,
+        price: suggested.price.toFixed(2),
+        stop: suggested.stop.toFixed(2),
+      }));
+    }
+  }, [suggested]);
   const result = sharesForRisk(
     Number(values.account),
     Number(values.risk),
@@ -68,7 +172,18 @@ function Sizer() {
 
 export default function ChecklistPanel({ ticker }: { ticker: string }) {
   const [checks, setChecks] = useState<Check[] | null>(null);
+  const [levels, setLevels] = useState<{ levels: Suggested | null; tested: Tested[] } | null>(null);
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/stocks/${encodeURIComponent(ticker)}/levels`)
+      .then((response) => {
+        if (response.status !== 200) throw new Error();
+        return response.json();
+      })
+      .then(setLevels)
+      .catch(() => setFailed(true));
+  }, [ticker]);
 
   useEffect(() => {
     setFailed(false);
@@ -103,7 +218,8 @@ export default function ChecklistPanel({ ticker }: { ticker: string }) {
           </tbody>
         </table>
       </div>
-      <Sizer />
+      {levels && <Levels data={levels.levels} tested={levels.tested} />}
+      <Sizer suggested={levels?.levels ?? null} />
     </div>
   );
 }

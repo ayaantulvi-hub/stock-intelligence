@@ -28,17 +28,45 @@ test("a stop above the price gives no answer", () => {
 });
 
 test("shows checks with their state", async () => {
+  const levels = {
+    levels: {
+      price: 100,
+      stop: 90,
+      target: 120,
+      risk_percent: 10,
+      target_percent: 20,
+      stop_reason: "Fixture stop reason.",
+      target_reason: "Fixture target reason.",
+      ceiling_warning: null,
+    },
+    tested: [
+      {
+        stop_multiple: null,
+        trades: 100,
+        avg_return: 0.03,
+        win_rate: 0.6,
+        worst_return: -0.5,
+        stopped_share: 0,
+      },
+    ],
+  };
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({
+    vi.fn(async (url: string) => ({
       status: 200,
-      json: async () => [
-        { topic: "Debt", state: "unknown", text: "Fixture." },
-        { topic: "Data", state: "pass", text: "Fixture fresh." },
-      ],
+      json: async () =>
+        url.endsWith("/levels")
+          ? levels
+          : [
+              { topic: "Debt", state: "unknown", text: "Fixture." },
+              { topic: "Data", state: "pass", text: "Fixture fresh." },
+            ],
     })),
   );
   render(<ChecklistPanel ticker="AAA" />);
   expect(await screen.findByText("Not verified")).toBeTruthy();
   expect(screen.getByText("Pass")).toBeTruthy();
+  expect(await screen.findByText("90.00")).toBeTruthy();
+  expect(screen.getByText("Fixture stop reason.")).toBeTruthy();
+  expect(screen.getByText("No stop")).toBeTruthy();
 });

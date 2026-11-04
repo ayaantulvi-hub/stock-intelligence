@@ -132,6 +132,18 @@ needs at least 30 tested cases that beat the baseline.
 - A reliability grade needs 60 trading days. Overconfidence correction starts at that point.
 - Next earnings is an estimate: 91 days after the last quarterly or yearly report.
 
+## Scheduling
+
+- GitHub skipped most scheduled runs, so hourly price runs are started by cron-job.org through
+  the GitHub API. It needs a fine-grained token limited to Actions on this repository.
+- The daily run for filings and forecasts stays on GitHub's schedule, with a manual check.
+
+## Stops
+
+- Suggested stop: just under support if that is 1 to 3 daily ranges away, otherwise 2 average
+  daily ranges below the price. Suggested target: twice the risk. These are rules, not
+  predictions. Stop distances are tested weekly across all stocks, not per stock.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

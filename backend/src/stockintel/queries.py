@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import advice, backtest, charts, explain, longterm, signals, tools
+from stockintel import advice, backtest, charts, explain, longterm, signals, stops, tools
 from stockintel.market import is_stale, latest_expected_session
 from stockintel.profiles import PROFILES
 
@@ -515,3 +515,36 @@ def model_comparison(engine: Engine) -> dict | None:
         "run_at": rows[0]["run_at"],
         "models": [{**row, **PROFILES[row["model"]]} for row in rows],
     }
+
+
+def suggested_levels(engine: Engine, ticker: str) -> dict | None:
+    """Suggested stop and target for the latest price, with the tested distances."""
+    with engine.connect() as conn:
+        security = conn.execute(
+            text("SELECT id FROM securities WHERE ticker = :t"), {"t": ticker.upper()}
+        ).first()
+        if security is None:
+            return None
+        rows = conn.execute(
+            text(
+                """SELECT DISTINCT ON (market_date) market_date, open, high, low, close,
+                     volume, div_cash, split_factor
+                   FROM price_bars WHERE security_id = :id
+                   ORDER BY market_date, id DESC"""
+            ),
+            {"id": security.id},
+        ).all()
+        tested = _rows(
+            conn.execute(
+                text(
+                    """SELECT stop_multiple, trades, avg_return, win_rate, worst_return,
+                         stopped_share FROM stop_studies
+                       WHERE run_at = (SELECT max(run_at) FROM stop_studies)
+                       ORDER BY stop_multiple NULLS FIRST"""
+                )
+            )
+        )
+    if not rows:
+        return {"levels": None, "tested": tested}
+    frame = charts.adjust(pd.DataFrame([row._mapping for row in rows]))
+    return {"levels": stops.suggest(frame), "tested": tested}

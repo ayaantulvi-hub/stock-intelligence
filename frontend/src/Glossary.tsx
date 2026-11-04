@@ -67,6 +67,11 @@ const TERMS: [string, string][] = [
     "Cancelled at",
     "The price where a signal's idea stops being valid. Below that price for a bullish signal, or above it for a bearish one, the signal has failed.",
   ],
+  [
+    "Stop price",
+    "A price you choose in advance where you sell to limit a loss. Too close and normal swings trigger it. Too far and you lose more. If the price jumps below it, you can get less than the stop.",
+  ],
+  ["Target price", "A price you choose in advance where you take your profit."],
   ["Buy candidate", "A stock the tested model ranks in its top 10% for the next 20 days. It isn't a guarantee."],
 ];
 
