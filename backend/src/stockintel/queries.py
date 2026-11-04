@@ -1,6 +1,6 @@
 """Read stored records for the API. Every value carries its provenance."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 from sqlalchemy import Engine, text
@@ -19,7 +19,7 @@ from stockintel import (
     stops,
     tools,
 )
-from stockintel.market import is_stale, latest_expected_session
+from stockintel.market import is_stale, latest_expected_session, sessions_between
 from stockintel.profiles import PROFILES
 
 FEEDS = {
@@ -322,6 +322,32 @@ def ideas(engine: Engine, count: int = 10) -> dict:
         "top": [card(row, "Buy") for row in buyable[:count]],
         "bottom": [card(row, "Sell") for row in rows[-count:][::-1]],
     }
+
+
+HOLD_SESSIONS = 20
+ORDER_COUNT = 10
+
+
+def orders(engine: Engine) -> dict:
+    """Today's list as orders: stop price and sell-by date. The page works out the shares."""
+    found = ideas(engine, ORDER_COUNT)
+    target = found["target_session"]
+    rows = []
+    for card in found["top"]:
+        levels = (suggested_levels(engine, card["ticker"]) or {}).get("levels")
+        rows.append(
+            {
+                "ticker": card["ticker"],
+                "name": card["name"],
+                "price": card["price"],
+                "stop": levels["stop"] if levels else None,
+            }
+        )
+    sell_by = None
+    if target is not None:
+        days = sessions_between(target, target + timedelta(days=HOLD_SESSIONS * 2))
+        sell_by = days[HOLD_SESSIONS] if len(days) > HOLD_SESSIONS else None
+    return {"session": target, "sell_by": sell_by, "proven": found["edge"], "orders": rows}
 
 
 def track_record(engine: Engine) -> dict:

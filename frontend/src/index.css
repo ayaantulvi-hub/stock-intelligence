@@ -196,3 +196,6 @@ td.wrap { white-space: normal; min-width: 190px; }
 .ticket { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
 .ticket h4 { margin: 0 0 6px; font-size: 1rem; }
 .ticket td:last-child { text-align: right; }
+
+.orders { border: 2px solid var(--ok); border-radius: 8px; padding: 12px 14px; margin: 14px 0; background: var(--panel); }
+.orders h3 { margin-top: 0; }

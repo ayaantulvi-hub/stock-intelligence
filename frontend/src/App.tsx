@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
+import { TodaysOrders } from "./ChecklistPanel";
 import { AlertsPage, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, TradesPanel } from "./ForecastPanel";
 
@@ -362,6 +363,7 @@ export default function App() {
         </>
       )}
 
+      {!stock && !failed && <TodaysOrders onOpen={open} />}
       {!stock && !failed && <IdeasPanel onOpen={open} />}
       {!stock && !failed && <TradesPanel onOpen={open} />}
       {!stock && !failed && <Screener onOpen={open} />}

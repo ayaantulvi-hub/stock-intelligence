@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import ChecklistPanel, { OrderTicket, HowMuch, sharesForRisk } from "./ChecklistPanel";
+import ChecklistPanel, { HowMuch, OrderTicket, sharesForRisk, TodaysOrders } from "./ChecklistPanel";
 
 afterEach(() => {
   cleanup();
@@ -90,4 +90,29 @@ test("the order ticket uses the field names in the trading screen", () => {
   expect(screen.getByText("460.00")).toBeTruthy();
   expect(screen.getByText("350.50")).toBeTruthy();
   expect(screen.getByText("25")).toBeTruthy();
+});
+
+test("the order ticket says to switch take profit off when no target applies", () => {
+  render(<OrderTicket shares={25} stop={350.5} keep="GTC" />);
+  expect(screen.getByText("Switch off")).toBeTruthy();
+});
+
+test("today's orders split the money and give stop and sell date", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      status: 200,
+      json: async () => ({
+        session: "2026-11-04",
+        sell_by: "2026-12-03",
+        proven: false,
+        orders: [{ ticker: "AAA", name: "Fixture", price: 400, stop: 350 }],
+      }),
+    })),
+  );
+  render(<TodaysOrders onOpen={() => {}} />);
+  expect(await screen.findByText("2026-12-03")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText(/Your total money/), { target: { value: "1000" } });
+  expect(screen.getByText("2")).toBeTruthy();
+  expect(screen.getByText("350.00")).toBeTruthy();
 });

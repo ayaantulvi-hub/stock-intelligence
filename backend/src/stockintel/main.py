@@ -241,6 +241,11 @@ def stock_horizons(ticker: str) -> dict:
     return result
 
 
+@app.get("/api/orders")
+def todays_orders() -> dict:
+    return queries.orders(get_engine())
+
+
 @app.get("/api/trades")
 def trades() -> list[dict]:
     return experts.stored_trades(get_engine())
