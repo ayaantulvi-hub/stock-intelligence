@@ -149,6 +149,68 @@ def overall(action: str, rank: float | None) -> dict:
     return {"decision": action, "lean": lean, "proven": False, "rank": rank}
 
 
+def decision(action: str | None, rank: float | None, stale: bool, position: dict | None) -> dict:
+    """One plain answer for this stock, adapted to whether it is owned.
+
+    `proven` is true only when the call rests on a test the model passed. A stop or target
+    is the owner's own plan, so those are the owner's rules rather than a forecast.
+    """
+    owned = position is not None and position.get("profit") is not None
+
+    def answer(call, reason, proven=False, kind="neutral"):
+        return {"call": call, "reason": reason, "proven": proven, "kind": kind, "owned": owned}
+
+    if stale:
+        return answer("Wait", "The latest prices aren't in yet, so no call can be made.")
+    if owned:
+        stop, target, price = position["stop_price"], position["target_price"], position["price"]
+        if stop and price <= stop:
+            return answer(
+                "Sell",
+                f"It reached your stop of {stop:.2f}. This is the plan you set.",
+                kind="sell",
+            )
+        if target and price >= target:
+            return answer(
+                "Sell or take some profit",
+                f"It reached your target of {target:.2f}. This is the plan you set.",
+                kind="buy",
+            )
+    if action is None:
+        return answer("Hold" if owned else "Wait", "There's no forecast for this stock yet.")
+    if action == "Sell candidate":
+        return answer(
+            "Sell" if owned else "Don't buy",
+            "The tested model ranks it in its bottom 10%.",
+            True,
+            "sell",
+        )
+    if action == "Buy candidate":
+        return answer(
+            "Hold" if owned else "Buy", "The tested model ranks it in its top 10%.", True, "buy"
+        )
+    if action == "No action":
+        return answer(
+            "Hold" if owned else "Wait",
+            "The tested model doesn't rank it near the top or bottom.",
+            True,
+        )
+    lean = overall(action, rank)["lean"]
+    if lean == "Buy":
+        return answer(
+            "Hold" if owned else "Leans buy",
+            "The model ranks it well, but hasn't passed testing.",
+            kind="buy",
+        )
+    if lean == "Sell":
+        return answer(
+            "Hold and review" if owned else "Leans don't buy",
+            "The model ranks it poorly, but hasn't passed testing.",
+            kind="sell",
+        )
+    return answer("Hold" if owned else "Wait", "The model has no clear lean on this stock.")
+
+
 def position_view(position: dict, price: float, action: str, cases: list[dict]) -> dict:
     """Profit, break-even and the owner's plan against the latest close."""
     shares, paid = position["shares"], position["buy_price"]

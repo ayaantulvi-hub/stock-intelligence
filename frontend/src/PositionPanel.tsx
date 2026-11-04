@@ -25,7 +25,13 @@ const FIELDS: [keyof typeof blank, string][] = [
   ["stop_price", "Stop price (optional)"],
 ];
 
-export default function PositionPanel({ ticker }: { ticker: string }) {
+export default function PositionPanel({
+  ticker,
+  onChange,
+}: {
+  ticker: string;
+  onChange?: () => void;
+}) {
   const url = `/api/stocks/${encodeURIComponent(ticker)}/position`;
   const [position, setPosition] = useState<Position | null>(null);
   const [form, setForm] = useState(blank);
@@ -62,6 +68,7 @@ export default function PositionPanel({ ticker }: { ticker: string }) {
       setPosition(await response.json());
       setEditing(false);
       setFailed(false);
+      onChange?.();
     } catch {
       setFailed(true);
     }
@@ -73,6 +80,7 @@ export default function PositionPanel({ ticker }: { ticker: string }) {
       if (response.status !== 200) throw new Error();
       setPosition(null);
       setForm(blank);
+      onChange?.();
     } catch {
       setFailed(true);
     }

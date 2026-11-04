@@ -233,3 +233,43 @@ def test_factor_reading_is_explained_in_plain_words():
     assert "unproven here" in row["meaning"]
     middle = factor_leans([{"factor": "size", "percentile": 50}], {})["factors"][0]
     assert "middle" in middle["meaning"]
+
+
+OWNED = {"profit": 100.0, "price": 150.0, "stop_price": None, "target_price": None}
+EDGELESS = "No reliable edge"
+
+
+@pytest.mark.parametrize(
+    "action, rank, stale, position, call, proven",
+    [
+        (EDGELESS, 0.9, True, None, "Wait", False),
+        ("Buy candidate", 0.95, False, None, "Buy", True),
+        ("Buy candidate", 0.95, False, OWNED, "Hold", True),
+        ("Sell candidate", 0.05, False, None, "Don't buy", True),
+        ("Sell candidate", 0.05, False, OWNED, "Sell", True),
+        ("No action", 0.5, False, OWNED, "Hold", True),
+        (EDGELESS, 0.9, False, None, "Leans buy", False),
+        (EDGELESS, 0.1, False, None, "Leans don't buy", False),
+        (EDGELESS, 0.1, False, OWNED, "Hold and review", False),
+        (EDGELESS, 0.5, False, None, "Wait", False),
+        (None, None, False, OWNED, "Hold", False),
+    ],
+)
+def test_decision(action, rank, stale, position, call, proven):
+    result = advice.decision(action, rank, stale, position)
+    assert (result["call"], result["proven"]) == (call, proven)
+
+
+def test_owners_stop_and_target_come_first():
+    stopped = {**OWNED, "stop_price": 160.0}
+    assert advice.decision(EDGELESS, 0.9, False, stopped)["call"] == "Sell"
+    hit = {**OWNED, "target_price": 140.0}
+    assert advice.decision(EDGELESS, 0.9, False, hit)["call"] == "Sell or take some profit"
+
+
+def test_price_paid_does_not_change_the_decision():
+    cheap = {**OWNED, "buy_price": 10.0}
+    dear = {**OWNED, "buy_price": 900.0}
+    assert advice.decision(EDGELESS, 0.2, False, cheap) == advice.decision(
+        EDGELESS, 0.2, False, dear
+    )

@@ -169,6 +169,14 @@ def suggested_levels(ticker: str) -> dict:
     return result
 
 
+@app.get("/api/stocks/{ticker}/decision")
+def stock_decision(ticker: str) -> dict:
+    result = queries.stock_decision(get_engine(), ticker)
+    if result is None:
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return result
+
+
 @app.get("/api/stocks/{ticker}/position")
 def get_position(ticker: str) -> dict | None:
     return queries.get_position(get_engine(), ticker)

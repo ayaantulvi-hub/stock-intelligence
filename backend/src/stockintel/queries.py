@@ -583,3 +583,16 @@ def screener(engine: Engine) -> list[dict]:
         name = action(row.pop("rank_edge"), row["rank"])
         output.append({**row, "action": name, "lean": advice.overall(name, row["rank"])["lean"]})
     return output
+
+
+def stock_decision(engine: Engine, ticker: str) -> dict | None:
+    data = chart(engine, ticker, "daily")
+    if data is None:
+        return None
+    forecast = stock_forecast(engine, ticker)
+    return advice.decision(
+        forecast["action"] if forecast else None,
+        forecast["rank_20d"] if forecast else None,
+        data["stale"],
+        get_position(engine, ticker),
+    )

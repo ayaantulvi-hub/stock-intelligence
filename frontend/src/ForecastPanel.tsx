@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ChecklistPanel from "./ChecklistPanel";
 import PositionPanel from "./PositionPanel";
 
@@ -251,6 +251,14 @@ function LeanTable({ leans }: { leans: Leans }) {
   );
 }
 
+type Decision = {
+  call: string;
+  reason: string;
+  proven: boolean;
+  kind: string;
+  owned: boolean;
+};
+
 type Line = {
   topic: string;
   tone: string;
@@ -324,7 +332,16 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
   const [leans, setLeans] = useState<Leans | null>(null);
+  const [decision, setDecision] = useState<Decision | null>(null);
   const [failed, setFailed] = useState(false);
+
+  const loadDecision = useCallback(() => {
+    getJson<Decision>(`/api/stocks/${encodeURIComponent(ticker)}/decision`)
+      .then(setDecision)
+      .catch(() => setFailed(true));
+  }, [ticker]);
+
+  useEffect(loadDecision, [loadDecision]);
 
   useEffect(() => {
     setFailed(false);
@@ -342,25 +359,29 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
   }, [ticker]);
 
   if (failed) return <p className="bad">Forecast failed to load. Not verified.</p>;
-  const tone =
-    forecast?.action === "Buy candidate" ? "buy" : forecast?.action === "Sell candidate" ? "sell" : "";
+  const tone = decision?.kind === "neutral" ? "" : (decision?.kind ?? "");
   return (
     <div>
       <div className="verdict">
-        <h3 className={tone}>{forecast?.action ?? "No forecast yet"}</h3>
-        <p>
-          {forecast
-            ? MEANINGS[forecast.action]
-            : "Forecasts are written once a day before the US market opens."}
-        </p>
-        {leans && !leans.overall.proven && (
-          <p className="lean">
-            The model leans {leans.overall.lean}
-            {leans.overall.rank === null
-              ? ""
-              : `, ranking this stock higher than ${Math.round(leans.overall.rank * 100)}% of those covered for the next 20 days`}
-            . This lean is unproven, so don't treat it as a decision.
-          </p>
+        <h3 className={tone}>{decision?.call ?? "Checking…"}</h3>
+        {decision && (
+          <>
+            <p>
+              {decision.reason} {decision.owned ? "You own this stock." : ""}
+            </p>
+            {forecast && !decision.proven && decision.kind !== "neutral" && (
+              <p className="lean">
+                Unproven: {MEANINGS["No reliable edge"]}
+                {leans?.overall.rank != null &&
+                  ` It ranks higher than ${Math.round(leans.overall.rank * 100)}% of covered stocks for the next 20 days.`}
+              </p>
+            )}
+            {!decision.owned && (
+              <p>
+                <small>Bought it? Open "Do you own this stock?" below and this will adapt.</small>
+              </p>
+            )}
+          </>
         )}
       </div>
       {leans && <Tug leans={leans} />}
@@ -418,7 +439,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
       </details>
       <details className="fold">
         <summary>Do you own this stock?</summary>
-        <PositionPanel ticker={ticker} />
+        <PositionPanel ticker={ticker} onChange={loadDecision} />
       </details>
     </div>
   );

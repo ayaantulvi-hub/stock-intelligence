@@ -69,6 +69,13 @@ test("lists every factor, with missing ones Not verified", async () => {
 test("simple view gives the call and explains the data in plain English", async () => {
   stub({
     "/api/stocks/AAA/forecast": forecast,
+    "/api/stocks/AAA/decision": {
+      call: "Leans buy",
+      reason: "Fixture decision reason.",
+      proven: false,
+      kind: "buy",
+      owned: false,
+    },
     "/api/stocks/AAA/leans": {
       factors: [
         {
@@ -108,8 +115,9 @@ test("simple view gives the call and explains the data in plain English", async 
   expect(screen.getByText("Insider trades")).toBeTruthy();
   expect(screen.getByText("Buy")).toBeTruthy();
   expect(screen.getByText("Fixture chart note.")).toBeTruthy();
-  expect(screen.getAllByText("No reliable edge").length).toBe(2);
-  expect(screen.getByText(/leans Buy, ranking this stock higher than 85%/)).toBeTruthy();
+  expect(await screen.findByText("Leans buy")).toBeTruthy();
+  expect(screen.getByText(/Unproven: No buy or sell call/)).toBeTruthy();
+  expect(screen.getByText(/ranks higher than 85%/)).toBeTruthy();
 });
 
 test("names no stocks when the model has no edge", async () => {
