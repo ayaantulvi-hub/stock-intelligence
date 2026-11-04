@@ -257,6 +257,11 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
         </table>
       </div>
       <OrderSteps keep="The longest offered" />
+      <p>
+        <b>When to sell:</b> don't sell before that date unless the stop sells it for you. There's
+        no target price. On the sell date, sell everything left with a Market order, at whatever
+        the price is then.
+      </p>
       <small>Skip a stock if its live price is more than 5% from the last close.</small>
     </>
   );
