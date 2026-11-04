@@ -104,9 +104,9 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
     if quarters is not None and not quarters.empty:
         merged = pd.merge_asof(dates, by_date(quarters), left_on="date", right_on="available")
         recent = (dates["date"] - merged["available"]).dt.days <= 60
-        fresher = merged["income_q"].where(recent).to_numpy()
+        fresher = pd.to_numeric(merged["income_q"], errors="coerce").where(recent).to_numpy(float)
         factors["earnings_drift"] = np.where(np.isnan(fresher), factors["earnings_drift"], fresher)
-        factors["revenue_growth"] = merged["revenue_q"].to_numpy()
+        factors["revenue_growth"] = pd.to_numeric(merged["revenue_q"], errors="coerce").to_numpy()
     trades = company.get("trades")
     if trades is not None and not trades.empty:
         dollars = (frame["raw_close"] * frame["volume"]).rolling(90, min_periods=20).sum()
@@ -179,7 +179,7 @@ def build_panel(
     known = slope.sort_index().shift(1).reindex(dates, method="ffill")
     panel["yield_slope"] = panel["date"].map(known)
     all_days = pd.DatetimeIndex(sorted(panel["date"].unique()))
-    for item in ("vix", "credit_spread", "oil_20d", "inflation_expected", "jobless_claims", "fomc"):
+    for item in ("vix", "credit_spread", "oil_20d", "inflation_expected", "jobless_claims"):
         known_values = None
         if macro is not None and item in macro:
             known_values = macro[item].reindex(all_days, method="ffill")
@@ -409,7 +409,6 @@ def load_macro(engine: Engine) -> pd.DataFrame:
                ORDER BY series_id, observation_date, realtime_start DESC"""
     with engine.connect() as conn:
         rows = pd.DataFrame([row._mapping for row in conn.execute(text(query))])
-        fed = [row[0] for row in conn.execute(text("SELECT announced FROM fomc_dates"))]
     if rows.empty:
         return pd.DataFrame()
     wide = rows.pivot(index="observation_date", columns="series_id", values="value")
@@ -428,13 +427,6 @@ def load_macro(engine: Engine) -> pd.DataFrame:
     if "ICSA" in wide:
         macro["jobless_claims"] = wide["ICSA"].dropna().pct_change(4).shift(5, freq="D")
     macro = macro.sort_index().ffill()
-    if fed:
-        days = pd.DatetimeIndex(sorted(macro.index.union(pd.to_datetime(fed))))
-        macro = macro.reindex(days).ffill()
-        # Fed dates are set in advance, so the day before an announcement can be flagged.
-        macro["fomc"] = pd.Series(1.0, index=pd.to_datetime(fed) - pd.Timedelta(days=1)).reindex(
-            days, fill_value=0.0
-        )
     return macro
 
 

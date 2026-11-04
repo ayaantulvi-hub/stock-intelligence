@@ -120,6 +120,11 @@ needs at least 30 tested cases that beat the baseline.
 - An edge needs a test score of 3.0, a positive spread after costs, and a positive final check.
 - General chat AI is not tested: it already knows past outcomes, so a test would be cheating.
 
+## Fed dates
+
+- FRED release 101 returned 3,896 dates, nearly every day, so it does not identify meetings.
+  The Fed factor stays off until the official meeting calendar is connected.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

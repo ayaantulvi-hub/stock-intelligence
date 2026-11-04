@@ -249,7 +249,7 @@ REGISTER = [
         "Drift before Fed announcements",
         "Events",
         "Lucca & Moench (2015), Journal of Finance",
-        LIVE,
+        NEEDS_CALENDAR,
         "S&P 500 rose 49 basis points on average in the 24 hours before, 1994 to 2011",
         "https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr512.pdf",
     ),
@@ -272,7 +272,6 @@ MARKET_WIDE = {
     "oil_20d",
     "inflation_expected",
     "jobless_claims",
-    "fomc",
 }
 NAMES = {factor.id: factor.name for factor in REGISTER}
 

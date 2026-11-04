@@ -86,6 +86,7 @@ def test_quoted_effects_have_a_link():
 def test_factors_that_need_missing_data_are_marked_and_not_used():
     assert "news_sentiment" not in factors.LIVE_IDS
     assert "implied_move" not in factors.LIVE_IDS
+    assert "fomc" not in factors.LIVE_IDS
     assert "value" in factors.LIVE_IDS
 
 
@@ -111,6 +112,18 @@ def test_filing_is_not_used_before_it_was_public():
     assert table["profitability"].iloc[:301].isna().all()
     assert table["profitability"].iloc[302] == 0.4
     assert table["value"].iloc[302] == pytest.approx(1000 / (frame["close"].iloc[302] * 10))
+
+
+def test_quarters_with_gaps_do_not_break_the_panel():
+    frame = stock(3, 500).assign(raw_close=lambda f: f["close"])
+    day = pd.Timestamp(frame["market_date"].iloc[300])
+    quarters = pd.DataFrame(
+        {"available": [day], "income_q": pd.Series([None], dtype=object), "revenue_q": [0.1]}
+    )
+    table = pd.DataFrame(index=frame.index)
+    table["earnings_drift"] = np.nan
+    forecast.add_company_data(table, frame, {"quarters": quarters})
+    assert table["revenue_growth"].iloc[301] == 0.1
 
 
 def test_insider_net_value_counts_buys_as_positive():
