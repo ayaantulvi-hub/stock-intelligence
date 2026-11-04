@@ -42,6 +42,35 @@ def test_missing_yield_data_blocks_forecasts():
         forecast.build_panel({"S1": stock(1, 400)}, None)
 
 
+def test_market_readings_are_used_only_from_when_they_were_public():
+    days = pd.date_range("2024-01-01", periods=3, freq="D")
+    macro = pd.DataFrame({"vix": [10.0, 20.0, 30.0]}, index=days + pd.Timedelta(days=1))
+    panel_ = forecast.build_panel(
+        {"S1": stock(1, 400, date(2024, 1, 10))},
+        pd.Series(1.0, index=pd.date_range("2022-01-01", "2024-02-01")),
+        None,
+        macro,
+    )
+    first = panel_[panel_["date"] == pd.Timestamp("2024-01-02")]["vix"].iloc[0]
+    assert first == 10.0
+
+
+def test_ineligible_rows_are_left_out_of_training(panel, monkeypatch):
+    blocked = panel.assign(eligible=False)
+    assert forecast.walk_forward(blocked, first_year=2025) == []
+    assert forecast.test_factors(blocked) == []
+
+
+def test_sector_ranks_compare_within_an_industry():
+    frames = {f"S{seed}": stock(seed, 400) for seed in range(4)}
+    slope = pd.Series(1.0, index=pd.date_range("2024-01-01", "2026-07-08"))
+    table = forecast.build_panel(
+        frames, slope, None, None, {"S0": 35, "S1": 35, "S2": 60, "S3": 60}
+    )
+    latest = table[table["date"] == table["date"].max()]
+    assert set(latest["sector_momentum"].dropna()) <= {0.5, 1.0}
+
+
 def test_every_factor_names_a_source():
     for item in factors.REGISTER:
         assert item.source

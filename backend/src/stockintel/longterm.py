@@ -289,3 +289,40 @@ def shares_history(facts: pd.DataFrame) -> pd.DataFrame:
             "shares": table["value"].to_numpy(),
         }
     )
+
+
+def quarterly_changes(facts: pd.DataFrame) -> pd.DataFrame:
+    """Each quarter against the same quarter a year before, dated the day after filing."""
+    if facts.empty:
+        return pd.DataFrame()
+
+    def quarters(tags) -> pd.DataFrame:
+        rows = facts[facts["tag"].isin(tags) & facts["period_start"].notna()].copy()
+        if rows.empty:
+            return rows
+        days = (pd.to_datetime(rows["period_end"]) - pd.to_datetime(rows["period_start"])).dt.days
+        rows = rows[days.between(80, 100)].sort_values("filed").drop_duplicates("period_end")
+        rows["period_end"] = pd.to_datetime(rows["period_end"]).astype("datetime64[ns]")
+        return rows.sort_values("period_end")
+
+    def change(rows: pd.DataFrame, name: str) -> pd.DataFrame:
+        if rows.empty:
+            return pd.DataFrame(columns=["period_end", "available", name])
+        earlier = rows[["period_end", "value"]].rename(columns={"value": "before"})
+        earlier["period_end"] = earlier["period_end"] + pd.Timedelta(days=364)
+        merged = pd.merge_asof(
+            rows, earlier, on="period_end", direction="nearest", tolerance=pd.Timedelta(days=20)
+        )
+        merged[name] = (merged["value"] - merged["before"]) / merged["before"].abs()
+        merged["available"] = pd.to_datetime(merged["filed"]) + pd.Timedelta(days=1)
+        return merged[["period_end", "available", name]]
+
+    income = change(quarters(["NetIncomeLoss"]), "income_q")
+    sales = change(quarters(REVENUE_TAGS), "revenue_q")
+    table = income.merge(sales, on="period_end", how="outer", suffixes=("", "_sales"))
+    table["available"] = table["available"].fillna(table["available_sales"])
+    return (
+        table[["available", "income_q", "revenue_q"]]
+        .dropna(subset=["available"])
+        .sort_values("available")
+    )

@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import text
 
 from stockintel import longterm, queries
-from stockintel.ingest import run_facts, run_insiders
+from stockintel.ingest import run_facts, run_fomc, run_history, run_insiders
 from stockintel.providers.base import Fact, FeedError, InsiderDocument, InsiderTrade, Provenance
 from stockintel.providers.sec import SecProvider
 
@@ -248,3 +248,69 @@ def test_net_income_and_yearly_history_are_shown():
     assert metric(result, "Net income")["sources"]
     assert result["history"][-1]["net_income"] == 13.31
     assert result["history"][-1]["revenue"] == pytest.approx(133.1)
+
+
+def quarter(tag, value, year, month, filed):
+    start = date(year, month, 1)
+    end = date(year, month + 2, 28)
+    return {
+        **fact(tag, value, year),
+        "period_start": start,
+        "period_end": end,
+        "form": "10-Q",
+        "filed": filed,
+    }
+
+
+def test_quarter_compares_with_the_same_quarter_a_year_before():
+    frame = pd.DataFrame(
+        [
+            quarter("NetIncomeLoss", 10.0, 2024, 4, date(2024, 8, 1)),
+            quarter("NetIncomeLoss", 15.0, 2025, 4, date(2025, 8, 1)),
+            quarter(REVENUE, 100.0, 2024, 4, date(2024, 8, 1)),
+            quarter(REVENUE, 110.0, 2025, 4, date(2025, 8, 1)),
+        ]
+    )
+    table = longterm.quarterly_changes(frame)
+    latest = table.iloc[-1]
+    assert latest["income_q"] == pytest.approx(0.5)
+    assert latest["revenue_q"] == pytest.approx(0.1)
+    assert latest["available"] == pd.Timestamp("2025-08-02")
+
+
+class FixtureFloats:
+    def public_floats(self, year):
+        return [(1, 5.0), (2, 9.0), (2, 3.0)], PROVENANCE
+
+
+class FixtureDates:
+    def release_dates(self, release_id):
+        return [date(2026, 1, 28), date(2026, 3, 18)], PROVENANCE
+
+
+def test_past_sizes_are_ranked_and_stored_once(engine):
+    now = pd.Timestamp("2011-06-01", tz="UTC").to_pydatetime()
+    assert run_history(engine, FixtureFloats(), now) == "ok"
+    assert run_history(engine, FixtureFloats(), now) == "ok"
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT cik, size_rank FROM historic_float WHERE year = 2009 ORDER BY size_rank")
+        ).all()
+    assert [tuple(row) for row in rows] == [(2, 1), (1, 2)]
+
+
+def test_fed_dates_are_stored_once(engine):
+    assert run_fomc(engine, FixtureDates()) == "ok"
+    assert run_fomc(engine, FixtureDates()) == "ok"
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM fomc_dates")).scalar() == 2
+
+
+def test_fred_release_dates_keep_the_key_out_of_the_url():
+    from stockintel.providers.fred import FredProvider
+
+    payload = {"release_dates": [{"release_id": 101, "date": "2026-01-28"}]}
+    provider = FredProvider("secret-key", client(lambda r: httpx.Response(200, json=payload)))
+    days, source = provider.release_dates(101)
+    assert days == [date(2026, 1, 28)]
+    assert "secret-key" not in source.source_url

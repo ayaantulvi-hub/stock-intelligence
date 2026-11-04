@@ -25,9 +25,11 @@ MIN_SAMPLE = 30
 # 8 rules over 2 holding periods is 16 tests, so some would pass by luck at the usual 2.0.
 # 3.0 allows for that, and for trades that overlap in time.
 MIN_Z = 3.0
+SIZE_LIMIT = 1000
 SURVIVORSHIP_NOTE = (
-    "Survivorship bias: the stock list is today's largest companies, so companies that "
-    "failed are missing and results look better than they really were."
+    "Survivorship bias, reduced but not removed: each stock is tested only from when it was "
+    "already among about the 1,000 largest, but companies that later failed or were bought "
+    "are still missing, so results may look better than they really were."
 )
 
 
@@ -85,8 +87,11 @@ class Backtest:
         self.signals: dict[tuple, dict[int, Tally]] = defaultdict(lambda: defaultdict(Tally))
         self.baselines: dict[tuple, dict[int, Tally]] = defaultdict(lambda: defaultdict(Tally))
 
-    def add_stock(self, frame: pd.DataFrame) -> None:
-        """frame: oldest-first adjusted bars with market_date, open and close."""
+    def add_stock(self, frame: pd.DataFrame, eligible: np.ndarray | None = None) -> None:
+        """frame: oldest-first adjusted bars with market_date, open and close.
+
+        eligible marks the days this stock had really earned a place on the list.
+        """
         if len(frame) < 2:
             return
         flags = pattern_history(frame)
@@ -98,13 +103,14 @@ class Backtest:
             count = len(frame) - horizon - 1
             if count <= 0:
                 continue
+            allowed = np.ones(count, bool) if eligible is None else eligible[:count]
             gross = closes[horizon + 1 :][:count] / opens[1 : count + 1] - 1
             long_net, short_net = gross - self.cost, -gross - self.cost
             for (name, direction), column in flags.items():
                 returns = long_net if direction == "bullish" else short_net
                 fired = column.to_numpy()[:count]
                 for year in np.unique(years[:count]):
-                    in_year = years[:count] == year
+                    in_year = (years[:count] == year) & allowed
                     self.signals[(name, direction, horizon)][int(year)].add(
                         returns[in_year & fired]
                     )
@@ -162,12 +168,32 @@ def calibration(records: list[tuple[float, bool]], buckets: int = 5) -> list[dic
     ]
 
 
+def eligibility(engine: Engine) -> dict[int, set[int]]:
+    """For each company, the years it ranked among the largest, as known at the time."""
+    query = "SELECT year, cik FROM historic_float WHERE size_rank <= :limit"
+    table: dict[int, set[int]] = defaultdict(set)
+    with engine.connect() as conn:
+        for year, cik in conn.execute(text(query), {"limit": SIZE_LIMIT}):
+            table[cik].add(year)
+    return table
+
+
+def eligible_days(dates: pd.Series, years: set[int]) -> np.ndarray:
+    """A mid-year size is reported in filings by about the next March, so use it from April."""
+    days = pd.to_datetime(dates)
+    known = np.where(days.dt.month >= 4, days.dt.year - 1, days.dt.year - 2)
+    return np.isin(known, sorted(years))
+
+
 def run(engine: Engine, cost_bps: float = COST_BPS) -> int:
     test = Backtest(cost_bps)
+    sizes = eligibility(engine)
+    if not sizes:
+        raise RuntimeError("no past company sizes stored: backtest blocked")
     first, last, stocks = None, None, 0
     with engine.connect() as conn:
-        ids = list(conn.execute(text("SELECT id FROM securities ORDER BY id")).scalars())
-        for security_id in ids:
+        companies = conn.execute(text("SELECT id, cik FROM securities ORDER BY id")).all()
+        for security_id, cik in companies:
             rows = conn.execute(
                 text(
                     """SELECT DISTINCT ON (market_date) market_date, open, high, low, close,
@@ -180,7 +206,7 @@ def run(engine: Engine, cost_bps: float = COST_BPS) -> int:
             if len(rows) < 260:
                 continue
             frame = adjust(pd.DataFrame([row._mapping for row in rows]))
-            test.add_stock(frame)
+            test.add_stock(frame, eligible_days(frame["market_date"], sizes.get(cik, set())))
             stocks += 1
             first = min(first or rows[0].market_date, rows[0].market_date)
             last = max(last or rows[-1].market_date, rows[-1].market_date)

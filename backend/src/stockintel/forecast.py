@@ -18,7 +18,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sqlalchemy import Engine, text
 
 from stockintel import longterm
-from stockintel.backtest import MIN_Z
+from stockintel.backtest import MIN_Z, eligibility, eligible_days
 from stockintel.charts import adjust
 from stockintel.db import get_engine
 from stockintel.factors import LIVE_IDS, MARKET_WIDE, NAMES, stock_factors
@@ -66,6 +66,7 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         "issuance",
         "earnings_drift",
         "insider",
+        "revenue_growth",
     ):
         factors[item] = np.nan
     if not company or "raw_close" not in frame:
@@ -99,6 +100,13 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         if held is not None:
             worth = frame["raw_close"].to_numpy() * held
             factors["value"] = merged["equity"].to_numpy() / np.where(worth > 0, worth, np.nan)
+    quarters = company.get("quarters")
+    if quarters is not None and not quarters.empty:
+        merged = pd.merge_asof(dates, by_date(quarters), left_on="date", right_on="available")
+        recent = (dates["date"] - merged["available"]).dt.days <= 60
+        fresher = merged["income_q"].where(recent).to_numpy()
+        factors["earnings_drift"] = np.where(np.isnan(fresher), factors["earnings_drift"], fresher)
+        factors["revenue_growth"] = merged["revenue_q"].to_numpy()
     trades = company.get("trades")
     if trades is not None and not trades.empty:
         dollars = (frame["raw_close"] * frame["volume"]).rolling(90, min_periods=20).sum()
@@ -113,6 +121,9 @@ def build_panel(
     frames: dict[str, pd.DataFrame],
     slope: pd.Series | None,
     company: dict[str, dict] | None = None,
+    macro: pd.DataFrame | None = None,
+    sectors: dict[str, int] | None = None,
+    allowed: dict[str, set[int]] | None = None,
 ) -> pd.DataFrame:
     """Combine stocks into one table, with factors ranked 0 to 1 across each day."""
     closes = pd.DataFrame(
@@ -128,6 +139,11 @@ def build_panel(
         factors = stock_factors(frame, market.reindex(dates))
         add_company_data(factors, frame, (company or {}).get(ticker))
         factors["ticker"] = ticker
+        factors["eligible"] = (
+            True
+            if allowed is None
+            else eligible_days(frame["market_date"], allowed.get(ticker, set()))
+        )
         factors["date"] = dates.to_numpy()
         following = frame["close"].shift(-1) / frame["close"] - 1
         factors["next_change"] = following
@@ -141,8 +157,20 @@ def build_panel(
         )
         parts.append(factors)
     panel = pd.concat(parts, ignore_index=True)
-    stock_columns = [item for item in LIVE_IDS if item not in MARKET_WIDE]
-    panel[stock_columns] = panel.groupby("date")[stock_columns].rank(pct=True)
+    panel["sector"] = panel["ticker"].map(sectors or {})
+    panel["sector_value"] = panel["value"]
+    panel["sector_profit"] = panel["profitability"]
+    panel["sector_momentum"] = panel["mom_12_1"]
+    sector_columns = ["sector_value", "sector_profit", "sector_momentum"]
+    plain_columns = [
+        item for item in LIVE_IDS if item not in MARKET_WIDE and item not in sector_columns
+    ]
+    panel[plain_columns] = panel.groupby("date")[plain_columns].rank(pct=True)
+    panel[sector_columns] = (
+        panel.groupby(["date", "sector"])[sector_columns].rank(pct=True)
+        if panel["sector"].notna().any()
+        else np.nan
+    )
     panel["market_20d"] = panel["date"].map((1 + market).rolling(20).apply(np.prod, raw=True) - 1)
     if slope is None or slope.empty:
         raise RuntimeError("no Treasury yield data: forecasts blocked")
@@ -150,6 +178,12 @@ def build_panel(
     dates = pd.DatetimeIndex(sorted(panel["date"].unique()))
     known = slope.sort_index().shift(1).reindex(dates, method="ffill")
     panel["yield_slope"] = panel["date"].map(known)
+    all_days = pd.DatetimeIndex(sorted(panel["date"].unique()))
+    for item in ("vix", "credit_spread", "oil_20d", "inflation_expected", "jobless_claims", "fomc"):
+        known_values = None
+        if macro is not None and item in macro:
+            known_values = macro[item].reindex(all_days, method="ffill")
+        panel[item] = np.nan if known_values is None else panel["date"].map(known_values)
     panel["target_day"] = panel["next_change"].map(lambda v: None if pd.isna(v) else outcome(v))
     median = panel.groupby("date")["future_20d"].transform("median")
     panel["excess_20d"] = panel["future_20d"] - median
@@ -197,7 +231,7 @@ def _verdict(name, dates, model_losses, base_losses, spread) -> Evaluation:
 
 def walk_forward(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list[Evaluation]:
     """Each test year is predicted by a model trained only on earlier data."""
-    data = panel.dropna(subset=["next_change"])
+    data = panel[panel["eligible"]].dropna(subset=["next_change"])
     years = sorted(y for y in data["date"].dt.year.unique() if y >= first_year)
     day_dates, day_model, day_base = [], [], []
     rank_dates, rank_model, rank_base, spreads = [], [], [], []
@@ -272,7 +306,7 @@ def walk_forward(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list
 
 def test_factors(panel: pd.DataFrame) -> list[dict]:
     """Did stocks ranking high on each factor beat those ranking low over the next 20 days?"""
-    data = panel.dropna(subset=["excess_20d"])
+    data = panel[panel["eligible"]].dropna(subset=["excess_20d"])
     if data.empty:
         return []
     days = sorted(data["date"].unique())[::RANK_HORIZON]
@@ -349,6 +383,7 @@ def load_company(engine: Engine) -> dict[str, dict]:
             output[security.ticker] = {
                 "filings": longterm.point_in_time(facts),
                 "shares": longterm.shares_history(facts),
+                "quarters": longterm.quarterly_changes(facts),
                 "trades": insider_values(pd.DataFrame([row._mapping for row in trades])),
             }
     return output
@@ -366,6 +401,70 @@ def insider_values(trades: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def load_macro(engine: Engine) -> pd.DataFrame:
+    """Market-wide readings, each dated from when it was public."""
+    query = """SELECT DISTINCT ON (series_id, observation_date) series_id, observation_date, value
+               FROM economic_observations
+               WHERE series_id IN ('VIXCLS', 'BAA10Y', 'DCOILWTICO', 'T10YIE', 'ICSA')
+               ORDER BY series_id, observation_date, realtime_start DESC"""
+    with engine.connect() as conn:
+        rows = pd.DataFrame([row._mapping for row in conn.execute(text(query))])
+        fed = [row[0] for row in conn.execute(text("SELECT announced FROM fomc_dates"))]
+    if rows.empty:
+        return pd.DataFrame()
+    wide = rows.pivot(index="observation_date", columns="series_id", values="value")
+    wide.index = pd.to_datetime(wide.index)
+    wide = wide.sort_index()
+    macro = pd.DataFrame(index=wide.index)
+    # Daily series are published the next day. Jobless claims come out about 5 days later.
+    if "VIXCLS" in wide:
+        macro["vix"] = wide["VIXCLS"].shift(1, freq="D")
+    if "BAA10Y" in wide:
+        macro["credit_spread"] = wide["BAA10Y"].shift(1, freq="D")
+    if "DCOILWTICO" in wide:
+        macro["oil_20d"] = wide["DCOILWTICO"].dropna().pct_change(20).shift(1, freq="D")
+    if "T10YIE" in wide:
+        macro["inflation_expected"] = wide["T10YIE"].shift(1, freq="D")
+    if "ICSA" in wide:
+        macro["jobless_claims"] = wide["ICSA"].dropna().pct_change(4).shift(5, freq="D")
+    macro = macro.sort_index().ffill()
+    if fed:
+        days = pd.DatetimeIndex(sorted(macro.index.union(pd.to_datetime(fed))))
+        macro = macro.reindex(days).ffill()
+        # Fed dates are set in advance, so the day before an announcement can be flagged.
+        macro["fomc"] = pd.Series(1.0, index=pd.to_datetime(fed) - pd.Timedelta(days=1)).reindex(
+            days, fill_value=0.0
+        )
+    return macro
+
+
+def load_sectors(engine: Engine) -> dict[str, int]:
+    """Two-digit SIC industry group for each stock."""
+    query = "SELECT ticker, sic FROM securities WHERE sic IS NOT NULL"
+    with engine.connect() as conn:
+        return {ticker: sic // 100 for ticker, sic in conn.execute(text(query))}
+
+
+def load_panel(engine: Engine) -> pd.DataFrame:
+    frames = load_frames(engine)
+    if not frames:
+        raise RuntimeError("no stock has enough price history")
+    sizes = eligibility(engine)
+    if not sizes:
+        raise RuntimeError("no past company sizes stored: forecasts blocked")
+    with engine.connect() as conn:
+        ciks = dict(conn.execute(text("SELECT ticker, cik FROM securities")).all())
+    allowed = {ticker: sizes.get(ciks[ticker], set()) for ticker in frames}
+    return build_panel(
+        frames,
+        load_slope(engine),
+        load_company(engine),
+        load_macro(engine),
+        load_sectors(engine),
+        allowed,
+    )
+
+
 def load_slope(engine: Engine) -> pd.Series | None:
     query = """SELECT DISTINCT ON (series_id, observation_date) series_id, observation_date, value
                FROM economic_observations WHERE series_id IN ('DGS2', 'DGS10')
@@ -380,10 +479,8 @@ def load_slope(engine: Engine) -> pd.Series | None:
 
 
 def evaluate(engine: Engine) -> list[Evaluation]:
-    frames = load_frames(engine)
-    if not frames:
-        raise RuntimeError("no stock has enough price history to evaluate")
-    panel = build_panel(frames, load_slope(engine), load_company(engine))
+    panel = load_panel(engine)
+    stocks = panel["ticker"].nunique()
     results = walk_forward(panel)
     tests = test_factors(panel)
     with engine.begin() as conn:
@@ -405,7 +502,7 @@ def evaluate(engine: Engine) -> list[Evaluation]:
                        VALUES (:model, :stocks, :test_days, :first_test, :last_test,
                          :model_loss, :baseline_loss, :t_stat, :top_minus_bottom, :edge)"""
                 ),
-                {**item.__dict__, "stocks": len(frames)},
+                {**item.__dict__, "stocks": stocks},
             )
             print(item)
     return results
@@ -453,14 +550,15 @@ def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
     latest = panel[panel["date"] == pd.Timestamp(expected)].dropna(subset=["recent_low"])
     if latest.empty:
         raise RuntimeError(f"no prices for {expected}: forecasts blocked as stale")
-    train = panel.dropna(subset=["next_change"])
+    pool = panel[panel["eligible"]]
+    train = pool.dropna(subset=["next_change"])
     columns = usable(train)
     fitted = model().fit(train[columns], train["target_day"])
     base = train["target_day"].value_counts(normalize=True).to_dict()
     probabilities = pd.DataFrame(
         fitted.predict_proba(latest[columns]), columns=fitted.classes_, index=latest.index
     )
-    rank_train = panel.dropna(subset=["excess_20d"])
+    rank_train = pool.dropna(subset=["excess_20d"])
     rank_columns = usable(rank_train)
     ranker = model().fit(rank_train[rank_columns], rank_train["excess_20d"] > 0)
     ranks = pd.Series(ranker.predict_proba(latest[rank_columns])[:, 1], index=latest.index).rank(
@@ -551,9 +649,7 @@ def score_forecasts(engine: Engine) -> int:
 
 def daily(engine: Engine, now: datetime) -> None:
     print("scored", score_forecasts(engine))
-    frames = load_frames(engine)
-    panel = build_panel(frames, load_slope(engine), load_company(engine))
-    print("written", write_forecasts(engine, panel, now))
+    print("written", write_forecasts(engine, load_panel(engine), now))
 
 
 if __name__ == "__main__":

@@ -100,6 +100,17 @@ needs at least 30 tested cases that beat the baseline.
   Wang (2000) found some information in such patterns, 1962 to 1996. Flags and cups are not
   built. The rule thresholds are choices, set before testing.
 
+## Reducing survivorship bias
+
+- SEC yearly public float figures rebuild who was large at the time. A stock enters tests
+  only from when it ranked in about the top 1,000, using figures known by that April.
+- This stops today's winners being tested from before they became large. It does not add
+  companies that failed or were bought: their tickers are not in the SEC list, and Tiingo's
+  free plan has room for about 20 more symbols a month. Tiingo Power at $30 a month, even
+  for one month, would allow loading them if tickers can be found.
+- The float data is noisy, as some filers misreport it.
+- VIX and the Moody's spread are copyrighted on FRED, so they are for personal use only.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

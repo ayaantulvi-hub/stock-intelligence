@@ -30,9 +30,23 @@ log = logging.getLogger("stockintel.ingest")
 
 EXCHANGES = {"NYSE", "Nasdaq"}
 INSIDER_LOOKBACK = timedelta(days=730)
-ECONOMIC_SERIES = ("DGS2", "DGS10", "FEDFUNDS", "CPIAUCSL", "UNRATE", "GDPC1")
+ECONOMIC_SERIES = (
+    "DGS2",
+    "DGS10",
+    "FEDFUNDS",
+    "CPIAUCSL",
+    "UNRATE",
+    "GDPC1",
+    "VIXCLS",
+    "BAA10Y",
+    "DCOILWTICO",
+    "T10YIE",
+    "ICSA",
+)
+FOMC_RELEASE = 101
+FIRST_FLOAT_YEAR = 2009
 # FRED rejects full version history for these daily series.
-CURRENT_VALUES_ONLY = {"DGS2", "DGS10"}
+CURRENT_VALUES_ONLY = {"DGS2", "DGS10", "VIXCLS", "BAA10Y", "DCOILWTICO", "T10YIE", "ICSA"}
 ECONOMIC_START = date(2005, 1, 1)
 # Re-read recent days, because Tiingo publishes corrections through the evening.
 CORRECTION_WINDOW = timedelta(days=5)
@@ -272,8 +286,15 @@ def run_filings(engine: Engine, provider: FilingsProvider, now: datetime) -> str
                     ],
                 )
             conn.execute(
-                text("UPDATE securities SET last_filing_fetch_at = :now WHERE id = :id"),
-                {"now": now, "id": security.id},
+                text(
+                    """UPDATE securities SET last_filing_fetch_at = :now,
+                         sic = COALESCE(:sic, sic) WHERE id = :id"""
+                ),
+                {
+                    "now": now,
+                    "id": security.id,
+                    "sic": getattr(provider, "sic", {}).get(security.cik),
+                },
             )
         run.added += len(new)
         run.ok += 1
@@ -399,6 +420,61 @@ def run_insiders(engine: Engine, provider, now: datetime, limit: int) -> str:
     return run.finish()
 
 
+def run_history(engine: Engine, provider, now: datetime) -> str:
+    """Store each year's company sizes, so stock lists can be rebuilt as they stood."""
+    run = Run(engine, "history")
+    with engine.connect() as conn:
+        known = set(conn.execute(text("SELECT DISTINCT year FROM historic_float")).scalars())
+    for year in range(FIRST_FLOAT_YEAR, now.year):
+        if year in known:
+            continue
+        run.attempted += 1
+        try:
+            rows, provenance = provider.public_floats(year)
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        best: dict[int, float] = {}
+        for cik, value in rows:
+            best[cik] = max(value, best.get(cik, 0.0))
+        ordered = sorted(best.items(), key=lambda item: item[1], reverse=True)
+        with engine.begin() as conn:
+            fetch_id = add_fetch(conn, provenance)
+            conn.execute(
+                text(
+                    """INSERT INTO historic_float (year, cik, public_float, size_rank, fetch_id)
+                       VALUES (:year, :cik, :value, :rank, :fetch_id)"""
+                ),
+                [
+                    {"year": year, "cik": cik, "value": value, "rank": rank, "fetch_id": fetch_id}
+                    for rank, (cik, value) in enumerate(ordered, 1)
+                ],
+            )
+        run.added += len(ordered)
+        run.ok += 1
+    return run.finish()
+
+
+def run_fomc(engine: Engine, provider) -> str:
+    run = Run(engine, "fomc")
+    run.attempted = 1
+    try:
+        days, provenance = provider.release_dates(FOMC_RELEASE)
+    except FeedError as exc:
+        return run.finish(str(exc))
+    with engine.begin() as conn:
+        known = set(conn.execute(text("SELECT announced FROM fomc_dates")).scalars())
+        new = [day for day in days if day not in known]
+        if new:
+            fetch_id = add_fetch(conn, provenance)
+            conn.execute(
+                text("INSERT INTO fomc_dates (announced, fetch_id) VALUES (:day, :fetch_id)"),
+                [{"day": day, "fetch_id": fetch_id} for day in new],
+            )
+    run.ok, run.added = 1, len(new)
+    return run.finish()
+
+
 def run_economic(engine: Engine, provider: EconomicProvider) -> str:
     run = Run(engine, "economic")
     for series_id in ECONOMIC_SERIES:
@@ -455,7 +531,17 @@ def run_economic(engine: Engine, provider: EconomicProvider) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "feed", choices=["universe", "prices", "filings", "economic", "facts", "insiders"]
+        "feed",
+        choices=[
+            "universe",
+            "prices",
+            "filings",
+            "economic",
+            "facts",
+            "insiders",
+            "history",
+            "fomc",
+        ],
     )
     parser.add_argument("--limit", type=int, default=45, help="stocks or documents per run")
     args = parser.parse_args()
@@ -477,6 +563,10 @@ def main() -> None:
                 args.limit,
                 now,
             )
+        elif args.feed == "history":
+            status = run_history(engine, SecProvider(settings.sec_contact_email), now)
+        elif args.feed == "fomc":
+            status = run_fomc(engine, FredProvider(settings.fred_api_key))
         elif args.feed == "facts":
             status = run_facts(engine, SecProvider(settings.sec_contact_email))
         elif args.feed == "insiders":

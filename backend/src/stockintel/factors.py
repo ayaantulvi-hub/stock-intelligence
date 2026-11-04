@@ -139,6 +139,47 @@ REGISTER = [
     ),
     Factor("market_20d", "Whole-market 20-day return", "Economy", "Market-wide control", LIVE),
     Factor(
+        "revenue_growth",
+        "Latest quarter's sales against a year before",
+        "Growth",
+        "Quarterly SEC filings",
+        LIVE,
+    ),
+    Factor(
+        "sector_value",
+        "Value compared within its industry",
+        "Sector",
+        "Compared with its own industry group",
+        LIVE,
+    ),
+    Factor(
+        "sector_profit",
+        "Profitability compared within its industry",
+        "Sector",
+        "Compared with its own industry group",
+        LIVE,
+    ),
+    Factor(
+        "sector_momentum",
+        "12-month momentum compared within its industry",
+        "Sector",
+        "Compared with its own industry group",
+        LIVE,
+    ),
+    Factor("vix", "Market fear gauge (VIX)", "Economy", "Cboe VIX, through FRED", LIVE),
+    Factor(
+        "credit_spread", "Corporate borrowing premium", "Economy", "Moody's, through FRED", LIVE
+    ),
+    Factor("oil_20d", "Oil price, 20-day change", "Economy", "EIA, through FRED", LIVE),
+    Factor("inflation_expected", "Expected inflation", "Economy", "Through FRED", LIVE),
+    Factor(
+        "jobless_claims",
+        "Jobless claims, 4-week change",
+        "Economy",
+        "US Labor Department, through FRED",
+        LIVE,
+    ),
+    Factor(
         "value",
         "Book-to-market value",
         "Value",
@@ -208,7 +249,7 @@ REGISTER = [
         "Drift before Fed announcements",
         "Events",
         "Lucca & Moench (2015), Journal of Finance",
-        NEEDS_CALENDAR,
+        LIVE,
         "S&P 500 rose 49 basis points on average in the 24 hours before, 1994 to 2011",
         "https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr512.pdf",
     ),
@@ -223,7 +264,16 @@ REGISTER = [
     Factor("news_sentiment", "News tone", "News", "Tetlock (2007), Journal of Finance", NEEDS_NEWS),
 ]
 LIVE_IDS = [factor.id for factor in REGISTER if factor.status == LIVE]
-MARKET_WIDE = {"yield_slope", "market_20d"}
+MARKET_WIDE = {
+    "yield_slope",
+    "market_20d",
+    "vix",
+    "credit_spread",
+    "oil_20d",
+    "inflation_expected",
+    "jobless_claims",
+    "fomc",
+}
 NAMES = {factor.id: factor.name for factor in REGISTER}
 
 
@@ -242,6 +292,10 @@ HIGH_MEANS = {
     "rsi": "Stronger recent buying than most stocks",
     "macd_hist": "Stronger short-term trend than most stocks",
     "above_200": "Further above its 200-day average than most stocks",
+    "revenue_growth": "Sales grew faster than most stocks",
+    "sector_value": "Cheaper than most stocks in its industry",
+    "sector_profit": "More profitable than most stocks in its industry",
+    "sector_momentum": "Rose more than most stocks in its industry",
     "chart_pattern": "Recently completed a bullish chart pattern",
     "value": "Priced cheaply against its accounting value, compared with most stocks",
     "size": "A larger company than most covered stocks",

@@ -24,6 +24,7 @@ TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
 FORMS = {"10-K", "10-K/A", "10-Q", "10-Q/A", "8-K", "8-K/A", "20-F", "20-F/A", "40-F", "6-K"}
+FLOAT_URL = "https://data.sec.gov/api/xbrl/frames/dei/EntityPublicFloat/USD/CY{year}Q2I.json"
 FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 ACCESSION_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/"
 FACT_TAGS = {
@@ -63,6 +64,7 @@ class SecProvider:
         self.client = client or httpx.Client(timeout=30)
         self.headers = {"User-Agent": f"stock-intelligence {contact_email}"}
         self.last_request = 0.0
+        self.sic: dict[int, int] = {}
 
     def _get(self, url: str, name: str) -> object:
         wait = self.last_request + MIN_SECONDS_BETWEEN_REQUESTS - time.monotonic()
@@ -89,6 +91,8 @@ class SecProvider:
         data = self._get(url, f"SEC CIK {cik}")
         retrieved = datetime.now(UTC)
         try:
+            if data.get("sic"):
+                self.sic[cik] = int(data["sic"])
             recent = data["filings"]["recent"]
             rows = zip(
                 recent["accessionNumber"],
@@ -116,6 +120,17 @@ class SecProvider:
         except (KeyError, TypeError, ValueError):
             raise FeedError(f"SEC CIK {cik}: unexpected response shape") from None
         return filings, Provenance("SEC EDGAR", url, retrieved, "end_of_day")
+
+    def public_floats(self, year: int) -> tuple[list[tuple[int, float]], Provenance]:
+        """Each filer's reported market value of public shares, mid-year."""
+        url = FLOAT_URL.format(year=year)
+        data = self._get(url, f"SEC floats {year}")
+        retrieved = datetime.now(UTC)
+        try:
+            rows = [(int(row["cik"]), float(row["val"])) for row in data["data"]]
+        except (KeyError, TypeError, ValueError):
+            raise FeedError(f"SEC floats {year}: unexpected response shape") from None
+        return rows, Provenance("SEC EDGAR", url, retrieved, "end_of_day")
 
     def company_facts(self, cik: int) -> tuple[list[Fact], Provenance]:
         url = FACTS_URL.format(cik=cik)

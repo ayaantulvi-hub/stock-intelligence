@@ -15,6 +15,7 @@ from stockintel.backtest import (
     Tally,
     assert_no_look_ahead,
     calibration,
+    eligible_days,
     has_edge,
     run,
 )
@@ -199,6 +200,15 @@ def test_run_stores_results_and_warns_about_survivorship(engine):
             ),
             [{**row, "fetch": fetch} for row in frame.to_dict("records")],
         )
+    with engine.begin() as conn:
+        fetch = conn.execute(text("SELECT min(id) FROM fetches")).scalar()
+        conn.execute(
+            text(
+                """INSERT INTO historic_float (year, cik, public_float, size_rank, fetch_id)
+                   VALUES (2018, 1, 5, 1, :f), (2019, 1, 5, 1, :f), (2020, 1, 5, 1, :f)"""
+            ),
+            {"f": fetch},
+        )
     run(engine)
     latest = queries.latest_backtest(engine)
     assert latest["stocks"] == 1
@@ -206,6 +216,24 @@ def test_run_stores_results_and_warns_about_survivorship(engine):
     assert latest["results"]
     assert "Golden cross:bullish" in queries.records_for(engine, "daily")
     assert queries.records_for(engine, "weekly") == {}
+
+
+def test_backtest_is_blocked_without_past_sizes(engine):
+    with pytest.raises(RuntimeError, match="blocked"):
+        run(engine)
+
+
+def test_stock_only_counts_after_it_was_large_enough():
+    days = pd.Series([date(2020, 1, 15), date(2020, 5, 1), date(2021, 5, 1)])
+    # Sized in mid-2019, known from April 2020.
+    assert list(eligible_days(days, {2019})) == [False, True, False]
+
+
+def test_ineligible_days_are_left_out_of_the_test():
+    frame = random_frame()
+    test = Backtest()
+    test.add_stock(frame, np.zeros(len(frame), bool))
+    assert all(t.count == 0 for years in test.baselines.values() for t in years.values())
 
 
 def test_no_backtest_yet_returns_nothing(engine):

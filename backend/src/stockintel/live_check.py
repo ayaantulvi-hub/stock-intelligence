@@ -219,7 +219,7 @@ def probe_history() -> None:
 
 
 def main() -> None:
-    probe_history()
+    check_adjustment()
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,

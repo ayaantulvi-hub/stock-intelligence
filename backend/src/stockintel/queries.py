@@ -14,6 +14,8 @@ FEEDS = {
     "filings": "SEC EDGAR",
     "facts": "SEC EDGAR",
     "insiders": "SEC EDGAR",
+    "history": "SEC EDGAR",
+    "fomc": "FRED",
     "economic": "FRED",
 }
 PROVENANCE = "d.name AS source, f.source_url, f.retrieved_at, f.data_status"
