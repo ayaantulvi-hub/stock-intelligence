@@ -6,6 +6,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import date
 
 from sqlalchemy import create_engine, text
 
@@ -300,7 +301,109 @@ def probe_tags() -> None:
             print("tags  ", item)
 
 
+def probe_adjustments() -> None:
+    """List dividends and splits that would make adjusted prices impossible or suspect."""
+    from stockintel.forecast import load_frames  # noqa: F401
+    from sqlalchemy import text as sql
+
+    engine = create_engine(Settings().database_url)
+    query = """
+      WITH b AS (SELECT DISTINCT ON (security_id, market_date) security_id, market_date, close,
+                   div_cash, split_factor FROM price_bars ORDER BY security_id, market_date, id DESC),
+      l AS (SELECT *, lag(close) OVER (PARTITION BY security_id ORDER BY market_date) AS prev FROM b)
+      SELECT s.ticker, l.market_date, l.prev, l.close, l.div_cash, l.split_factor
+      FROM l JOIN securities s ON s.id = l.security_id
+      WHERE l.div_cash >= 0.15 * l.prev OR l.close / NULLIF(l.prev, 0) NOT BETWEEN 0.5 AND 1.6
+         OR l.split_factor <> 1
+      ORDER BY l.div_cash / NULLIF(l.prev, 0) DESC NULLS LAST"""
+    with engine.connect() as conn:
+        rows = conn.execute(sql(query)).all()
+    big = [r for r in rows if r.prev and r.div_cash >= 0.15 * r.prev]
+    print("adj big dividends", len(big))
+    for row in big[:40]:
+        print("adj div", tuple(row))
+    odd = [
+        r
+        for r in rows
+        if r.prev and r.split_factor != 1 and not 0.7 < r.close * r.split_factor / r.prev < 1.3
+    ]
+    print("adj odd splits", len(odd))
+    for row in odd[:40]:
+        print("adj split", tuple(row))
+    jumps = [
+        r
+        for r in rows
+        if r.prev and r.split_factor == 1 and not 0.5 <= r.close / r.prev <= 1.6
+        and r.div_cash < 0.15 * r.prev
+    ]
+    print("adj jumps", len(jumps))
+    for row in jumps[:40]:
+        print("adj jump", tuple(row))
+
+
+def probe_flagged() -> None:
+    """Show what the SEC really holds for companies the audit flags."""
+    from sqlalchemy import text as sql
+
+    agent = f"stock-intelligence {os.environ['SEC_CONTACT_EMAIL']}"
+    engine = create_engine(Settings().database_url)
+    with engine.connect() as conn:
+        issues = conn.execute(
+            sql("SELECT ticker, detail FROM validation_issues WHERE feed = 'audit' ORDER BY id")
+        ).all()
+    flagged: dict = {}
+    for ticker, detail in issues:
+        flagged.setdefault(ticker, []).append(detail)
+    print("flag all", {k: [d[:22] for d in v] for k, v in flagged.items()})
+    words = ("revenue", "sales", "netincome", "profitloss", "grossprofit", "interestincome",
+             "premiums", "income")
+    for ticker in ("FITB", "XEL", "LHX", "TFC", "CNI", "HONA", "FNV", "BIIB", "RVMD", "MSTR",
+                   "NVS", "HSBC", "TM", "SAN", "UBS", "BBVA", "IBN", "BSP", "VYLR", "ARGX"):
+        with engine.connect() as conn:
+            row = conn.execute(
+                sql("SELECT cik FROM securities WHERE ticker = :t"), {"t": ticker}
+            ).first()
+            forms = conn.execute(
+                sql("""SELECT f.form, max(f.filing_date) FROM filings f
+                       JOIN securities s ON s.id = f.security_id WHERE s.ticker = :t
+                       GROUP BY f.form ORDER BY 2 DESC LIMIT 6"""),
+                {"t": ticker},
+            ).all()
+        if row is None:
+            print("tags", ticker, "not in list")
+            continue
+        status, body = fetch(
+            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{row.cik:010d}.json",
+            {"User-Agent": agent},
+        )
+        print("tags", ticker, row.cik, status, flagged.get(ticker), [tuple(map(str, f)) for f in forms])
+        if status != 200:
+            continue
+        data = json.loads(body)
+        found = []
+        for taxonomy, tags in data["facts"].items():
+            for tag, concept in tags.items():
+                if any(word in tag.lower() for word in words):
+                    for unit, rows in concept["units"].items():
+                        yearly = [
+                            r for r in rows
+                            if r.get("start")
+                            and 350 <= (date.fromisoformat(r["end"]) - date.fromisoformat(r["start"])).days <= 380
+                        ]
+                        if yearly:
+                            top = max(yearly, key=lambda r: r["end"])
+                            found.append((top["end"], top["val"], taxonomy, tag, unit, top.get("form")))
+        for item in sorted(found, key=lambda x: (x[0], abs(x[1])), reverse=True)[:9]:
+            print("tags  ", item)
+
+
 def main() -> None:
+    probe_adjustments()
+    probe_flagged()
+    sys.exit(0)
+
+
+def main_full() -> None:
     from stockintel import audit
 
     audit.run(create_engine(Settings().database_url))
