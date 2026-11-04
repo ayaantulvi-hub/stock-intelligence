@@ -15,7 +15,6 @@ from sqlalchemy import Engine, text
 from stockintel.backtest import eligibility, eligible_days
 from stockintel.charts import levels
 from stockintel.db import get_engine
-from stockintel.forecast import load_frames
 
 ATR_DAYS = 14
 DEFAULT_MULTIPLE = 2.0
@@ -126,6 +125,9 @@ def study(results: dict) -> list[dict]:
 
 
 def run(engine: Engine) -> list[dict]:
+    # Imported here so the website does not load the machine-learning libraries.
+    from stockintel.forecast import load_frames
+
     sizes = eligibility(engine)
     with engine.connect() as conn:
         ciks = dict(conn.execute(text("SELECT ticker, cik FROM securities")).all())

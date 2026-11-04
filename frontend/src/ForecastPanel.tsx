@@ -333,35 +333,32 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [leans, setLeans] = useState<Leans | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [problems, setProblems] = useState<string[]>([]);
 
   const loadDecision = useCallback(() => {
     getJson<Decision>(`/api/stocks/${encodeURIComponent(ticker)}/decision`)
       .then(setDecision)
-      .catch(() => setFailed(true));
+      .catch(() => setProblems((list) => [...list, "the buy or sell answer"]));
   }, [ticker]);
 
   useEffect(loadDecision, [loadDecision]);
 
   useEffect(() => {
-    setFailed(false);
-    Promise.all([
-      getJson<Forecast | null>(`/api/stocks/${encodeURIComponent(ticker)}/forecast`),
-      getJson<Line[]>(`/api/stocks/${encodeURIComponent(ticker)}/story`),
-      getJson<Leans | null>(`/api/stocks/${encodeURIComponent(ticker)}/leans`),
-    ])
-      .then(([nextForecast, nextLines, nextLeans]) => {
-        setForecast(nextForecast);
-        setLines(nextLines);
-        setLeans(nextLeans);
-      })
-      .catch(() => setFailed(true));
+    // Each part loads alone, so one failure can't hide the rest of the page.
+    const base = `/api/stocks/${encodeURIComponent(ticker)}`;
+    const note = (part: string) => () => setProblems((list) => [...list, part]);
+    setProblems([]);
+    getJson<Forecast | null>(`${base}/forecast`).then(setForecast).catch(note("the forecast"));
+    getJson<Line[]>(`${base}/story`).then(setLines).catch(note("the data summary"));
+    getJson<Leans | null>(`${base}/leans`).then(setLeans).catch(note("the factor table"));
   }, [ticker]);
 
-  if (failed) return <p className="bad">Forecast failed to load. Not verified.</p>;
   const tone = decision?.kind === "neutral" ? "" : (decision?.kind ?? "");
   return (
     <div>
+      {problems.length > 0 && (
+        <p className="bad">Could not load {problems.join(", ")}. Refresh to try again.</p>
+      )}
       <div className="verdict">
         <h3 className={tone}>{decision?.call ?? "Checking…"}</h3>
         {decision && (
