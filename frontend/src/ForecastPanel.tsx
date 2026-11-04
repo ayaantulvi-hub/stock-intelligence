@@ -164,8 +164,12 @@ function Tug({ leans }: { leans: Leans }) {
     ));
   const sell = side("Sell");
   const buy = side("Buy");
+  const model = leans.overall.lean;
+  const disagrees =
+    (model === "Buy" && sell.length > buy.length) || (model === "Sell" && buy.length > sell.length);
   return (
     <div className="tug">
+      <h3>What each factor says on its own</h3>
       <div className="tug-labels">
         <span>{sell.length} lean sell</span>
         <span>{buy.length} lean buy</span>
@@ -176,9 +180,16 @@ function Tug({ leans }: { leans: Leans }) {
         <div className="tug-side buy">{blocks(buy)}</div>
       </div>
       <small>
-        Each block is one factor. Solid passed testing here. Outlined is only backed by a paper.
-        This isn't a vote: the call comes from the tested model.
+        Each block is one factor taken alone. Solid passed testing here. Outlined is only backed by
+        a paper.
       </small>
+      {disagrees && (
+        <p className="lean">
+          Why this differs from the answer at the top: the model leans {model} because it looks at
+          how factors combine and learns which matter, so it doesn't count these blocks. Disagreement
+          like this is a reason to be more careful.
+        </p>
+      )}
     </div>
   );
 }
@@ -400,7 +411,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
       {leans && <Tug leans={leans} />}
       {forecast && (
         <>
-          <h3>Tomorrow's chances ({forecast.target_session})</h3>
+          <h3>Chances for {forecast.target_session}</h3>
           <div className="odds" role="img" aria-label={`Down ${percent(forecast.p_down)}, flat ${percent(forecast.p_flat)}, up ${percent(forecast.p_up)}`}>
             <span className="down" style={{ flexGrow: forecast.p_down, flexBasis: 0 }}>
               Down {percent(forecast.p_down)}

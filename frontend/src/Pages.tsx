@@ -61,8 +61,8 @@ const COLUMNS: [keyof Row, string][] = [
   ["ticker", "Stock"],
   ["last_close", "Close"],
   ["lean", "Model leans"],
-  ["rank", "20-day rank"],
-  ["p_up", "Chance up tomorrow"],
+  ["rank", "Upside rank, 20 days"],
+  ["p_up", "Chance up next day"],
 ];
 
 export function Screener({ onOpen }: { onOpen: (ticker: string) => void }) {
@@ -91,7 +91,8 @@ export function Screener({ onOpen }: { onOpen: (ticker: string) => void }) {
     <details className="fold">
       <summary>All stocks</summary>
       <p>
-        The model's unproven lean for each stock. Tap a heading to sort, or a stock to open it.
+        Most upside first, as ranked by the model, where 100 is its top pick. Unproven. Tap a
+        heading to sort, or a stock to open it.
       </p>
       <div className="screener-tools">
         <input
