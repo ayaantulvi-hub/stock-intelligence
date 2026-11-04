@@ -1,6 +1,10 @@
 name: Update data
 # Started by cron-job.org: hourly for prices, daily for forecasts. See docs/decisions.md.
 on:
+  # A backup for cron-job.org. GitHub can delay these, so forecasts may run late.
+  schedule:
+    - cron: "25 * * * *"
+    - cron: "50 10 * * 2-6"
   workflow_dispatch:
     inputs:
       prices:
