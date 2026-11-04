@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import Engine, text
 
+from stockintel import localcache
 from stockintel.charts import adjust, pattern_history
 from stockintel.db import get_engine
 
@@ -193,23 +194,17 @@ def run(engine: Engine, cost_bps: float = COST_BPS) -> int:
     first, last, stocks = None, None, 0
     with engine.connect() as conn:
         companies = conn.execute(text("SELECT id, cik FROM securities ORDER BY id")).all()
-        for security_id, cik in companies:
-            rows = conn.execute(
-                text(
-                    """SELECT DISTINCT ON (market_date) market_date, open, high, low, close,
-                         volume, div_cash, split_factor
-                       FROM price_bars WHERE security_id = :id
-                       ORDER BY market_date, id DESC"""
-                ),
-                {"id": security_id},
-            ).all()
-            if len(rows) < 260:
-                continue
-            frame = adjust(pd.DataFrame([row._mapping for row in rows]))
-            test.add_stock(frame, eligible_days(frame["market_date"], sizes.get(cik, set())))
-            stocks += 1
-            first = min(first or rows[0].market_date, rows[0].market_date)
-            last = max(last or rows[-1].market_date, rows[-1].market_date)
+    bars = localcache.daily_bars(engine)
+    for security_id, cik in companies:
+        rows = bars.get(security_id)
+        if rows is None or len(rows) < 260:
+            continue
+        frame = adjust(rows)
+        test.add_stock(frame, eligible_days(frame["market_date"], sizes.get(cik, set())))
+        stocks += 1
+        opened, closed = rows["market_date"].iloc[0], rows["market_date"].iloc[-1]
+        first = min(first or opened, opened)
+        last = max(last or closed, closed)
     if not stocks:
         raise RuntimeError("no stock has enough price history to test")
     results = test.results()

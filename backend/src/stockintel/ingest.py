@@ -5,9 +5,11 @@ import logging
 import sys
 from datetime import UTC, date, datetime, timedelta
 
+import pandas as pd
 from sqlalchemy import Engine, text
 from sqlalchemy.engine import Connection
 
+from stockintel import localcache
 from stockintel.config import get_settings
 from stockintel.db import get_engine
 from stockintel.market import PUBLISH_DELAY, latest_expected_session, session_close
@@ -31,6 +33,7 @@ from stockintel.worker import record_heartbeat
 log = logging.getLogger("stockintel.ingest")
 
 EXCHANGES = {"NYSE", "Nasdaq"}
+KNOWN_FILINGS_WINDOW = timedelta(days=90)
 INSIDER_LOOKBACK = timedelta(days=730)
 ECONOMIC_SERIES = (
     "DGS2",
@@ -272,12 +275,18 @@ def run_filings(engine: Engine, provider: FilingsProvider, now: datetime) -> str
             run.errors.append(str(exc))
             continue
         with engine.begin() as conn:
+            # Older filings are stored already, and re-reading them all costs database transfer.
+            since = now.date() - KNOWN_FILINGS_WINDOW
             known = set(
                 conn.execute(
-                    text("SELECT accession_number FROM filings WHERE security_id = :id"),
-                    {"id": security.id},
+                    text(
+                        """SELECT accession_number FROM filings
+                           WHERE security_id = :id AND filing_date >= :since"""
+                    ),
+                    {"id": security.id, "since": since},
                 ).scalars()
             )
+            filings = [filing for filing in filings if filing.filing_date >= since]
             new = [filing for filing in filings if filing.accession_number not in known]
             if new:
                 fetch_id = add_fetch(conn, provenance)
@@ -295,8 +304,11 @@ def run_filings(engine: Engine, provider: FilingsProvider, now: datetime) -> str
                 )
             known_events = set(
                 conn.execute(
-                    text("SELECT accession_number FROM filing_events WHERE security_id = :id"),
-                    {"id": security.id},
+                    text(
+                        """SELECT accession_number FROM filing_events
+                           WHERE security_id = :id AND filing_date >= :since"""
+                    ),
+                    {"id": security.id, "since": since},
                 ).scalars()
             )
             events = [
@@ -350,6 +362,19 @@ def run_facts(engine: Engine, provider) -> str:
         securities = conn.execute(
             text("SELECT id, ticker, cik FROM securities ORDER BY universe_rank")
         ).all()
+    stored = localcache.load(engine, "company_facts")
+    known_keys: dict = {}
+    for security_id, group in stored.groupby("security_id"):
+        known_keys[security_id] = {
+            (tag, None if pd.isna(start) else start, end, accession)
+            for tag, start, end, accession in zip(
+                group["tag"],
+                group["period_start"],
+                group["period_end"],
+                group["accession_number"],
+                strict=True,
+            )
+        }
     for security in securities:
         run.attempted += 1
         try:
@@ -365,15 +390,7 @@ def run_facts(engine: Engine, provider) -> str:
             run.errors.append(str(exc))
             continue
         with engine.begin() as conn:
-            known = set(
-                conn.execute(
-                    text(
-                        """SELECT tag, period_start, period_end, accession_number
-                           FROM company_facts WHERE security_id = :id"""
-                    ),
-                    {"id": security.id},
-                ).all()
-            )
+            known = known_keys.get(security.id, set())
             new, seen = [], set()
             for fact in facts:
                 key = (fact.tag, fact.period_start, fact.period_end, fact.accession_number)

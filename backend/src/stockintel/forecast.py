@@ -17,7 +17,7 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sqlalchemy import Engine, text
 
-from stockintel import longterm
+from stockintel import localcache, longterm
 from stockintel.backtest import MIN_Z, eligibility, eligible_days
 from stockintel.charts import adjust
 from stockintel.db import get_engine
@@ -352,19 +352,11 @@ def load_frames(engine: Engine) -> dict[str, pd.DataFrame]:
         securities = conn.execute(
             text("SELECT id, ticker FROM securities ORDER BY universe_rank")
         ).all()
-        for security in securities:
-            rows = conn.execute(
-                text(
-                    """SELECT DISTINCT ON (market_date) market_date, open, high, low, close,
-                         volume, div_cash, split_factor
-                       FROM price_bars WHERE security_id = :id
-                       ORDER BY market_date, id DESC"""
-                ),
-                {"id": security.id},
-            ).all()
-            if len(rows) >= 300:
-                raw = pd.DataFrame([row._mapping for row in rows])
-                frames[security.ticker] = adjust(raw).assign(raw_close=raw["close"])
+    bars = localcache.daily_bars(engine)
+    for security in securities:
+        raw = bars.get(security.id)
+        if raw is not None and len(raw) >= 300:
+            frames[security.ticker] = adjust(raw).assign(raw_close=raw["close"])
     return frames
 
 
@@ -373,32 +365,27 @@ def load_company(engine: Engine) -> dict[str, dict]:
     output: dict[str, dict] = {}
     with engine.connect() as conn:
         securities = conn.execute(text("SELECT id, ticker FROM securities")).all()
-        for security in securities:
-            rows = conn.execute(
-                text(
-                    """SELECT tag, unit, period_start, period_end, value, accession_number,
-                         fiscal_period, form, filed, document_url
-                       FROM company_facts WHERE security_id = :id"""
-                ),
-                {"id": security.id},
-            ).all()
-            trades = conn.execute(
-                text(
-                    """SELECT filed, code, shares, price, owner FROM insider_transactions
-                       WHERE security_id = :id AND price IS NOT NULL
-                         AND (code = 'P' OR (code = 'S' AND NOT planned_sale))"""
-                ),
-                {"id": security.id},
-            ).all()
-            if not rows and not trades:
-                continue
-            facts = pd.DataFrame([row._mapping for row in rows])
-            output[security.ticker] = {
-                "filings": longterm.point_in_time(facts),
-                "shares": longterm.shares_history(facts),
-                "quarters": longterm.quarterly_changes(facts),
-                "trades": insider_values(pd.DataFrame([row._mapping for row in trades])),
-            }
+    all_facts = localcache.facts_by_security(engine)
+    all_trades = localcache.load(engine, "insider_transactions")
+    wanted = all_trades[
+        all_trades["price"].notna()
+        & (
+            (all_trades["code"] == "P")
+            | ((all_trades["code"] == "S") & all_trades["planned_sale"].eq(False))
+        )
+    ]
+    grouped = dict(tuple(wanted.groupby("security_id")))
+    for security in securities:
+        facts = all_facts.get(security.id, pd.DataFrame())
+        trades = grouped.get(security.id, pd.DataFrame())
+        if facts.empty and trades.empty:
+            continue
+        output[security.ticker] = {
+            "filings": longterm.point_in_time(facts),
+            "shares": longterm.shares_history(facts),
+            "quarters": longterm.quarterly_changes(facts),
+            "trades": insider_values(trades),
+        }
     return output
 
 

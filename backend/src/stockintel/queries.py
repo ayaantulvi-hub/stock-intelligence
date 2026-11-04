@@ -651,8 +651,8 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
     )
 
 
-def expert_review(engine: Engine, ticker: str, today, owned: bool = True) -> dict | None:
-    """The expert lenses for one stock. `owned=False` leaves the holder's own position out."""
+def expert_review(engine: Engine, ticker: str, today) -> dict | None:
+    """The expert lenses for one stock, for the person who may own it."""
     with engine.connect() as conn:
         security = conn.execute(
             text("SELECT id, sic FROM securities WHERE ticker = :t"), {"t": ticker.upper()}
@@ -678,7 +678,7 @@ def expert_review(engine: Engine, ticker: str, today, owned: bool = True) -> dic
         frame,
         sic=security.sic,
         serious=tools.serious_events(tools.company_events(engine, ticker, today), today),
-        position=get_position(engine, ticker) if owned else None,
+        position=get_position(engine, ticker),
         earnings_in=(earnings - today).days if earnings else None,
         outside=experts.load_outside(engine),
     )

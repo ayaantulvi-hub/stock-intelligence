@@ -15,10 +15,9 @@ from datetime import UTC, date, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import longterm
+from stockintel import localcache, longterm, tools
 from stockintel.charts import sma
 from stockintel.db import get_engine
-from stockintel.tools import SEVERE_EVENTS
 
 GOOD, BAD, MIXED, UNKNOWN = "good", "bad", "mixed", "unknown"
 F_STRONG, F_WEAK = 7, 2
@@ -171,7 +170,7 @@ def filings_lens(serious: list[str]) -> dict:
     name, source = "Any trouble in its filings?", "SEC Form 8-K"
     teaches = "Experienced investors read what a company must report before trusting the numbers."
     if serious:
-        severe = any(event in SEVERE_EVENTS for event in serious)
+        severe = any(event in tools.SEVERE_EVENTS for event in serious)
         return {**lens(name, source, BAD, "; ".join(serious) + ".", teaches), "severe": severe}
     return lens(name, source, GOOD, "Nothing serious in the last 90 days.", teaches)
 
@@ -302,18 +301,33 @@ def stored_blocks(engine: Engine) -> dict[str, str]:
 
 def run(engine: Engine) -> int:
     """Review every stock, so the home page lists match each stock's own page."""
-    from stockintel import queries
+    from stockintel.charts import adjust
 
     today: date = datetime.now(UTC).date()
     with engine.connect() as conn:
-        tickers = list(
-            conn.execute(text("SELECT ticker FROM securities ORDER BY universe_rank")).scalars()
-        )
+        securities = conn.execute(
+            text("SELECT id, ticker, sic FROM securities ORDER BY universe_rank")
+        ).all()
+    bars = localcache.daily_bars(engine)
+    all_facts = localcache.facts_by_security(engine)
+    outside = load_outside(engine)
     done = 0
-    for ticker in tickers:
-        result = queries.expert_review(engine, ticker, today, owned=False)
-        if result is None:
+    for security in securities:
+        raw = bars.get(security.id)
+        if raw is None or raw.empty:
             continue
+        ticker = security.ticker
+        facts = all_facts.get(security.id, pd.DataFrame())
+        earnings = tools.next_earnings(engine, ticker, today)
+        result = review(
+            facts,
+            longterm.report(facts, float(raw["close"].iloc[-1])),
+            adjust(raw),
+            sic=security.sic,
+            serious=tools.serious_events(tools.company_events(engine, ticker, today), today),
+            earnings_in=(earnings - today).days if earnings else None,
+            outside=outside,
+        )
         with engine.begin() as conn:
             conn.execute(
                 text(

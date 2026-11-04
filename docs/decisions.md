@@ -187,3 +187,11 @@ needs at least 30 tested cases that beat the baseline.
   The Piotroski score is also a model factor. The app can't contain every book or video.
 - Several insiders buying together is a tested factor. It affects ranking only if it earns
   weight in the weekly model test.
+
+## Staying inside free limits
+
+- Neon's free plan allows 100 compute hours and 5 GB of transfer a month per project. Repeated
+  full reads of about 1.1 million price rows suspended the database on 2026-11-04.
+- Jobs now keep a copy of the append-only tables in the GitHub Actions cache and fetch only
+  rows newer than the copy (localcache.py). The website reads one stock at a time.
+- Paid plans are ruled out by the user. The tool must stay free.

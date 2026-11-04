@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import longterm, queries
+from stockintel import localcache, longterm
 from stockintel.db import get_engine
 
 MAX_AGE = timedelta(days=500)
@@ -78,8 +78,9 @@ def run(engine: Engine) -> dict:
         securities = conn.execute(text(query)).all()
     tally: Counter = Counter()
     flagged = {}
+    all_facts = localcache.facts_by_security(engine)
     for security in securities:
-        facts = queries.load_facts(engine, security.id)
+        facts = all_facts.get(security.id, pd.DataFrame())
         report = longterm.report(facts, security.price)
         problems = check(report, today)
         if problems:

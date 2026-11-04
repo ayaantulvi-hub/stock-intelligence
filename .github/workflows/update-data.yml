@@ -27,6 +27,7 @@ jobs:
     timeout-minutes: 90
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      STOCKINTEL_CACHE: .dbcopy
       TIINGO_API_TOKEN: ${{ secrets.TIINGO_API_TOKEN }}
       FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
       SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
@@ -35,6 +36,12 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+      # A copy of the database, so each job downloads only new rows. See localcache.py.
+      - uses: actions/cache@v4
+        with:
+          path: backend/.dbcopy
+          key: dbcopy-${{ github.run_id }}
+          restore-keys: dbcopy-
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
