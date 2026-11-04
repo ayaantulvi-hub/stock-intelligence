@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-type Check = { topic: string; state: string; text: string };
+type Check = { topic: string; state: string; text: string; meaning?: string };
 const MARKS: Record<string, [string, string]> = {
   pass: ["Pass", "ok"],
   caution: ["Caution", "bad"],
@@ -211,7 +211,10 @@ export default function ChecklistPanel({ ticker }: { ticker: string }) {
                 <tr key={check.topic}>
                   <td>{check.topic}</td>
                   <td className={tone}>{label}</td>
-                  <td>{check.text}</td>
+                  <td>
+                    {check.text}
+                    {check.meaning && <small>{check.meaning}</small>}
+                  </td>
                 </tr>
               );
             })}

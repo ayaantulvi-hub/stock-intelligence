@@ -16,6 +16,38 @@ def _line(topic: str, tone: str, text: str, why: str, evidence: str, on_chart: s
     }
 
 
+MEANINGS = {
+    ("Long-term trend", "good"): "You'd be going with the bigger direction, which many investors "
+    "prefer. It doesn't mean it will keep rising.",
+    ("Long-term trend", "bad"): "You'd be going against the bigger direction. Falling stocks can "
+    "keep falling, so a lower price isn't automatically a bargain.",
+    ("Recent trend", "good"): "Recent buyers are mostly sitting on gains.",
+    ("Recent trend", "bad"): "Recent buyers are mostly sitting on losses, which can bring more "
+    "selling.",
+    ("Company profit", "good"): "Rising profit supports the share price over time, though much "
+    "of it may already be in the price.",
+    ("Company profit", "bad"): "Weak profit can pull the share price down, unless investors "
+    "expect a recovery.",
+}
+DEFAULT_MEANINGS = {
+    "Momentum": "A stretched stock can keep going, so this alone isn't a reason to act. It does "
+    "suggest being careful about chasing the move.",
+    "Key prices": "Buying just under a ceiling leaves less room to rise. A floor gives you a "
+    "natural place to set a stop.",
+    "Normal daily swing": "A move inside this range is ordinary, so it's no reason to panic.",
+    "Why this call": "Until this passes, treat every lean on this page as unproven.",
+    "Signals": "Wait for fresh prices before acting.",
+}
+
+
+def _meaning(line: dict) -> str:
+    return (
+        MEANINGS.get((line["topic"], line["tone"]))
+        or DEFAULT_MEANINGS.get(line["topic"])
+        or "On its own this is weak evidence, so weigh it with everything else."
+    )
+
+
 def _versus(close: float, average: float, name: str) -> str:
     gap = (close / average - 1) * 100
     return f"Last close {close:.2f} against {name} {average:.2f}, a gap of {gap:+.1f}%."
@@ -221,4 +253,6 @@ def story(
                 f"Chart tab: this happened on the latest candle, {signal['market_date']}.",
             )
         )
+    for line in lines:
+        line["meaning"] = _meaning(line)
     return lines

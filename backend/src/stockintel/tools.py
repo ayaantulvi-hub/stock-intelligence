@@ -371,8 +371,18 @@ def market_mood(engine: Engine) -> dict:
         mood = "Nervous"
     else:
         mood = "Calm"
+    meaning = {
+        "Calm": "Prices have been expected to move fairly little. Calm periods can end quickly, "
+        "so keep your stops in place.",
+        "Nervous": "Investors expect bigger swings than usual. Stops get hit more easily and "
+        "daily moves can look alarming, so many people buy smaller amounts in these periods.",
+        "Stressed": "Investors expect very large swings. Losses can build quickly and prices can "
+        "jump past your stop, so this is a poor time to risk more than you planned.",
+        "Not verified": "The latest reading isn't available, so don't rely on this.",
+    }[mood]
     return {
         "mood": mood,
+        "meaning": meaning,
         "vix": vix,
         "credit_spread": latest["BAA10Y"].value if "BAA10Y" in latest else None,
         "above_200": breadth.above / breadth.total if breadth and breadth.total else None,

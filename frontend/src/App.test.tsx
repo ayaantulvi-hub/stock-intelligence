@@ -13,6 +13,7 @@ function stub(routes: Record<string, [number, unknown]>) {
     "/api/ideas": [200, { target_session: null, edge: false, buy: [], sell: [] }],
     "/api/track-record": [200, { scored: 0, written: 0, brier: null, evaluations: [] }],
     "/api/model-comparison": [200, null],
+    "/api/screener": [200, []],
     "/api/market-mood": [200, { mood: "Not verified", vix: null, credit_spread: null, above_200: null, stocks_measured: 0, next_fed: null }],
   };
   vi.stubGlobal(

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
-import { AlertsPage, JournalPage, MarketMood, PortfolioPage, PracticePage, ReliabilityPage, WatchButton } from "./Pages";
+import { AlertsPage, JournalPage, MarketMood, PortfolioPage, PracticePage, ReliabilityPage, Screener, WatchButton } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 type Status = {
@@ -344,13 +344,14 @@ export default function App() {
       )}
       {stock && <StockView stock={stock} />}
 
-      {!stock && !failed && <MarketMood />}
       {!stock && !failed && <IdeasPanel />}
+      {!stock && !failed && <MarketMood />}
+      {!stock && !failed && <Screener onOpen={open} />}
       {backtest && <BacktestView backtest={backtest} />}
 
       {status && (
-        <section>
-          <h2>System</h2>
+        <details className="fold">
+          <summary>Is everything running?</summary>
           <dl>
             <div>
               <dt>Database</dt>
@@ -371,7 +372,7 @@ export default function App() {
               </dd>
             </div>
           </dl>
-        </section>
+        </details>
       )}
 
       {feeds.length > 0 && (

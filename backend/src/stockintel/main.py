@@ -186,6 +186,11 @@ def delete_position(ticker: str) -> None:
     queries.delete_position(get_engine(), ticker)
 
 
+@app.get("/api/screener")
+def screener() -> list[dict]:
+    return queries.screener(get_engine())
+
+
 @app.get("/api/ideas")
 def ideas() -> dict:
     return queries.ideas(get_engine())

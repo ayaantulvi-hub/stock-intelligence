@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { IdeasPanel } from "./ForecastPanel";
 
 const NOT_VERIFIED = "Not verified";
 
@@ -47,8 +48,103 @@ export function WatchButton({ ticker }: { ticker: string }) {
   );
 }
 
+type Row = {
+  ticker: string;
+  name: string;
+  last_close: number;
+  rank: number | null;
+  p_up: number;
+  action: string;
+  lean: string;
+};
+const COLUMNS: [keyof Row, string][] = [
+  ["ticker", "Stock"],
+  ["last_close", "Close"],
+  ["lean", "Model leans"],
+  ["rank", "20-day rank"],
+  ["p_up", "Chance up tomorrow"],
+];
+
+export function Screener({ onOpen }: { onOpen: (ticker: string) => void }) {
+  const { data, failed } = useData<Row[]>("/api/screener");
+  const [filter, setFilter] = useState("");
+  const [lean, setLean] = useState("All");
+  const [sort, setSort] = useState<keyof Row>("rank");
+  const [ascending, setAscending] = useState(false);
+  if (failed) return <Failed />;
+  if (!data || data.length === 0) return null;
+  const text = filter.toLowerCase();
+  const rows = data
+    .filter((row) => lean === "All" || row.lean === lean)
+    .filter(
+      (row) => row.ticker.toLowerCase().includes(text) || row.name.toLowerCase().includes(text),
+    )
+    .sort((a, b) => {
+      const order = (a[sort] ?? -1) < (b[sort] ?? -1) ? -1 : 1;
+      return ascending ? order : -order;
+    });
+  const click = (key: keyof Row) => {
+    setAscending(sort === key ? !ascending : key === "ticker");
+    setSort(key);
+  };
+  return (
+    <section>
+      <h2>All stocks</h2>
+      <p>
+        The model's unproven lean for each stock. Tap a heading to sort, or a stock to open it.
+      </p>
+      <div className="screener-tools">
+        <input
+          aria-label="Filter stocks"
+          placeholder="Filter"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+        />
+        <div className="tabs" role="group" aria-label="Lean">
+          {["All", "Buy", "Mixed", "Sell"].map((name) => (
+            <button key={name} aria-pressed={name === lean} onClick={() => setLean(name)}>
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="scroll">
+        <table className="screener">
+          <thead>
+            <tr>
+              {COLUMNS.map(([key, label]) => (
+                <th key={key}>
+                  <button onClick={() => click(key)}>{label}</button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 100).map((row) => (
+              <tr key={row.ticker}>
+                <td>
+                  <button className="link" onClick={() => onOpen(row.ticker)}>
+                    {row.ticker}
+                  </button>
+                </td>
+                <td>{row.last_close.toFixed(2)}</td>
+                <td className={row.lean === "Buy" ? "ok" : row.lean === "Sell" ? "bad" : ""}>
+                  {row.lean}
+                </td>
+                <td>{row.rank === null ? NOT_VERIFIED : Math.round(row.rank * 100)}</td>
+                <td>{pct(row.p_up)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 type Mood = {
   mood: string;
+  meaning: string;
   vix: number | null;
   credit_spread: number | null;
   above_200: number | null;
@@ -62,6 +158,9 @@ export function MarketMood() {
   return (
     <section>
       <h2>Market mood: {data.mood}</h2>
+      <p className="so-what">
+        <b>What this means for you:</b> {data.meaning}
+      </p>
       <div className="glance">
         <div>
           <small>Fear gauge (VIX)</small>
@@ -430,6 +529,7 @@ export function ReliabilityPage() {
           </li>
         ))}
       </ul>
+      <IdeasPanel part="record" />
     </section>
   );
 }

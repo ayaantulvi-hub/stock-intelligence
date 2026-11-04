@@ -125,3 +125,16 @@ def test_company_profit_is_explained_with_its_numbers():
     assert line["topic"] == "Company profit"
     assert "$1.5 billion" in line["text"] and "+50%" in line["text"]
     assert line["tone"] == "good"
+
+
+def test_every_line_says_what_it_means_for_you():
+    signal = {
+        "name": "Breakout",
+        "label": "Unproven",
+        "detail": "Closed above resistance",
+        "cancellation_level": 1.0,
+        "market_date": "2026-11-02",
+    }
+    forecast = {"range_low": 95.0, "range_high": 105.0, "last_close": 100.0}
+    for line in story(FACTS, [signal], True, forecast):
+        assert line["meaning"]

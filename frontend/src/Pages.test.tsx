@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { PortfolioPage, PracticePage, ReliabilityPage } from "./Pages";
+import { PortfolioPage, PracticePage, ReliabilityPage, Screener } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -48,4 +48,23 @@ test("a refused practice trade shows the reason", async () => {
   fireEvent.change(screen.getByLabelText("Why?"), { target: { value: "Fixture" } });
   fireEvent.click(screen.getByText("Place practice trade"));
   expect(await screen.findByText("Not enough practice cash.")).toBeTruthy();
+});
+
+test("screener filters by lean and opens a stock", async () => {
+  const row = (ticker: string, lean: string) => ({
+    ticker,
+    name: `${ticker} Fixture`,
+    last_close: 100,
+    rank: 0.5,
+    p_up: 0.5,
+    action: "No reliable edge",
+    lean,
+  });
+  respond([row("AAA", "Buy"), row("BBB", "Sell")]);
+  const open = vi.fn();
+  render(<Screener onOpen={open} />);
+  fireEvent.click(await screen.findByText("BBB"));
+  expect(open).toHaveBeenCalledWith("BBB");
+  fireEvent.click(screen.getByRole("button", { name: "Buy" }));
+  expect(screen.queryByText("BBB")).toBeNull();
 });

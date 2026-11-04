@@ -220,3 +220,16 @@ def test_survivorship_suspect_pass_is_not_proven():
 def test_overall_lean_is_marked_unless_tested(action, rank, lean, proven):
     result = advice.overall(action, rank)
     assert (result["lean"], result["proven"], result["decision"]) == (lean, proven, action)
+
+
+def test_every_check_says_what_it_means():
+    for check in review(insider_net=1.0, last_earnings_days=80, portfolio_share=0.5).values():
+        assert check["meaning"]
+
+
+def test_factor_reading_is_explained_in_plain_words():
+    row = factor_leans([{"factor": "size", "percentile": 95}], {})["factors"][0]
+    assert "larger company" in row["meaning"]
+    assert "unproven here" in row["meaning"]
+    middle = factor_leans([{"factor": "size", "percentile": 50}], {})["factors"][0]
+    assert "middle" in middle["meaning"]

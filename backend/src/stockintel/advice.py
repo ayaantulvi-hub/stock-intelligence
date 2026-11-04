@@ -5,7 +5,7 @@ a buy or sell call. It changes the profit, the break-even and the owner's own pl
 """
 
 from stockintel.backtest import COST_BPS, MIN_Z
-from stockintel.factors import NAMES
+from stockintel.factors import HIGH_MEANS, NAMES
 
 HIGH = 70
 LOW = 30
@@ -61,6 +61,23 @@ def lean_for(percentile: int | None, direction: int | None) -> str:
     return "No lean"
 
 
+def reading_meaning(factor: str, percentile: int, lean: str, proven: bool) -> str:
+    """What one factor reading says about this stock, and why it matters."""
+    high = HIGH_MEANS.get(factor, "")
+    if percentile >= HIGH:
+        text = f"{high}."
+    elif percentile <= LOW:
+        text = f"The opposite of: {high.lower()}."
+    else:
+        return "Close to the middle, so it tells you little either way."
+    if lean == "No lean":
+        return text
+    side = "better" if lean == "Buy" else "worse"
+    if proven:
+        return f"{text} Stocks like this did {side} in this app's tests."
+    return f"{text} Research found stocks like this tended to do {side}, unproven here."
+
+
 def factor_leans(drivers: list[dict], tests: dict[str, dict]) -> dict:
     """Which way each factor leans for one stock, and how strong the evidence is."""
     rows = []
@@ -92,10 +109,15 @@ def factor_leans(drivers: list[dict], tests: dict[str, dict]) -> dict:
                 "percentile": percentile,
                 "lean": lean_for(percentile, direction),
                 "evidence": evidence,
+                "meaning": "",
                 "proven": proven,
                 "t_stat": None if test is None else test["t_stat"],
                 "spread": None if test is None else test["spread"],
             }
+        )
+    for row in rows:
+        row["meaning"] = reading_meaning(
+            row["factor"], row["percentile"], row["lean"], row["proven"]
         )
     order = {"Buy": 0, "Sell": 1, "No lean": 2}
     rows.sort(key=lambda row: (order[row["lean"]], not row["proven"]))
@@ -172,8 +194,36 @@ MIN_SAFETY = 0.15
 MAX_DEBT_TO_EQUITY = 1.0
 
 
+CHECK_MEANINGS = {
+    ("Data", "caution"): "Decisions on old prices can be wrong, so wait for the update.",
+    ("Tested edge", "caution"): "Nothing here proves this stock will beat the market.",
+    ("Tested edge", "pass"): "The ranking has held up in testing, but it can still be wrong.",
+    ("Long-term trend", "pass"): "You would be going with the bigger direction.",
+    ("Long-term trend", "caution"): "Falling stocks can keep falling, so a low price isn't "
+    "automatically a bargain.",
+    ("Margin of safety", "pass"): "If the estimate is somewhat wrong, you still have a cushion.",
+    ("Margin of safety", "caution"): "If the estimate is wrong, there's little cushion.",
+    ("Downside", "pass"): "Even the cautious case is above today's price.",
+    ("Downside", "caution"): "If things go less well, the shares could be worth less than today.",
+    ("Debt", "pass"): "Lower debt gives a company more room in a bad year.",
+    ("Debt", "caution"): "More debt raises the risk in a downturn, though normal levels differ "
+    "by industry.",
+    ("Insiders", "pass"): "People running the company put in more than they took out. They can "
+    "still be wrong.",
+    ("Insiders", "caution"): "Insiders sell for many reasons, like tax, so this is a weak warning.",
+    ("Earnings", "pass"): "A report isn't likely for a while, so that risk is lower.",
+    ("Earnings", "caution"): "Prices can jump either way on a report, so holding through one is "
+    "riskier.",
+    ("Your exit plan", "pass"): "You've decided in advance, which helps you avoid panic.",
+    ("Your exit plan", "caution"): "Without a plan, it's easier to panic or hold a loser too long.",
+    ("Concentration", "pass"): "One bad result won't sink your holdings.",
+    ("Concentration", "caution"): "One bad company could do real damage to your total.",
+}
+
+
 def _check(topic: str, state: str, text: str) -> dict:
-    return {"topic": topic, "state": state, "text": text}
+    meaning = CHECK_MEANINGS.get((topic, state), "This couldn't be checked, so look into it first.")
+    return {"topic": topic, "state": state, "text": text, "meaning": meaning}
 
 
 def _metric(report: dict, name: str) -> float | None:

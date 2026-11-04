@@ -548,3 +548,17 @@ def suggested_levels(engine: Engine, ticker: str) -> dict | None:
         return {"levels": None, "tested": tested}
     frame = charts.adjust(pd.DataFrame([row._mapping for row in rows]))
     return {"levels": stops.suggest(frame), "tested": tested}
+
+
+def screener(engine: Engine) -> list[dict]:
+    """Every stock in the latest forecast, with its action and the model's lean."""
+    query = """SELECT s.ticker, s.name, f.last_close, f.rank_20d AS rank, f.p_up, f.rank_edge
+               FROM forecasts f JOIN securities s ON s.id = f.security_id
+               WHERE f.target_session = (SELECT max(target_session) FROM forecasts)"""
+    with engine.connect() as conn:
+        rows = _rows(conn.execute(text(query)))
+    output = []
+    for row in rows:
+        name = action(row.pop("rank_edge"), row["rank"])
+        output.append({**row, "action": name, "lean": advice.overall(name, row["rank"])["lean"]})
+    return output

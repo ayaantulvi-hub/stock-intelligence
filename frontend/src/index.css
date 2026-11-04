@@ -1,21 +1,25 @@
 :root {
-  --bg: #fafaf8;
-  --text: #1c1c1a;
-  --muted: #66665f;
-  --line: #deded8;
-  --ok: #1a6b3c;
-  --bad: #a32020;
-  font-family: system-ui, sans-serif;
+  --bg: #eef2f3;
+  --panel: #f8fafa;
+  --text: #14242e;
+  --muted: #566772;
+  --line: #d3dce0;
+  --ok: #0a7359;
+  --bad: #ad3044;
+  --unproven: #94640f;
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161614;
-    --text: #ededE8;
-    --muted: #a3a39b;
-    --line: #33332f;
-    --ok: #63c98e;
-    --bad: #f08a8a;
+    --bg: #10202b;
+    --panel: #172a36;
+    --text: #e9f0f2;
+    --muted: #9db0ba;
+    --line: #2c4250;
+    --ok: #57cfa9;
+    --bad: #f0919f;
+    --unproven: #e2b35a;
   }
 }
 body { margin: 0; background: var(--bg); color: var(--text); }
@@ -89,3 +93,60 @@ td:nth-child(4) { white-space: normal; min-width: 180px; }
 .position p { margin: 8px 0; color: inherit; }
 .checks td:last-child { white-space: normal; min-width: 200px; }
 .checks td:nth-child(4) { min-width: 0; }
+
+body { line-height: 1.5; font-size: 17px; font-variant-numeric: tabular-nums; }
+main { max-width: 980px; }
+h1 { font-size: 1.15rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.1rem; margin-top: 28px; }
+button { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit; }
+button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid var(--unproven); outline-offset: 2px; }
+.glance div, .action, .story div, .position, .glossary { background: var(--panel); }
+
+.verdict { margin: 18px 0 8px; }
+.verdict h3 { font-size: clamp(2rem, 6vw, 3rem); line-height: 1.1; margin: 0 0 6px; }
+.verdict h3.buy { color: var(--ok); }
+.verdict h3.sell { color: var(--bad); }
+.verdict p { margin: 0 0 8px; max-width: 62ch; color: var(--text); }
+.verdict .lean { color: var(--unproven); }
+
+.tug { margin: 18px 0 6px; }
+.tug-row { display: grid; grid-template-columns: 1fr 2px 1fr; align-items: center; gap: 10px; }
+.tug-side { display: flex; gap: 4px; flex-wrap: wrap; min-height: 26px; align-items: center; }
+.tug-side.sell { justify-content: flex-end; }
+.tug-axis { background: var(--text); height: 34px; }
+.tug-block { width: 16px; height: 22px; border-radius: 2px; border: 2px solid currentColor; box-sizing: border-box; }
+.tug-block.proven { background: currentColor; }
+.tug-side.sell .tug-block { color: var(--bad); }
+.tug-side.buy .tug-block { color: var(--ok); }
+.tug-labels { display: grid; grid-template-columns: 1fr 1fr; font-weight: 700; margin-bottom: 4px; }
+.tug-labels span:first-child { text-align: right; padding-right: 16px; color: var(--bad); }
+.tug-labels span:last-child { padding-left: 16px; color: var(--ok); }
+
+.odds { display: flex; height: 40px; border-radius: 6px; overflow: hidden; margin: 8px 0; font-weight: 700; }
+.odds span { display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; min-width: 0; color: #fff; font-size: 0.9rem; }
+.odds .down { background: #ad3044; }
+.odds .flat { background: #566772; }
+.odds .up { background: #0a7359; }
+
+.meter { display: block; width: 110px; height: 8px; background: var(--line); border-radius: 4px; position: relative; margin-top: 3px; }
+.meter i { position: absolute; top: -3px; width: 4px; height: 14px; background: var(--text); border-radius: 1px; }
+
+.fold { margin: 10px 0; border-top: 1px solid var(--line); }
+.fold > summary { cursor: pointer; font-weight: 700; font-size: 1.05rem; padding: 12px 0; }
+.fold > summary small { display: inline; margin-left: 8px; }
+
+.screener-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
+.screener-tools input { flex: 1 1 180px; }
+.screener th button { all: unset; cursor: pointer; font-weight: 700; }
+.screener th button:focus-visible { outline: 3px solid var(--unproven); }
+.screener td:first-child { font-weight: 700; }
+tbody tr:hover { background: var(--panel); }
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  .tug-block { width: 12px; height: 18px; }
+}
+.tabs button { text-transform: none; }
+.so-what { margin: 6px 0 0; color: var(--text); font-size: 0.92rem; }
+td.wrap { white-space: normal; min-width: 190px; }

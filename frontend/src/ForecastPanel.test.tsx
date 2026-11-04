@@ -77,6 +77,7 @@ test("simple view gives the call and explains the data in plain English", async 
           percentile: 95,
           lean: "Buy",
           evidence: "Paper only: not tested in this app yet",
+          meaning: "Fixture factor meaning.",
           proven: false,
         },
       ],
@@ -92,6 +93,7 @@ test("simple view gives the call and explains the data in plain English", async 
         tone: "good",
         text: "Up: fixture.",
         why: "Fixture reason.",
+        meaning: "Fixture meaning.",
         evidence: "Fixture numbers.",
         on_chart: "Fixture chart note.",
       },
@@ -101,10 +103,12 @@ test("simple view gives the call and explains the data in plain English", async 
   expect(await screen.findByText("Up: fixture.")).toBeTruthy();
   expect(screen.getByText("Fixture reason.")).toBeTruthy();
   expect(screen.getByText("Fixture numbers.")).toBeTruthy();
+  expect(screen.getByText("Fixture meaning.")).toBeTruthy();
+  expect(screen.getByText("Fixture factor meaning.")).toBeTruthy();
   expect(screen.getByText("Insider trades")).toBeTruthy();
   expect(screen.getByText("Buy")).toBeTruthy();
   expect(screen.getByText("Fixture chart note.")).toBeTruthy();
-  expect(screen.getAllByText("No reliable edge").length).toBe(3);
+  expect(screen.getAllByText("No reliable edge").length).toBe(2);
   expect(screen.getByText(/leans Buy, ranking this stock higher than 85%/)).toBeTruthy();
 });
 
@@ -141,8 +145,10 @@ test("names no stocks when the model has no edge", async () => {
   });
   render(<IdeasPanel />);
   expect(await screen.findByText("No reliable edge")).toBeTruthy();
+  cleanup();
+  render(<IdeasPanel part="record" />);
   expect(screen.queryByText("Buy candidates")).toBeNull();
-  expect(screen.getByText("Fixture model (chosen)")).toBeTruthy();
+  expect(await screen.findByText("Fixture model (chosen)")).toBeTruthy();
   expect(screen.getByText("-2.0%")).toBeTruthy();
 });
 

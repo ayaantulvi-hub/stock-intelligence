@@ -119,6 +119,7 @@ type Lean = {
   percentile: number;
   lean: string;
   evidence: string;
+  meaning: string;
   proven: boolean;
 };
 type Leans = {
@@ -130,10 +131,40 @@ type Leans = {
   overall: { decision: string; lean: string; proven: boolean; rank: number | null };
 };
 
+function Tug({ leans }: { leans: Leans }) {
+  const side = (lean: string) => leans.factors.filter((row) => row.lean === lean);
+  const blocks = (rows: Lean[]) =>
+    rows.map((row) => (
+      <span
+        key={row.factor}
+        title={`${row.name}: ${row.evidence}`}
+        className={`tug-block ${row.proven ? "proven" : ""}`}
+      />
+    ));
+  const sell = side("Sell");
+  const buy = side("Buy");
+  return (
+    <div className="tug">
+      <div className="tug-labels">
+        <span>{sell.length} lean sell</span>
+        <span>{buy.length} lean buy</span>
+      </div>
+      <div className="tug-row">
+        <div className="tug-side sell">{blocks(sell)}</div>
+        <div className="tug-axis" />
+        <div className="tug-side buy">{blocks(buy)}</div>
+      </div>
+      <small>
+        Each block is one factor. Solid passed testing here. Outlined is only backed by a paper.
+        This isn't a vote: the call comes from the tested model.
+      </small>
+    </div>
+  );
+}
+
 function LeanTable({ leans }: { leans: Leans }) {
   return (
     <>
-      <h3>Which factors lean buy or sell</h3>
       <div className="glance">
         <div>
           <small>Proven, lean buy</small>
@@ -152,19 +183,6 @@ function LeanTable({ leans }: { leans: Leans }) {
           <strong>{leans.paper_sell}</strong>
         </div>
       </div>
-      <div className={`action ${leans.overall.proven ? (leans.overall.lean === "Buy" ? "buy" : "sell") : ""}`}>
-        <small>Overall decision</small>
-        <strong>{leans.overall.decision}</strong>
-        <p>
-          {leans.overall.proven
-            ? "This passed testing."
-            : `The model weighing all factors leans ${leans.overall.lean}${
-                leans.overall.rank === null
-                  ? ""
-                  : `, ranking this stock higher than ${Math.round(leans.overall.rank * 100)}% of those covered for the next 20 days`
-              }. This lean is unproven, so don't treat it as a decision.`}
-        </p>
-      </div>
       <small>
         Proven means the factor passed testing in this app. Unproven only reflects what a paper
         found, so don't count it the same way. The overall decision comes from the tested model, not from counting these rows.
@@ -176,6 +194,7 @@ function LeanTable({ leans }: { leans: Leans }) {
               <th>Factor</th>
               <th>Percentile</th>
               <th>Leans</th>
+              <th>What it means</th>
               <th>Evidence</th>
             </tr>
           </thead>
@@ -183,11 +202,17 @@ function LeanTable({ leans }: { leans: Leans }) {
             {leans.factors.map((row) => (
               <tr key={row.factor}>
                 <td>{row.name}</td>
-                <td>{row.percentile}</td>
+                <td>
+                  {row.percentile}
+                  <span className="meter">
+                    <i style={{ left: `calc(${row.percentile}% - 2px)` }} />
+                  </span>
+                </td>
                 <td className={row.lean === "Buy" ? "ok" : row.lean === "Sell" ? "bad" : ""}>
                   {row.lean}
                 </td>
-                <td>{row.evidence}</td>
+                <td className="wrap">{row.meaning}</td>
+                <td className="wrap">{row.evidence}</td>
               </tr>
             ))}
           </tbody>
@@ -202,6 +227,7 @@ type Line = {
   tone: string;
   text: string;
   why: string;
+  meaning: string;
   evidence: string;
   on_chart: string;
 };
@@ -214,6 +240,9 @@ function Story({ lines, chartFirst = false }: { lines: Line[]; chartFirst?: bool
           <small>{line.topic}</small>
           <strong>{line.text}</strong>
           <span>{line.why}</span>
+          <p className="so-what">
+            <b>What this means for you:</b> {line.meaning}
+          </p>
           <details open={chartFirst}>
             <summary>How we know</summary>
             <p>{line.evidence}</p>
@@ -284,42 +313,43 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
   }, [ticker]);
 
   if (failed) return <p className="bad">Forecast failed to load. Not verified.</p>;
+  const tone =
+    forecast?.action === "Buy candidate" ? "buy" : forecast?.action === "Sell candidate" ? "sell" : "";
   return (
     <div>
-      <div className={`action ${forecast?.action === "Buy candidate" ? "buy" : ""} ${forecast?.action === "Sell candidate" ? "sell" : ""}`}>
-        <small>What to do</small>
-        <strong>{forecast?.action ?? "No forecast yet"}</strong>
+      <div className="verdict">
+        <h3 className={tone}>{forecast?.action ?? "No forecast yet"}</h3>
         <p>
           {forecast
             ? MEANINGS[forecast.action]
             : "Forecasts are written once a day before the US market opens."}
         </p>
+        {leans && !leans.overall.proven && (
+          <p className="lean">
+            The model leans {leans.overall.lean}
+            {leans.overall.rank === null
+              ? ""
+              : `, ranking this stock higher than ${Math.round(leans.overall.rank * 100)}% of those covered for the next 20 days`}
+            . This lean is unproven, so don't treat it as a decision.
+          </p>
+        )}
       </div>
-      <ChecklistPanel ticker={ticker} />
-      <PositionPanel ticker={ticker} />
-      {leans && <LeanTable leans={leans} />}
-      {lines.length > 0 && (
-        <>
-          <h3>What the data says</h3>
-          <Story lines={lines} />
-        </>
-      )}
+      {leans && <Tug leans={leans} />}
       {forecast && (
         <>
-          <h3>Tomorrow's forecast ({forecast.target_session})</h3>
+          <h3>Tomorrow's chances ({forecast.target_session})</h3>
+          <div className="odds" role="img" aria-label={`Down ${percent(forecast.p_down)}, flat ${percent(forecast.p_flat)}, up ${percent(forecast.p_up)}`}>
+            <span className="down" style={{ flexGrow: forecast.p_down, flexBasis: 0 }}>
+              Down {percent(forecast.p_down)}
+            </span>
+            <span className="flat" style={{ flexGrow: forecast.p_flat, flexBasis: 0 }}>
+              {forecast.p_flat >= 0.12 ? `Flat ${percent(forecast.p_flat)}` : ""}
+            </span>
+            <span className="up" style={{ flexGrow: forecast.p_up, flexBasis: 0 }}>
+              Up {percent(forecast.p_up)}
+            </span>
+          </div>
           <div className="glance">
-            <div>
-              <small>Up</small>
-              <strong>{percent(forecast.p_up)}</strong>
-            </div>
-            <div>
-              <small>Flat</small>
-              <strong>{percent(forecast.p_flat)}</strong>
-            </div>
-            <div>
-              <small>Down</small>
-              <strong>{percent(forecast.p_down)}</strong>
-            </div>
             <div>
               <small>Likely range (90%)</small>
               <strong>
@@ -336,15 +366,34 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
             </div>
           </div>
           <small>
-            Written {new Date(forecast.created_at).toLocaleString()}, before the outcome, and
-            cannot be edited.
+            Written {new Date(forecast.created_at).toLocaleString()}, before the outcome. It can't
+            be edited.
           </small>
         </>
       )}
+      {lines.length > 0 && (
+        <>
+          <h3>What the data says</h3>
+          <Story lines={lines} />
+        </>
+      )}
+      {leans && (
+        <details className="fold">
+          <summary>Every factor, and which way it leans</summary>
+          <LeanTable leans={leans} />
+        </details>
+      )}
+      <details className="fold">
+        <summary>Before you trade: checklist, exit prices and how much to buy</summary>
+        <ChecklistPanel ticker={ticker} />
+      </details>
+      <details className="fold">
+        <summary>Do you own this stock?</summary>
+        <PositionPanel ticker={ticker} />
+      </details>
     </div>
   );
 }
-
 type Comparison = {
   models: {
     model: string;
@@ -421,7 +470,7 @@ function ComparisonView({ comparison }: { comparison: Comparison }) {
   );
 }
 
-export function IdeasPanel() {
+export function IdeasPanel({ part = "today" }: { part?: "today" | "record" }) {
   const [ideas, setIdeas] = useState<Ideas | null>(null);
   const [track, setTrack] = useState<Track | null>(null);
   const [comparison, setComparison] = useState<Comparison | null>(null);
@@ -447,6 +496,8 @@ export function IdeasPanel() {
     items.length ? items.map((item) => item.ticker).join(", ") : "None";
   return (
     <section>
+      {part === "today" ? (
+        <>
       <h2>What to do today</h2>
       {!ideas.target_session ? (
         <p>No forecasts yet. They are written once a day before the US market opens.</p>
@@ -470,6 +521,9 @@ export function IdeasPanel() {
           </p>
         </div>
       )}
+        </>
+      ) : (
+        <>
       <h3>Model track record</h3>
       <div className="glance">
         <div>
@@ -501,7 +555,9 @@ export function IdeasPanel() {
           </div>
         ))}
       </div>
-      {comparison && <ComparisonView comparison={comparison} />}
+          {comparison && <ComparisonView comparison={comparison} />}
+        </>
+      )}
     </section>
   );
 }

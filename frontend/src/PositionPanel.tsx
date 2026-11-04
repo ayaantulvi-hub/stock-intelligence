@@ -92,7 +92,6 @@ export default function PositionPanel({ ticker }: { ticker: string }) {
 
   return (
     <div className="position">
-      <h3>Do you own this stock?</h3>
       {failed && <p className="bad">Could not load or save this. Not verified.</p>}
       {editing ? (
         <form onSubmit={save} className="inputs">
