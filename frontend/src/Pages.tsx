@@ -1,3 +1,4 @@
+import { leanRow } from "./leanRow";
 import { useEffect, useState, type FormEvent } from "react";
 import { IdeasPanel } from "./ForecastPanel";
 
@@ -121,14 +122,14 @@ export function Screener({ onOpen }: { onOpen: (ticker: string) => void }) {
           </thead>
           <tbody>
             {rows.slice(0, 100).map((row) => (
-              <tr key={row.ticker}>
+              <tr key={row.ticker} className={leanRow(row.lean)}>
                 <td>
                   <button className="link" onClick={() => onOpen(row.ticker)}>
                     {row.ticker}
                   </button>
                 </td>
                 <td>{row.last_close.toFixed(2)}</td>
-                <td className={row.lean === "Buy" ? "ok" : row.lean === "Sell" ? "bad" : ""}>
+                <td>
                   {row.lean}
                 </td>
                 <td>{row.rank === null ? NOT_VERIFIED : Math.round(row.rank * 100)}</td>

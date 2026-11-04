@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ChecklistPanel, { HowMuch } from "./ChecklistPanel";
 import PositionPanel from "./PositionPanel";
+import { leanRow } from "./leanRow";
 
 const NOT_VERIFIED = "Not verified";
 type Driver = { factor: string; percentile: number };
@@ -208,11 +209,11 @@ function LeanTable({ leans }: { leans: Leans }) {
         </div>
         <div>
           <small>Unproven, lean buy</small>
-          <strong>{leans.paper_buy}</strong>
+          <strong className="ok">{leans.paper_buy}</strong>
         </div>
         <div>
           <small>Unproven, lean sell</small>
-          <strong>{leans.paper_sell}</strong>
+          <strong className="bad">{leans.paper_sell}</strong>
         </div>
       </div>
       <small>
@@ -232,7 +233,7 @@ function LeanTable({ leans }: { leans: Leans }) {
           </thead>
           <tbody>
             {leans.factors.map((row) => (
-              <tr key={row.factor}>
+              <tr key={row.factor} className={leanRow(row.lean)}>
                 <td>{row.name}</td>
                 <td>
                   {row.percentile}
@@ -428,7 +429,7 @@ function ExpertReview({ ticker }: { ticker: string }) {
               {review.lenses.map((lens) => {
                 const [word, tone] = VERDICTS[lens.verdict];
                 return (
-                  <tr key={lens.name}>
+                  <tr key={lens.name} className={leanRow(lens.verdict)}>
                     <td>{lens.name}</td>
                     <td className={tone}>{word}</td>
                     <td>
@@ -490,7 +491,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
             <div className="why">
               <div>
                 <h4 className="ok">In its favour</h4>
-                <ul>
+                <ul className="ok">
                   {decision.reasons_for.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
@@ -499,7 +500,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
               </div>
               <div>
                 <h4 className="bad">Reasons for caution</h4>
-                <ul>
+                <ul className="bad">
                   {decision.reasons_against.map((item) => (
                     <li key={item}>{item}</li>
                   ))}

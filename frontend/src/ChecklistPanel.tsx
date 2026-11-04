@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { leanRow } from "./leanRow";
 
 type Check = { topic: string; state: string; text: string; meaning?: string };
 const MARKS: Record<string, [string, string]> = {
@@ -270,7 +271,7 @@ export default function ChecklistPanel({ ticker }: { ticker: string }) {
             {checks.map((check) => {
               const [label, tone] = MARKS[check.state];
               return (
-                <tr key={check.topic}>
+                <tr key={check.topic} className={leanRow(check.state)}>
                   <td>{check.topic}</td>
                   <td className={tone}>{label}</td>
                   <td>

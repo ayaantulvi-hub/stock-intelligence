@@ -175,3 +175,13 @@ td.wrap { white-space: normal; min-width: 190px; }
 .traps small {
   display: block;
 }
+
+/* Rows that point to buying are green and rows that point to selling are red. The word stays, so colour is never the only signal. */
+.row-buy td { background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.row-sell td { background: color-mix(in srgb, var(--bad) 13%, transparent); }
+.row-wait td { background: color-mix(in srgb, var(--unproven) 13%, transparent); }
+.row-buy td:first-child, .row-buy td:nth-child(3) { color: var(--ok); }
+.row-sell td:first-child, .row-sell td:nth-child(3) { color: var(--bad); }
+.row-buy td:first-child, .row-sell td:first-child { font-weight: 600; }
+.row-buy td small, .row-sell td small { color: var(--muted); font-weight: 400; }
+.why ul.ok li, .why ul.bad li { color: inherit; }
