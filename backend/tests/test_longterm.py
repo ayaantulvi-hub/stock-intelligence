@@ -459,3 +459,9 @@ def test_receipt_filers_get_no_value_from_price_times_shares():
     assert result["cases"] == []
     assert result["receipts"] is True
     assert longterm.shares_history(facts).empty
+
+
+def test_point_in_time_copes_with_a_company_missing_most_figures():
+    facts = pd.DataFrame([yearly("Revenue", 100.0)])
+    assert longterm.point_in_time(facts).empty
+    assert longterm.quarterly_changes(facts).empty

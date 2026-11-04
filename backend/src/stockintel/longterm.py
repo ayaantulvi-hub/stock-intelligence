@@ -355,6 +355,9 @@ def point_in_time(facts: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     def series(table: pd.DataFrame, name: str) -> pd.DataFrame:
+        # A company may lack any given figure, and an empty table has no columns.
+        if table.empty:
+            return pd.DataFrame(columns=["period_end", name, f"filed_{name}"])
         return table[["period_end", "value", "filed"]].rename(
             columns={"value": name, "filed": f"filed_{name}"}
         )
