@@ -8,10 +8,12 @@ from sqlalchemy import Engine, text
 from stockintel import (
     advice,
     backtest,
+    candles,
     charts,
     experts,
     explain,
     factors,
+    horizons,
     longterm,
     signals,
     stops,
@@ -649,6 +651,38 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
         position,
         review,
     )
+
+
+def stock_horizons(engine: Engine, ticker: str) -> dict | None:
+    """The trading answer and the investing answer for one stock."""
+    data = chart(engine, ticker, "daily")
+    if data is None:
+        return None
+    today = datetime.now(UTC).date()
+    review = expert_review(engine, ticker, today)
+    frame = _adjusted_bars(engine, ticker)
+    earnings = tools.next_earnings(engine, ticker, today)
+    return {
+        "trade": horizons.trade(
+            frame,
+            candles.latest_tests(engine),
+            data["stale"],
+            (earnings - today).days if earnings else None,
+        ),
+        "invest": horizons.invest(review),
+    }
+
+
+def _adjusted_bars(engine: Engine, ticker: str) -> pd.DataFrame:
+    query = """SELECT DISTINCT ON (market_date) market_date, open, high, low, close, volume,
+                 div_cash, split_factor
+               FROM price_bars p JOIN securities s ON s.id = p.security_id
+               WHERE s.ticker = :t ORDER BY market_date, p.id DESC"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query), {"t": ticker.upper()}).all()
+    if not rows:
+        return pd.DataFrame(columns=["market_date", "open", "high", "low", "close", "volume"])
+    return charts.adjust(pd.DataFrame([row._mapping for row in rows]))
 
 
 def expert_review(engine: Engine, ticker: str, today) -> dict | None:

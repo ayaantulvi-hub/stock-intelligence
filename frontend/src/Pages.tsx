@@ -369,6 +369,55 @@ type Reliability = {
   sectors: { sector: string; count: number; brier: number | null; baseline: number | null }[];
 };
 
+type Misses = {
+  checked: number;
+  reasons: { reason: string; count: number }[];
+  recent: { ticker: string; target_session: string; reason: string; change_percent: number }[];
+};
+
+function WhyWrong() {
+  const { data } = useData<Misses>("/api/misses");
+  if (!data) return null;
+  const total = data.reasons.reduce((sum, row) => sum + row.count, 0);
+  return (
+    <>
+      <h3>Why forecasts were wrong</h3>
+      {total === 0 ? (
+        <p>Nothing to explain yet. Reasons appear once forecasts have been scored.</p>
+      ) : (
+        <>
+          <p>
+            {total} of {data.checked} scored forecasts were wrong. These are the likeliest reasons
+            from stored records. "No cause is stored" means it's unknown, not that there wasn't one.
+          </p>
+          <div className="scroll">
+            <table>
+              <tbody>
+                {data.reasons.map((row) => (
+                  <tr key={row.reason}>
+                    <td>{row.reason}</td>
+                    <td>{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <details className="fold">
+            <summary>Latest misses</summary>
+            <ul>
+              {data.recent.map((row) => (
+                <li key={`${row.ticker}${row.target_session}`}>
+                  {row.target_session} {row.ticker} {row.change_percent.toFixed(1)}%: {row.reason}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </>
+      )}
+    </>
+  );
+}
+
 export function ReliabilityPage() {
   const { data, failed } = useData<Reliability>("/api/reliability");
   const { data: check } = useData<{
@@ -387,6 +436,7 @@ export function ReliabilityPage() {
         <strong>{data.grade}</strong>
         <p>A grade needs at least 60 trading days of locked forecasts.</p>
       </div>
+      <WhyWrong />
       <div className="glance">
         <div>
           <small>Forecasts scored</small>

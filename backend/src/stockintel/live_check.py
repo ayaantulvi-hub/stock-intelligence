@@ -548,8 +548,26 @@ def probe_today() -> None:
         print("today call", row["ticker"], answer["call"], answer["reason"], answer["proven"])
 
 
+def probe_tickets() -> None:
+    from stockintel import queries
+
+    engine = create_engine(Settings().database_url)
+    for row in queries.ideas(engine)["top"][:10]:
+        levels = (queries.suggested_levels(engine, row["ticker"]) or {}).get("levels") or {}
+        views = queries.stock_horizons(engine, row["ticker"]) or {}
+        print(
+            "ticket",
+            row["ticker"],
+            round(levels.get("price", 0), 2),
+            round(levels.get("stop", 0), 2),
+            round(levels.get("target", 0), 2),
+            views.get("trade", {}).get("call"),
+            views.get("invest", {}).get("call"),
+        )
+
+
 def main() -> None:
-    probe_today()
+    probe_tickets()
     main_full()
 
 

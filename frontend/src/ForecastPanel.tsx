@@ -381,6 +381,110 @@ function CompanyEvents({ ticker }: { ticker: string }) {
   );
 }
 
+type TradeView = {
+  call: string;
+  reason: string;
+  kind: string;
+  proven: boolean;
+  hold: number | null;
+  stop: number | null;
+  target: number | null;
+  patterns: {
+    id: string;
+    name: string;
+    direction: string;
+    meaning: string;
+    proven: boolean;
+    failed: boolean;
+    signals: number | null;
+    win_rate: number | null;
+    cancel: number;
+  }[];
+};
+type InvestView = { call: string; reason: string; kind: string; hold: string | null };
+
+function Horizons({ ticker }: { ticker: string }) {
+  const [views, setViews] = useState<{ trade: TradeView; invest: InvestView } | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    getJson<{ trade: TradeView; invest: InvestView }>(
+      `/api/stocks/${encodeURIComponent(ticker)}/horizons`,
+    )
+      .then(setViews)
+      .catch(() => setFailed(true));
+  }, [ticker]);
+  if (failed) return <p className="bad">Could not load the two answers. Refresh to try again.</p>;
+  if (!views?.trade) return null;
+  const { trade, invest } = views;
+  return (
+    <div className="horizons">
+      <section className={`horizon ${trade.kind}`}>
+        <small>Short-term trade, 1 to 5 days</small>
+        <h4>{trade.call}</h4>
+        <p>{trade.reason}</p>
+        {trade.hold && <p><b>How long:</b> sell within {trade.hold} trading days, or at the stop or target.</p>}
+        {!trade.proven && trade.kind !== "neutral" && <p>Unproven, so treat it as a guess.</p>}
+        {trade.patterns.map((item) => (
+          <p key={item.id}>
+            <span className={item.direction === "bullish" ? "ok" : item.direction === "bearish" ? "bad" : ""}>
+              {item.name}
+            </span>
+            : {item.meaning}{" "}
+            {item.signals === null
+              ? "Not tested yet."
+              : `Tested on ${item.signals.toLocaleString()} past cases: ${Math.round((item.win_rate ?? 0) * 100)}% made money.`}{" "}
+            Cancelled at {item.cancel.toFixed(2)}.
+          </p>
+        ))}
+        {trade.kind === "buy" && trade.stop !== null && trade.target !== null && (
+          <HowMuch ticker={ticker} keep="Week" stop={trade.stop} target={trade.target} />
+        )}
+        <small>Uses daily candles, so it can't time moves within a day.</small>
+      </section>
+      <section className={`horizon ${invest.kind}`}>
+        <small>Long-term investment, months to years</small>
+        <h4>{invest.call}</h4>
+        <p>{invest.reason}</p>
+        {invest.hold && <p><b>How long:</b> {invest.hold}</p>}
+        <small>Company checks only, not proven in this app.</small>
+      </section>
+    </div>
+  );
+}
+
+export function TradesPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
+  const [rows, setRows] = useState<(TradeView & { ticker: string; name: string })[] | null>(null);
+  useEffect(() => {
+    getJson<(TradeView & { ticker: string; name: string })[]>("/api/trades")
+      .then(setRows)
+      .catch(() => setRows(null));
+  }, []);
+  if (!rows?.length) return null;
+  return (
+    <details className="fold">
+      <summary>Short-term trades today ({rows.length})</summary>
+      <small>From today's candle patterns. Hold 1 to 5 trading days. Tested ones come first.</small>
+      <div className="scroll">
+        <table>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.ticker} className={row.kind === "buy" ? "row-buy" : "row-sell"}>
+                <td>
+                  <button className="link" onClick={() => onOpen(row.ticker)}>
+                    {row.ticker}
+                  </button>
+                </td>
+                <td>{row.call}</td>
+                <td>{row.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
 type Lens = { name: string; source: string; verdict: string; reason: string; teaches: string };
 type Trap = { name: string; source: string; text: string };
 type Review = { lenses: Lens[]; agree: number; against: number; unknown: number; traps: Trap[] };
@@ -517,6 +621,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
           </>
         )}
       </div>
+      <Horizons ticker={ticker} />
       <CompanyEvents ticker={ticker} />
       <ExpertReview ticker={ticker} />
       <details className="fold">

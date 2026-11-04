@@ -3,7 +3,7 @@ import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
 import { AlertsPage, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
-import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
+import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, TradesPanel } from "./ForecastPanel";
 
 type Status = {
   database: { state: string };
@@ -363,6 +363,7 @@ export default function App() {
       )}
 
       {!stock && !failed && <IdeasPanel onOpen={open} />}
+      {!stock && !failed && <TradesPanel onOpen={open} />}
       {!stock && !failed && <Screener onOpen={open} />}
       {!stock && !failed && <MarketMood />}
       {backtest && <BacktestView backtest={backtest} />}

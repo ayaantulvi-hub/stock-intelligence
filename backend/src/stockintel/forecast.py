@@ -17,7 +17,7 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sqlalchemy import Engine, text
 
-from stockintel import localcache, longterm
+from stockintel import localcache, longterm, misses
 from stockintel.backtest import MIN_Z, eligibility, eligible_days
 from stockintel.charts import adjust
 from stockintel.db import get_engine
@@ -694,6 +694,7 @@ def score_forecasts(engine: Engine) -> int:
 
 def daily(engine: Engine, now: datetime) -> None:
     print("scored", score_forecasts(engine))
+    print("misses explained", misses.run(engine))
     print("written", write_forecasts(engine, load_panel(engine), now))
 
 

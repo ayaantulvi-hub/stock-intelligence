@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from stockintel import queries, tools
+from stockintel import experts, misses, queries, tools
 from stockintel.charts import TIMEFRAMES
 from stockintel.config import get_settings
 from stockintel.db import get_engine
@@ -231,6 +231,24 @@ class JournalEntry(BaseModel):
 @app.get("/api/stocks/{ticker}/events")
 def stock_events(ticker: str) -> list[dict]:
     return tools.company_events(get_engine(), ticker, datetime.now(UTC).date())
+
+
+@app.get("/api/stocks/{ticker}/horizons")
+def stock_horizons(ticker: str) -> dict:
+    result = queries.stock_horizons(get_engine(), ticker)
+    if result is None:
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return result
+
+
+@app.get("/api/trades")
+def trades() -> list[dict]:
+    return experts.stored_trades(get_engine())
+
+
+@app.get("/api/misses")
+def forecast_misses() -> dict:
+    return misses.summary(get_engine())
 
 
 @app.get("/api/stocks/{ticker}/experts")

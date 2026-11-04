@@ -181,7 +181,47 @@ function remembered() {
   }
 }
 
-export function HowMuch({ ticker }: { ticker: string }) {
+export function OrderTicket({ shares, stop, target, keep }: {
+  shares: number;
+  stop: number;
+  target: number;
+  keep: string;
+}) {
+  const rows: [string, string][] = [
+    ["Order tab", "Market"],
+    ["Side", "Buy"],
+    ["Shares", String(shares)],
+    ["Take profit price (switch on)", target.toFixed(2)],
+    ["Stop loss price (switch on)", stop.toFixed(2)],
+    ["Time in force", keep],
+    ["Fill order outside RTH", "Leave unticked"],
+  ];
+  return (
+    <div className="ticket">
+      <h4>Fill in your order like this</h4>
+      <table>
+        <tbody>
+          {rows.map(([field, value]) => (
+            <tr key={field}>
+              <td>{field}</td>
+              <td>
+                <b>{value}</b>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <small>RTH means regular trading hours: 6:30pm to 1am Dubai time in winter.</small>
+    </div>
+  );
+}
+
+export function HowMuch({ ticker, keep = "GTC, or the longest offered", stop, target }: {
+  ticker: string;
+  keep?: string;
+  stop?: number;
+  target?: number;
+}) {
   const [money, setMoney] = useState(remembered);
   const [levels, setLevels] = useState<Suggested | null>(null);
 
@@ -200,7 +240,10 @@ export function HowMuch({ ticker }: { ticker: string }) {
       // The answer still works this visit. It just won't be remembered.
     }
   };
-  const result = levels && sharesForRisk(Number(money), 1, levels.price, levels.stop);
+  const stopPrice = stop ?? levels?.stop;
+  const targetPrice = target ?? levels?.target;
+  const result =
+    levels && stopPrice !== undefined && sharesForRisk(Number(money), 1, levels.price, stopPrice);
   return (
     <div className="how-much">
       <label>
@@ -222,6 +265,9 @@ export function HowMuch({ ticker }: { ticker: string }) {
           That keeps this stock under 10% of your money, and a fall to the stop would lose about $
           {result.loss.toFixed(2)}, or {((result.loss / Number(money)) * 100).toFixed(1)}% of it.
         </p>
+      )}
+      {result && result.shares > 0 && stopPrice !== undefined && targetPrice !== undefined && (
+        <OrderTicket shares={result.shares} stop={stopPrice} target={targetPrice} keep={keep} />
       )}
       {result && result.shares === 0 && (
         <p>

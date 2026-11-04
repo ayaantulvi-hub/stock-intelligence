@@ -195,3 +195,14 @@ needs at least 30 tested cases that beat the baseline.
 - Jobs now keep a copy of the append-only tables in the GitHub Actions cache and fetch only
   rows newer than the copy (localcache.py). The website reads one stock at a time.
 - Paid plans are ruled out by the user. The tool must stay free.
+
+## Trading and investing answers
+
+- Each stock gets a short-term trade answer (1 to 5 days, from candlestick patterns) and a
+  long-term answer (months to years, from company checks). Daily candles can't time moves
+  within a day, so this isn't true day trading.
+- Tiingo's free limit of 50 requests an hour rules out intraday data for all stocks.
+- Candle patterns are tested weekly against all stocks over the same days, after costs. A
+  pattern with a worse result gives no trade.
+- Each wrong forecast gets the likeliest reason from stored records, or says no cause is stored.
+- The stock page shows what to enter in an order, using TradingView's field names.

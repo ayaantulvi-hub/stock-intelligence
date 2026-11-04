@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import localcache, longterm, tools
+from stockintel import candles, horizons, localcache, longterm, tools
 from stockintel.charts import sma
 from stockintel.db import get_engine
 
@@ -290,6 +290,21 @@ def load_outside(engine: Engine) -> dict | None:
     return None if row is None else dict(row._mapping)
 
 
+def stored_trades(engine: Engine) -> list[dict]:
+    """Today's short-term signals across all stocks, tested ones first."""
+    query = """SELECT DISTINCT ON (s.ticker) s.ticker, s.name, r.short_term, r.review_date
+               FROM expert_reviews r JOIN securities s ON s.id = r.security_id
+               WHERE r.short_term IS NOT NULL ORDER BY s.ticker, r.id DESC"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query)).all()
+    found = [
+        {"ticker": row.ticker, "name": row.name, "date": row.review_date, **row.short_term}
+        for row in rows
+        if row.short_term["kind"] != "neutral"
+    ]
+    return sorted(found, key=lambda item: (not item["proven"], item["ticker"]))
+
+
 def stored_blocks(engine: Engine) -> dict[str, str]:
     query = """SELECT DISTINCT ON (s.ticker) s.ticker, r.blocked
                FROM expert_reviews r JOIN securities s ON s.id = r.security_id
@@ -311,6 +326,7 @@ def run(engine: Engine) -> int:
     bars = localcache.daily_bars(engine)
     all_facts = localcache.facts_by_security(engine)
     outside = load_outside(engine)
+    candle_tests = candles.latest_tests(engine)
     done = 0
     for security in securities:
         raw = bars.get(security.id)
@@ -328,15 +344,23 @@ def run(engine: Engine) -> int:
             earnings_in=(earnings - today).days if earnings else None,
             outside=outside,
         )
+        short = horizons.trade(
+            adjust(raw),
+            candle_tests,
+            False,
+            (earnings - today).days if earnings else None,
+        )
         with engine.begin() as conn:
             conn.execute(
                 text(
                     """INSERT INTO expert_reviews (security_id, review_date, agree, against,
-                         blocked, detail)
-                       SELECT id, :day, :agree, :against, :blocked, CAST(:detail AS jsonb)
+                         blocked, detail, short_term)
+                       SELECT id, :day, :agree, :against, :blocked, CAST(:detail AS jsonb),
+                         CAST(:short AS jsonb)
                        FROM securities WHERE ticker = :ticker"""
                 ),
                 {
+                    "short": json.dumps(short),
                     "day": today,
                     "agree": result["agree"],
                     "against": result["against"],

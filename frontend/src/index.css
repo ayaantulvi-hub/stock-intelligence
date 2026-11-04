@@ -185,3 +185,14 @@ td.wrap { white-space: normal; min-width: 190px; }
 .row-buy td:first-child, .row-sell td:first-child { font-weight: 600; }
 .row-buy td small, .row-sell td small { color: var(--muted); font-weight: 400; }
 .why ul.ok li, .why ul.bad li { color: inherit; }
+
+.horizons { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin: 14px 0; }
+.horizon { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.horizon.buy { border-left: 4px solid var(--ok); }
+.horizon.sell { border-left: 4px solid var(--bad); }
+.horizon h4 { font-size: 1.3rem; margin: 2px 0 6px; }
+.horizon.buy h4 { color: var(--ok); }
+.horizon.sell h4 { color: var(--bad); }
+.ticket { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+.ticket h4 { margin: 0 0 6px; font-size: 1rem; }
+.ticket td:last-child { text-align: right; }

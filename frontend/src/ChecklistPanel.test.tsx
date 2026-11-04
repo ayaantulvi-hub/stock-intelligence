@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import ChecklistPanel, { HowMuch, sharesForRisk } from "./ChecklistPanel";
+import ChecklistPanel, { OrderTicket, HowMuch, sharesForRisk } from "./ChecklistPanel";
 
 afterEach(() => {
   cleanup();
@@ -82,4 +82,12 @@ test("suggests an amount from the money entered", async () => {
   render(<HowMuch ticker="AAA" />);
   fireEvent.change(screen.getByLabelText(/Your total money/), { target: { value: "10000" } });
   expect(await screen.findByText(/Up to 10 shares, about \$1000.00/)).toBeTruthy();
+});
+
+test("the order ticket uses the field names in the trading screen", () => {
+  render(<OrderTicket shares={25} stop={350.5} target={460} keep="Week" />);
+  expect(screen.getByText("Take profit price (switch on)")).toBeTruthy();
+  expect(screen.getByText("460.00")).toBeTruthy();
+  expect(screen.getByText("350.50")).toBeTruthy();
+  expect(screen.getByText("25")).toBeTruthy();
 });
