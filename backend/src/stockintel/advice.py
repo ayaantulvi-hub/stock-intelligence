@@ -40,7 +40,15 @@ PAPER_DIRECTION = {
 
 # The stock list is today's largest companies, so past small or wild stocks in it are the
 # ones that went on to win. A pass for these factors is likely that bias, not a real effect.
-SURVIVORSHIP_SUSPECT = {"size", "vol_60", "vol_20", "max_ret", "beta"}
+SURVIVORSHIP_SUSPECT = {
+    "size",
+    "vol_60",
+    "vol_20",
+    "max_ret",
+    "beta",
+    "illiquidity",
+    "dollar_volume",
+}
 
 
 def lean_for(percentile: int | None, direction: int | None) -> str:
