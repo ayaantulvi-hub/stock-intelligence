@@ -1,5 +1,6 @@
 """The local copy must match the database and fetch only new rows."""
 
+import pandas as pd
 from sqlalchemy import text
 
 from stockintel import localcache
@@ -26,3 +27,9 @@ def test_first_read_fills_the_copy_and_later_reads_ask_only_for_new_rows(
     last = 0 if first.empty else int(first["id"].max())
     localcache.load(engine, "price_bars")
     assert seen == [last, last]
+
+
+def test_a_copy_from_another_database_is_thrown_away(engine, tmp_path, monkeypatch):
+    monkeypatch.setenv("STOCKINTEL_CACHE", str(tmp_path))
+    pd.DataFrame({"id": [10**12]}).to_pickle(tmp_path / "price_bars.pkl")
+    assert localcache.load(engine, "price_bars")["id"].max() != 10**12

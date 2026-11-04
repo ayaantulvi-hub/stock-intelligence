@@ -531,7 +531,6 @@ def probe_experts() -> None:
 
 
 def main() -> None:
-    probe_experts()
     main_full()
 
 

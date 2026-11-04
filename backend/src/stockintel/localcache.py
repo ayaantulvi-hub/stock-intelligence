@@ -35,6 +35,11 @@ def load(engine: Engine, table: str) -> pd.DataFrame:
     path = Path(folder) / f"{table}.pkl"
     old = pd.read_pickle(path) if path.exists() else None
     last = 0 if old is None or old.empty else int(old["id"].max())
+    with engine.connect() as conn:
+        newest = conn.execute(text(f"SELECT coalesce(max(id), 0) FROM {table}")).scalar()
+    if last > newest:
+        # The copy came from a different database, so it can't be trusted.
+        old, last = None, 0
     new = _read(engine, table, last)
     if old is None or old.empty:
         frame = new
