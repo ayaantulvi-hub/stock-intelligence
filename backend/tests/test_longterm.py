@@ -286,7 +286,9 @@ class FixtureFloats:
 
 class FixtureFed:
     def meetings(self, first_year):
-        return [date(2026, 1, 28), date(2026, 3, 18)], PROVENANCE
+        return [date(2026, 1, 28), date(2026, 3, 18)], Provenance(
+            "Federal Reserve", "https://fixture.test", PROVENANCE.retrieved_at, "end_of_day"
+        )
 
 
 def test_past_sizes_are_ranked_and_stored_once(engine):
@@ -318,3 +320,9 @@ def test_fed_calendar_with_no_dates_is_an_error():
     provider = FedProvider(client(lambda r: httpx.Response(200, text="<html></html>")))
     with pytest.raises(FeedError):
         provider.meetings(2026)
+
+
+def test_stock_with_trades_but_no_facts_does_not_crash():
+    assert longterm.shares_history(pd.DataFrame()).empty
+    assert longterm.point_in_time(pd.DataFrame()).empty
+    assert longterm.quarterly_changes(pd.DataFrame()).empty

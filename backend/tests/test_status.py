@@ -16,7 +16,7 @@ def test_status_healthy_after_real_heartbeat(engine):
     record_heartbeat(engine)
     result = get_status(engine, stale_after_seconds=180)
     assert result["healthy"] is True
-    assert result["migrations"]["current"] == result["migrations"]["expected"] == "0010"
+    assert result["migrations"]["current"] == result["migrations"]["expected"] == "0011"
     assert result["worker"]["state"] == "ok"
 
 
@@ -87,4 +87,4 @@ def test_trust_rank_outside_brief_is_rejected(engine):
 def test_official_sources_outrank_licensed_ones(engine):
     with engine.connect() as conn:
         ranks = dict(conn.execute(select(data_sources.c.name, data_sources.c.trust_rank)).all())
-    assert ranks == {"SEC EDGAR": 1, "FRED": 1, "Tiingo": 2}
+    assert ranks == {"SEC EDGAR": 1, "FRED": 1, "Federal Reserve": 1, "Tiingo": 2}

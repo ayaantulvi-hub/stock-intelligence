@@ -279,6 +279,8 @@ def point_in_time(facts: pd.DataFrame) -> pd.DataFrame:
 
 
 def shares_history(facts: pd.DataFrame) -> pd.DataFrame:
+    if facts.empty:
+        return pd.DataFrame()
     rows = facts[facts["tag"] == "EntityCommonStockSharesOutstanding"]
     if rows.empty:
         return pd.DataFrame()
