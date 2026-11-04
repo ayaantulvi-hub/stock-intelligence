@@ -214,7 +214,7 @@ EVENT_MEANINGS = {
     "2.04": ("Something made a debt come due early", True),
     "2.05": ("Started a restructuring, usually with job cuts or closures", True),
     "2.06": ("Wrote down the value of something it owns", True),
-    "3.01": ("Received a warning about its stock listing", True),
+    "3.01": ("Moved its stock listing or received a notice about it", True),
     "3.02": ("Sold shares without a public offering", False),
     "3.03": ("Changed shareholders' rights", False),
     "4.01": ("Changed its auditor", True),
@@ -228,8 +228,8 @@ EVENT_MEANINGS = {
 }
 SERIOUS_DAYS = 90
 # These alone can change whether a company is safe to own. Others are worth a warning, since
-# a restructuring or a new auditor can be routine.
-SEVERE_ITEMS = ("1.03", "2.04", "3.01", "4.02")
+# a restructuring, a new auditor or a move between exchanges can be routine.
+SEVERE_ITEMS = ("1.03", "2.04", "4.02")
 SEVERE_EVENTS = {EVENT_MEANINGS[item][0] for item in SEVERE_ITEMS}
 
 
