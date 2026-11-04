@@ -113,6 +113,7 @@ test("today's orders split the money and give stop and sell date", async () => {
   render(<TodaysOrders onOpen={() => {}} />);
   expect(await screen.findByText("2026-12-03")).toBeTruthy();
   fireEvent.change(screen.getByLabelText(/Your total money/), { target: { value: "1000" } });
-  expect(screen.getByText("2")).toBeTruthy();
-  expect(screen.getByText("350.00")).toBeTruthy();
+  expect(screen.getAllByText("2").length).toBe(2);
+  expect(screen.getAllByText("350.00").length).toBe(2);
+  expect(screen.getByText("Your order for AAA", { exact: false })).toBeTruthy();
 });
