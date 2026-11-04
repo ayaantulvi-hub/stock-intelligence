@@ -435,3 +435,54 @@ def delete_position(engine: Engine, ticker: str) -> None:
             ),
             {"t": ticker.upper()},
         )
+
+
+def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
+    data = chart(engine, ticker, "daily")
+    if data is None:
+        return None
+    report = valuation(engine, ticker, {}) or {}
+    forecast = stock_forecast(engine, ticker)
+    position = get_position(engine, ticker)
+    with engine.connect() as conn:
+        security_id = conn.execute(
+            text("SELECT id FROM securities WHERE ticker = :t"), {"t": ticker.upper()}
+        ).scalar()
+        net = conn.execute(
+            text(
+                """SELECT sum(CASE WHEN code = 'P' THEN shares * price ELSE -shares * price END)
+                   FROM insider_transactions
+                   WHERE security_id = :id AND price IS NOT NULL
+                     AND filed >= current_date - 90
+                     AND (code = 'P' OR (code = 'S' AND NOT planned_sale))"""
+            ),
+            {"id": security_id},
+        ).scalar()
+        filed = conn.execute(
+            text(
+                """SELECT max(filing_date) FROM filings
+                   WHERE security_id = :id AND form IN ('10-Q', '10-K', '20-F')"""
+            ),
+            {"id": security_id},
+        ).scalar()
+        holdings = conn.execute(
+            text(
+                """SELECT p.security_id, p.shares * (SELECT b.close FROM price_bars b
+                     WHERE b.security_id = p.security_id
+                     ORDER BY b.market_date DESC, b.id DESC LIMIT 1) AS worth
+                   FROM positions p"""
+            )
+        ).all()
+    total = sum(row.worth or 0 for row in holdings)
+    mine = next((row.worth for row in holdings if row.security_id == security_id), None)
+    summary = data["summary"] or {}
+    return advice.checklist(
+        stale=data["stale"],
+        action=forecast["action"] if forecast else None,
+        above_200=summary.get("above_200"),
+        report=report,
+        insider_net=net,
+        last_earnings_days=(datetime.now(UTC).date() - filed).days if filed else None,
+        position=position,
+        portfolio_share=mine / total if mine and total else None,
+    )

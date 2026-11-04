@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ChecklistPanel from "./ChecklistPanel";
 import PositionPanel from "./PositionPanel";
 
 const NOT_VERIFIED = "Not verified";
@@ -280,6 +281,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
             : "Forecasts are written once a day before the US market opens."}
         </p>
       </div>
+      <ChecklistPanel ticker={ticker} />
       <PositionPanel ticker={ticker} />
       {leans && <LeanTable leans={leans} />}
       {lines.length > 0 && (

@@ -4,6 +4,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import Glossary from "./Glossary";
 
 vi.mock("./PositionPanel", () => ({ default: () => null }));
+vi.mock("./ChecklistPanel", () => ({ default: () => null }));
 import { FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 afterEach(() => {

@@ -142,3 +142,57 @@ def test_every_directional_factor_is_real():
     from stockintel.factors import NAMES
 
     assert set(advice.PAPER_DIRECTION) <= set(NAMES)
+
+
+def review(**changes):
+    values = {
+        "stale": False,
+        "action": "No reliable edge",
+        "above_200": True,
+        "report": {},
+        "insider_net": None,
+        "last_earnings_days": None,
+        "position": None,
+        "portfolio_share": None,
+        **changes,
+    }
+    return {check["topic"]: check for check in advice.checklist(**values)}
+
+
+def test_no_edge_and_missing_data_are_not_passes():
+    checks = review()
+    assert checks["Tested edge"]["state"] == "caution"
+    assert checks["Margin of safety"]["state"] == "unknown"
+    assert checks["Debt"]["state"] == "unknown"
+    assert checks["Your exit plan"]["state"] == "caution"
+
+
+def test_margin_of_safety_needs_a_15_percent_cushion():
+    report = {"cases": [{"name": "Base", "against_price": 0.1}]}
+    assert review(report=report)["Margin of safety"]["state"] == "caution"
+    report = {"cases": [{"name": "Base", "against_price": 0.2}]}
+    assert review(report=report)["Margin of safety"]["state"] == "pass"
+
+
+def test_negative_equity_is_not_a_low_debt_pass():
+    report = {"metrics": [{"name": "Debt to equity", "value": -3.0}]}
+    assert review(report=report)["Debt"]["state"] == "caution"
+
+
+def test_concentration_flags_more_than_10_percent():
+    assert review(portfolio_share=0.4)["Concentration"]["state"] == "caution"
+    assert review(portfolio_share=0.05)["Concentration"]["state"] == "pass"
+    assert "Concentration" not in review()
+
+
+def test_insider_selling_and_late_earnings_are_cautions():
+    assert review(insider_net=-5.0)["Insiders"]["state"] == "caution"
+    assert review(last_earnings_days=80)["Earnings"]["state"] == "caution"
+    assert review(last_earnings_days=10)["Earnings"]["state"] == "pass"
+
+
+def test_checklist_works_for_a_stock_with_no_data(engine):
+    seed(engine)
+    checks = {check["topic"]: check for check in queries.stock_checklist(engine, "AAA")}
+    assert checks["Data"]["state"] == "caution"
+    assert queries.stock_checklist(engine, "ZZZ") is None

@@ -128,3 +128,136 @@ def position_view(position: dict, price: float, action: str, cases: list[dict]) 
             for case in cases
         ],
     }
+
+
+MAX_SINGLE_STOCK = 0.10
+MIN_SAFETY = 0.15
+MAX_DEBT_TO_EQUITY = 1.0
+
+
+def _check(topic: str, state: str, text: str) -> dict:
+    return {"topic": topic, "state": state, "text": text}
+
+
+def _metric(report: dict, name: str) -> float | None:
+    for item in report.get("metrics", []):
+        if item["name"] == name:
+            return item["value"]
+    return None
+
+
+def checklist(
+    *,
+    stale: bool,
+    action: str | None,
+    above_200: bool | None,
+    report: dict,
+    insider_net: float | None,
+    last_earnings_days: int | None,
+    position: dict | None,
+    portfolio_share: float | None,
+) -> list[dict]:
+    """A pre-trade review. Pass, Caution or Not verified, never added into a score."""
+    checks = [
+        _check(
+            "Data",
+            "caution" if stale else "pass",
+            "Prices are out of date." if stale else "Prices are up to date.",
+        )
+    ]
+    if action in {"Buy candidate", "Sell candidate"}:
+        checks.append(_check("Tested edge", "pass", "The model passed testing."))
+    else:
+        checks.append(
+            _check("Tested edge", "caution", "No proven edge, so any trade rests on your own view.")
+        )
+    if above_200 is None:
+        checks.append(_check("Long-term trend", "unknown", "Not enough price history."))
+    else:
+        checks.append(
+            _check(
+                "Long-term trend",
+                "pass" if above_200 else "caution",
+                "Above the 200-day average."
+                if above_200
+                else "Below the 200-day average: you would be buying against the long-term trend.",
+            )
+        )
+    cases = {case["name"]: case for case in report.get("cases", [])}
+    if "Base" not in cases:
+        checks.append(_check("Margin of safety", "unknown", "No value estimate is available."))
+    else:
+        gap = cases["Base"]["against_price"]
+        checks.append(
+            _check(
+                "Margin of safety",
+                "pass" if gap >= MIN_SAFETY else "caution",
+                f"Base value is {gap * 100:+.0f}% against the price. "
+                "A 15% cushion allows for the estimate being wrong.",
+            )
+        )
+    if "Bear" in cases:
+        bear = cases["Bear"]["against_price"]
+        checks.append(
+            _check(
+                "Downside",
+                "pass" if bear >= 0 else "caution",
+                f"If the Bear assumptions came true, value is {bear * 100:+.0f}% against the price.",
+            )
+        )
+    debt = _metric(report, "Debt to equity")
+    if debt is None:
+        checks.append(_check("Debt", "unknown", "Debt figures are not available."))
+    else:
+        safe = 0 <= debt <= MAX_DEBT_TO_EQUITY
+        checks.append(
+            _check(
+                "Debt", "pass" if safe else "caution", f"Long-term debt is {debt:.2f} times equity."
+            )
+        )
+    if insider_net is None:
+        checks.append(_check("Insiders", "unknown", "No open-market insider trades stored."))
+    else:
+        checks.append(
+            _check(
+                "Insiders",
+                "pass" if insider_net >= 0 else "caution",
+                f"Insiders were net {'buyers' if insider_net >= 0 else 'sellers'} of "
+                f"${abs(insider_net):,.0f} in 90 days, leaving out planned sales.",
+            )
+        )
+    if last_earnings_days is None:
+        checks.append(_check("Earnings", "unknown", "The last report date is not stored."))
+    else:
+        soon = last_earnings_days >= 75
+        checks.append(
+            _check(
+                "Earnings",
+                "caution" if soon else "pass",
+                f"Last quarterly or yearly report was {last_earnings_days} days ago."
+                + (" The next could be close, and prices often jump on reports." if soon else ""),
+            )
+        )
+    if position is None:
+        checks.append(
+            _check("Your exit plan", "caution", "Decide your target and stop before you buy.")
+        )
+    else:
+        ready = position.get("target_price") and position.get("stop_price")
+        checks.append(
+            _check(
+                "Your exit plan",
+                "pass" if ready else "caution",
+                "Target and stop are set." if ready else "Set both a target and a stop.",
+            )
+        )
+    if portfolio_share is not None:
+        checks.append(
+            _check(
+                "Concentration",
+                "pass" if portfolio_share <= MAX_SINGLE_STOCK else "caution",
+                f"This is {portfolio_share * 100:.0f}% of the holdings entered here. "
+                "A common limit is 10%.",
+            )
+        )
+    return checks

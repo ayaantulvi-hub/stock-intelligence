@@ -152,6 +152,14 @@ def leans(ticker: str) -> dict | None:
     return queries.stock_leans(get_engine(), ticker)
 
 
+@app.get("/api/stocks/{ticker}/checklist")
+def checklist(ticker: str) -> list[dict]:
+    result = queries.stock_checklist(get_engine(), ticker)
+    if result is None:
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return result
+
+
 @app.get("/api/stocks/{ticker}/position")
 def get_position(ticker: str) -> dict | None:
     return queries.get_position(get_engine(), ticker)
