@@ -478,13 +478,31 @@ def probe_remaining() -> None:
         print("left", ticker, sorted(found, reverse=True, key=lambda x: (x[0], abs(x[1])))[:3])
 
 
-def main() -> None:
-    from stockintel import audit
+def probe_events() -> None:
+    from datetime import UTC, datetime
 
-    audit.run(create_engine(Settings().database_url))
-    check_adjustment()
-    probe_remaining()
-    sys.exit(0)
+    from sqlalchemy import text as sql
+
+    from stockintel import tools
+
+    engine = create_engine(Settings().database_url)
+    today = datetime.now(UTC).date()
+    with engine.connect() as conn:
+        print("events stored", conn.execute(sql("SELECT count(*) FROM filing_events")).scalar())
+        print(
+            "events results",
+            conn.execute(
+                sql("SELECT count(*) FROM filing_events WHERE items LIKE '%2.02%'")
+            ).scalar(),
+        )
+    for ticker in ("NVDA", "AAPL", "JPM"):
+        print("events next", ticker, tools.next_earnings(engine, ticker, today))
+        print("events list", ticker, tools.company_events(engine, ticker, today)[:2])
+
+
+def main() -> None:
+    probe_events()
+    main_full()
 
 
 def main_full() -> None:
