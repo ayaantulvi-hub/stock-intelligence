@@ -106,7 +106,36 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
     def share_of(value):
         return None if value is None or not market_value else value / market_value
 
+    def plain(name, row):
+        value = None if row is None else float(row["value"])
+        return _metric(name, value, "money", [] if row is None else [row])
+
+    income_table = _annual_flow(facts, "NetIncomeLoss")
+    history = []
+    if len(revenue_table) and len(income_table):
+        joined = revenue_table[["period_end", "value"]].merge(
+            income_table[["period_end", "value", "document_url"]],
+            on="period_end",
+            how="outer",
+            suffixes=("_revenue", "_income"),
+        )
+        history = [
+            {
+                "period_end": row["period_end"],
+                "revenue": None if pd.isna(row["value_revenue"]) else float(row["value_revenue"]),
+                "net_income": None if pd.isna(row["value_income"]) else float(row["value_income"]),
+                "url": None if pd.isna(row["document_url"]) else row["document_url"],
+            }
+            for _, row in joined.sort_values("period_end").tail(5).iterrows()
+        ]
+
     metrics = [
+        plain("Net income", income),
+        plain("Gross profit", gross),
+        plain("Operating cash flow", cash_flow),
+        plain("Total assets", _latest(_year_end(facts, "Assets"))),
+        plain("Long-term debt", debt),
+        plain("Cash", cash),
         _metric(
             "Revenue",
             None if revenue is None else float(revenue["value"]),
