@@ -274,8 +274,6 @@ def chart_patterns(frame: pd.DataFrame) -> list[tuple[str, str, int, float]]:
         while t < len(troughs) and troughs[t] + PIVOT_WINDOW <= now:
             known_troughs.append(troughs[t])
             t += 1
-        crossed_down = lambda line: close[now - 1] >= line > close[now]
-        crossed_up = lambda line: close[now - 1] <= line < close[now]
         if len(known_peaks) >= 2:
             a, b = known_peaks[-2], known_peaks[-1]
             between = [i for i in known_troughs if a < i < b]
