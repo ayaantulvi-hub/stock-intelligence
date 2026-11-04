@@ -200,9 +200,37 @@ def compare(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list[dict
     ]
 
 
+def factor_weights(panel: pd.DataFrame) -> list[dict]:
+    """How much each factor counted in a random forest. Weights add up to 1."""
+    data = panel[panel["eligible"]].dropna(subset=["excess_20d"])
+    days = sorted(data["date"].unique())[::TRAIN_EVERY]
+    train = data[data["date"].isin(days)]
+    if train.empty:
+        return []
+    columns = usable(train)
+    fitted = _forest().fit(train[columns], train["excess_20d"] > 0)
+    weights = fitted[-1].feature_importances_
+    used = [name for i, name in enumerate(columns) if i < len(weights)]
+    return [
+        {"factor": name, "weight": float(weight)}
+        for name, weight in zip(used, weights, strict=True)
+    ]
+
+
 def run(engine: Engine) -> list[dict]:
-    results = compare(load_panel(engine))
+    panel = load_panel(engine)
+    results = compare(panel)
+    weights = factor_weights(panel)
     now = datetime.now(UTC)
+    if weights:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """INSERT INTO factor_weights (run_at, factor, weight)
+                       VALUES (:run_at, :factor, :weight)"""
+                ),
+                [{**row, "run_at": now} for row in weights],
+            )
     if results:
         with engine.begin() as conn:
             conn.execute(

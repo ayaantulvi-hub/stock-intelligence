@@ -110,3 +110,9 @@ def test_latest_comparison_is_served_with_its_cautions(engine):
     result = queries.model_comparison(engine)
     assert result["models"][0]["caution"]
     assert forecast.current_champion(engine)["model"] == "Linear model"
+
+
+def test_factor_weights_add_up_to_one():
+    weights = compare.factor_weights(panel())
+    assert sum(item["weight"] for item in weights) == pytest.approx(1)
+    assert "mom_12_1" in {item["factor"] for item in weights}

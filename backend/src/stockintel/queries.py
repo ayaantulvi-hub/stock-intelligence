@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import advice, backtest, charts, explain, longterm, signals, stops, tools
+from stockintel import advice, backtest, charts, explain, factors, longterm, signals, stops, tools
 from stockintel.market import is_stale, latest_expected_session
 from stockintel.profiles import PROFILES
 
@@ -533,9 +533,17 @@ def model_comparison(engine: Engine) -> dict | None:
         rows = _rows(conn.execute(text(query)))
     if not rows:
         return None
+    weight_query = """SELECT factor, weight FROM factor_weights
+                      WHERE run_at = (SELECT max(run_at) FROM factor_weights)
+                      ORDER BY weight DESC LIMIT 12"""
+    with engine.connect() as conn:
+        weights = _rows(conn.execute(text(weight_query)))
     return {
         "run_at": rows[0]["run_at"],
         "models": [{**row, **PROFILES[row["model"]]} for row in rows],
+        "weights": [
+            {**row, "name": factors.NAMES.get(row["factor"], row["factor"])} for row in weights
+        ],
     }
 
 

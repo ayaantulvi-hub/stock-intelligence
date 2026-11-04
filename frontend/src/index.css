@@ -162,3 +162,7 @@ td.wrap { white-space: normal; min-width: 190px; }
 .how-much label { display: block; font-size: 0.9rem; color: var(--muted); max-width: 280px; }
 .how-much input { display: block; width: 100%; box-sizing: border-box; margin-top: 2px; }
 .how-much p { margin: 8px 0 0; color: var(--text); max-width: 62ch; }
+.weights { list-style: none; padding: 0; margin: 8px 0; }
+.weights li { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(70px, 2fr) 3.5rem; gap: 10px; align-items: center; margin: 6px 0; font-size: 0.9rem; }
+.meter.wide { width: 100%; margin: 0; }
+.meter.wide b { display: block; height: 100%; background: var(--text); border-radius: 4px; }

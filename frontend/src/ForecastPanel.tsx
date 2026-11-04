@@ -455,6 +455,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
   );
 }
 type Comparison = {
+  weights?: { factor: string; name: string; weight: number }[];
   models: {
     model: string;
     t_stat: number;
@@ -478,6 +479,26 @@ const signed = (value: number | null) =>
 function ComparisonView({ comparison }: { comparison: Comparison }) {
   return (
     <>
+      {comparison.weights && comparison.weights.length > 0 && (
+        <>
+          <h3>Which factors count most</h3>
+          <small>
+            How much the model relied on each factor, learned from past data. Counting most doesn't
+            prove a factor works, and the stock list's bias may affect this.
+          </small>
+          <ul className="weights">
+            {comparison.weights.map((row) => (
+              <li key={row.factor}>
+                <span>{row.name}</span>
+                <span className="meter wide">
+                  <b style={{ width: `${(row.weight / comparison.weights![0].weight) * 100}%` }} />
+                </span>
+                <span>{(row.weight * 100).toFixed(1)}%</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <h3>Which model type works best?</h3>
       <small>
         Every model faced the same dates. Spread is how much its top-ranked stocks beat its
