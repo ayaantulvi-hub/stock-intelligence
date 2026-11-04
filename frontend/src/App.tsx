@@ -4,7 +4,7 @@ import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
 import { TodaysOrders } from "./ChecklistPanel";
 import { AlertsPage, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
-import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, TradesPanel } from "./ForecastPanel";
+import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
 type Status = {
   database: { state: string };
@@ -149,6 +149,28 @@ function State({ state }: { state: string }) {
 const PAGES = ["Today", "My portfolio", "Journal", "Alerts", "How reliable?"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
+
+const PLANS = ["About a month", "1 to 5 days", "Years"] as const;
+
+function PlanPicker({ onOpen }: { onOpen: (ticker: string) => void }) {
+  const [plan, setPlan] = useState<(typeof PLANS)[number]>(PLANS[0]);
+  return (
+    <section className="orders">
+      <h2>What to do today</h2>
+      <p>How long do you want to hold?</p>
+      <div className="tabs pages" role="group" aria-label="How long to hold">
+        {PLANS.map((name) => (
+          <button key={name} aria-pressed={name === plan} onClick={() => setPlan(name)}>
+            {name}
+          </button>
+        ))}
+      </div>
+      {plan === PLANS[0] && <TodaysOrders onOpen={onOpen} />}
+      {plan === PLANS[1] && <TradesPanel onOpen={onOpen} />}
+      {plan === PLANS[2] && <InvestPanel onOpen={onOpen} />}
+    </section>
+  );
+}
 
 function StockView({ stock }: { stock: Stock }) {
   const [tab, setTab] = useState(TABS[0]);
@@ -363,11 +385,17 @@ export default function App() {
         </>
       )}
 
-      {!stock && !failed && <TodaysOrders onOpen={open} />}
-      {!stock && !failed && <IdeasPanel onOpen={open} />}
-      {!stock && !failed && <TradesPanel onOpen={open} />}
-      {!stock && !failed && <Screener onOpen={open} />}
-      {!stock && !failed && <MarketMood />}
+      {!stock && !failed && (
+        <>
+          <PlanPicker onOpen={open} />
+          <details className="fold">
+            <summary>See all stocks and the market</summary>
+            <IdeasPanel onOpen={open} />
+            <Screener onOpen={open} />
+            <MarketMood />
+          </details>
+        </>
+      )}
       {backtest && <BacktestView backtest={backtest} />}
 
       {status && (

@@ -452,36 +452,69 @@ function Horizons({ ticker }: { ticker: string }) {
   );
 }
 
-export function TradesPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
-  const [rows, setRows] = useState<(TradeView & { ticker: string; name: string })[] | null>(null);
+type Listed = { ticker: string; name: string; call: string; reason: string; kind: string };
+
+function ListTable({ url, onOpen, empty }: {
+  url: string;
+  onOpen: (ticker: string) => void;
+  empty: string;
+}) {
+  const [rows, setRows] = useState<Listed[] | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    getJson<(TradeView & { ticker: string; name: string })[]>("/api/trades")
+    getJson<Listed[]>(url)
       .then(setRows)
-      .catch(() => setRows(null));
-  }, []);
-  if (!rows?.length) return null;
+      .catch(() => setFailed(true));
+  }, [url]);
+  if (failed) return <p className="bad">Could not load this list. Refresh to try again.</p>;
+  if (!rows) return <p>Loading…</p>;
+  if (rows.length === 0) return <p>{empty}</p>;
   return (
-    <details className="fold">
-      <summary>Short-term trades today ({rows.length})</summary>
-      <small>From today's candle patterns. Hold 1 to 5 trading days. Tested ones come first.</small>
-      <div className="scroll">
-        <table>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.ticker} className={row.kind === "buy" ? "row-buy" : "row-sell"}>
-                <td>
-                  <button className="link" onClick={() => onOpen(row.ticker)}>
-                    {row.ticker}
-                  </button>
-                </td>
-                <td>{row.call}</td>
-                <td>{row.reason}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
+    <div className="scroll">
+      <table>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.ticker} className={row.kind === "buy" ? "row-buy" : "row-sell"}>
+              <td>
+                <button className="link" onClick={() => onOpen(row.ticker)}>
+                  {row.ticker}
+                </button>
+              </td>
+              <td>{row.call}</td>
+              <td>{row.reason}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function TradesPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
+  return (
+    <>
+      <p className="plain">
+        <b>Sell within 5 trading days, or sooner at the stop or target.</b> Tap a stock for its
+        exact prices. Unproven until the weekly test, so treat these as guesses.
+      </p>
+      <ListTable url="/api/trades" onOpen={onOpen} empty="No candle signals today. Do nothing." />
+    </>
+  );
+}
+
+export function InvestPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
+  return (
+    <>
+      <p className="plain">
+        <b>Buy and keep for years while the company checks hold.</b> Review after each yearly
+        report. These rules aren't proven in this app.
+      </p>
+      <ListTable
+        url="/api/investments"
+        onOpen={onOpen}
+        empty="No stock passes the company checks yet. More appear as data loads."
+      />
+    </>
   );
 }
 

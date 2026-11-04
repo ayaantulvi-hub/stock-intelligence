@@ -305,6 +305,29 @@ def stored_trades(engine: Engine) -> list[dict]:
     return sorted(found, key=lambda item: (not item["proven"], item["ticker"]))
 
 
+def stored_investments(engine: Engine) -> list[dict]:
+    """Stocks whose company checks make them long-term buys, strongest first."""
+    query = """SELECT DISTINCT ON (s.ticker) s.ticker, s.name, r.detail, r.blocked, r.agree,
+                 r.against
+               FROM expert_reviews r JOIN securities s ON s.id = r.security_id
+               ORDER BY s.ticker, r.id DESC"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query)).all()
+    found = []
+    for row in rows:
+        view = horizons.invest({"lenses": row.detail, "blocked": row.blocked})
+        if view["kind"] == "buy":
+            found.append(
+                {
+                    "ticker": row.ticker,
+                    "name": row.name,
+                    "score": row.agree - row.against,
+                    **view,
+                }
+            )
+    return sorted(found, key=lambda item: (-item["score"], item["ticker"]))
+
+
 def stored_blocks(engine: Engine) -> dict[str, str]:
     query = """SELECT DISTINCT ON (s.ticker) s.ticker, r.blocked
                FROM expert_reviews r JOIN securities s ON s.id = r.security_id

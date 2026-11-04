@@ -171,18 +171,7 @@ function Sizer({ suggested }: { suggested: Suggested | null }) {
   );
 }
 
-const MONEY_KEY = "stock-intelligence-total-money";
-
-function remembered() {
-  try {
-    return window.localStorage.getItem(MONEY_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-export function OrderTicket({ shares, stop, target, keep }: {
-  shares: number;
+export function OrderTicket({ stop, target, keep }: {
   stop: number;
   target?: number;
   keep: string;
@@ -190,7 +179,7 @@ export function OrderTicket({ shares, stop, target, keep }: {
   const rows: [string, string][] = [
     ["Order tab", "Market"],
     ["Side", "Buy"],
-    ["Shares", String(shares)],
+    ["Shares", "Your choice"],
     target === undefined
       ? ["Take profit price", "Switch off"]
       : ["Take profit price (switch on)", target.toFixed(2)],
@@ -223,9 +212,7 @@ type Plan = { session: string | null; sell_by: string | null; proven: boolean; o
 
 export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [money, setMoney] = useState(remembered);
   const [failed, setFailed] = useState(false);
-  const [chosen, setChosen] = useState<string | null>(null);
   useEffect(() => {
     fetch("/api/orders")
       .then((response) => {
@@ -235,141 +222,73 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
       .then(setPlan)
       .catch(() => setFailed(true));
   }, []);
-  const change = (value: string) => {
-    setMoney(value);
-    try {
-      window.localStorage.setItem(MONEY_KEY, value);
-    } catch {
-      // The answer still works this visit. It just won't be remembered.
-    }
-  };
   if (failed) return <p className="bad">Could not load today's orders. Refresh to try again.</p>;
-  if (!plan || plan.orders.length === 0) return null;
-  const each = Number(money) / plan.orders.length;
-  const picked = plan.orders.find((row) => row.ticker === (chosen ?? plan.orders[0].ticker));
+  if (!plan) return <p>Loading…</p>;
+  if (plan.orders.length === 0) return <p>No orders yet. They appear after the next forecast.</p>;
   return (
-    <section className="orders">
-      <h3>Today's orders: hold for about a month</h3>
-      <p>
-        This is a 20-trading-day hold. It isn't day trading or a long-term investment. Buy these for{" "}
-        {plan.session} and sell them all on <b>{plan.sell_by ?? "Not verified"}</b>.
+    <>
+      <p className="plain">
+        <b>Buy these now. Sell them all on {plan.sell_by ?? "Not verified"}.</b>
         {!plan.proven && " The model hasn't passed its test yet, so this is a guess."}
       </p>
-      <label>
-        Your total money to invest ($)
-        <input type="number" min="0" step="any" value={money} onChange={(e) => change(e.target.value)} />
-      </label>
       <div className="scroll">
         <table>
           <thead>
             <tr>
               <th>Stock</th>
-              <th>Order tab</th>
-              <th>Shares</th>
+              <th>Last close</th>
               <th>Stop loss price</th>
-              <th>Take profit</th>
             </tr>
           </thead>
           <tbody>
             {plan.orders.map((row) => (
-              <tr key={row.ticker} className={row.ticker === picked?.ticker ? "row-buy" : ""}>
+              <tr key={row.ticker}>
                 <td>
-                  <button className="link" onClick={() => setChosen(row.ticker)}>
+                  <button className="link" onClick={() => onOpen(row.ticker)}>
                     {row.ticker}
-                  </button>
+                  </button>{" "}
+                  {row.name}
                 </td>
-                <td>Market</td>
-                <td>{each > 0 ? Math.floor(each / row.price) : "Enter your money"}</td>
+                <td>{row.price.toFixed(2)}</td>
                 <td>{row.stop === null ? "Not verified" : row.stop.toFixed(2)}</td>
-                <td>Off</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {picked && picked.stop !== null && each >= picked.price && (
-        <>
-          <h4>
-            Your order for {picked.ticker}{" "}
-            <button className="link" onClick={() => onOpen(picked.ticker)}>
-              See why
-            </button>
-          </h4>
-          <OrderTicket
-            shares={Math.floor(each / picked.price)}
-            stop={picked.stop}
-            keep="The longest offered"
-          />
-        </>
-      )}
-      <small>
-        Tap a stock to see its order filled in. Shares split your money equally, using the last close. If the live price is more than 5%
-        away, skip that stock. Time in force: the longest offered. Outside RTH: unticked.
-      </small>
-    </section>
+      <OrderSteps keep="The longest offered" />
+      <small>Skip a stock if its live price is more than 5% from the last close.</small>
+    </>
   );
 }
 
-export function HowMuch({ ticker, keep = "GTC, or the longest offered", stop, target }: {
+function OrderSteps({ keep }: { keep: string }) {
+  return (
+    <p>
+      For each one: choose <b>Market</b>, enter any number of shares, turn <b>Take profit</b> off,
+      turn <b>Stop loss</b> on and enter the price above, set <b>Time in force</b> to {keep.toLowerCase()},
+      and leave <b>outside RTH</b> unticked. Place orders while the US market is open, 6:30pm to
+      1am Dubai time.
+    </p>
+  );
+}
+
+export function HowMuch({ ticker, keep = "The longest offered", stop, target }: {
   ticker: string;
   keep?: string;
   stop?: number;
   target?: number;
 }) {
-  const [money, setMoney] = useState(remembered);
   const [levels, setLevels] = useState<Suggested | null>(null);
-
   useEffect(() => {
     fetch(`/api/stocks/${encodeURIComponent(ticker)}/levels`)
       .then((response) => (response.status === 200 ? response.json() : null))
       .then((body) => setLevels(body?.levels ?? null))
       .catch(() => setLevels(null));
   }, [ticker]);
-
-  const change = (value: string) => {
-    setMoney(value);
-    try {
-      window.localStorage.setItem(MONEY_KEY, value);
-    } catch {
-      // The answer still works this visit. It just won't be remembered.
-    }
-  };
   const stopPrice = stop ?? levels?.stop;
-  const result =
-    levels && stopPrice !== undefined && sharesForRisk(Number(money), 1, levels.price, stopPrice);
-  return (
-    <div className="how-much">
-      <label>
-        Your total money to invest ($)
-        <input
-          type="number"
-          min="0"
-          step="any"
-          value={money}
-          onChange={(event) => change(event.target.value)}
-        />
-      </label>
-      {result && result.shares > 0 && (
-        <p>
-          <strong>
-            Up to {result.shares} {result.shares === 1 ? "share" : "shares"}, about $
-            {result.cost.toFixed(2)}.
-          </strong>{" "}
-          That keeps this stock under 10% of your money, and a fall to the stop would lose about $
-          {result.loss.toFixed(2)}, or {((result.loss / Number(money)) * 100).toFixed(1)}% of it.
-        </p>
-      )}
-      {result && result.shares > 0 && stopPrice !== undefined && (
-        <OrderTicket shares={result.shares} stop={stopPrice} target={target} keep={keep} />
-      )}
-      {result && result.shares === 0 && (
-        <p>
-          One share costs more than the 10% limit allows with this much money. Consider a smaller
-          priced stock, a fund, or fractional shares.
-        </p>
-      )}
-    </div>
-  );
+  if (stopPrice === undefined) return null;
+  return <OrderTicket stop={stopPrice} target={target} keep={keep} />;
 }
 
 export default function ChecklistPanel({ ticker }: { ticker: string }) {

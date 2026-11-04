@@ -1,6 +1,6 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import ChecklistPanel, { HowMuch, OrderTicket, sharesForRisk, TodaysOrders } from "./ChecklistPanel";
 
 afterEach(() => {
@@ -71,33 +71,25 @@ test("shows checks with their state", async () => {
   expect(screen.getByText("No stop")).toBeTruthy();
 });
 
-test("suggests an amount from the money entered", async () => {
+test("the stock page order leaves shares to you", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({
-      status: 200,
-      json: async () => ({ levels: { price: 100, stop: 90 } }),
-    })),
+    vi.fn(async () => ({ status: 200, json: async () => ({ levels: { price: 100, stop: 90 } }) })),
   );
   render(<HowMuch ticker="AAA" />);
-  fireEvent.change(screen.getByLabelText(/Your total money/), { target: { value: "10000" } });
-  expect(await screen.findByText(/Up to 10 shares, about \$1000.00/)).toBeTruthy();
-});
-
-test("the order ticket uses the field names in the trading screen", () => {
-  render(<OrderTicket shares={25} stop={350.5} target={460} keep="Week" />);
-  expect(screen.getByText("Take profit price (switch on)")).toBeTruthy();
-  expect(screen.getByText("460.00")).toBeTruthy();
-  expect(screen.getByText("350.50")).toBeTruthy();
-  expect(screen.getByText("25")).toBeTruthy();
-});
-
-test("the order ticket says to switch take profit off when no target applies", () => {
-  render(<OrderTicket shares={25} stop={350.5} keep="GTC" />);
+  expect(await screen.findByText("Your choice")).toBeTruthy();
+  expect(screen.getByText("90.00")).toBeTruthy();
   expect(screen.getByText("Switch off")).toBeTruthy();
 });
 
-test("today's orders split the money and give stop and sell date", async () => {
+test("the order ticket uses the field names in the trading screen", () => {
+  render(<OrderTicket stop={350.5} target={460} keep="Week" />);
+  expect(screen.getByText("Take profit price (switch on)")).toBeTruthy();
+  expect(screen.getByText("460.00")).toBeTruthy();
+  expect(screen.getByText("350.50")).toBeTruthy();
+});
+
+test("today's orders say when to sell and give each stop", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({
@@ -111,9 +103,6 @@ test("today's orders split the money and give stop and sell date", async () => {
     })),
   );
   render(<TodaysOrders onOpen={() => {}} />);
-  expect(await screen.findByText("2026-12-03")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText(/Your total money/), { target: { value: "1000" } });
-  expect(screen.getAllByText("2").length).toBe(2);
-  expect(screen.getAllByText("350.00").length).toBe(2);
-  expect(screen.getByText("Your order for AAA", { exact: false })).toBeTruthy();
+  expect(await screen.findByText(/Sell them all on 2026-12-03/)).toBeTruthy();
+  expect(screen.getByText("350.00")).toBeTruthy();
 });
