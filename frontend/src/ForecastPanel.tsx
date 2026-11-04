@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import ChecklistPanel from "./ChecklistPanel";
+import ChecklistPanel, { HowMuch } from "./ChecklistPanel";
 import PositionPanel from "./PositionPanel";
 
 const NOT_VERIFIED = "Not verified";
@@ -385,6 +385,9 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
             <p className="step">
               <b>Your next step:</b> {decision.next_step}
             </p>
+            {!decision.owned && ["Buy", "Leans buy"].includes(decision.call) && (
+              <HowMuch ticker={ticker} />
+            )}
           </>
         )}
       </div>

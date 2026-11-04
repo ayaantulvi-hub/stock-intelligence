@@ -16,6 +16,7 @@ type Trade = {
 };
 type Report = {
   available: boolean;
+  currency?: string;
   price: number | null;
   metrics: Metric[];
   history: { period_end: string; revenue: number | null; net_income: number | null; url: string | null }[];
@@ -36,17 +37,18 @@ const INPUTS: [string, string][] = [
   ["terminal_growth", "Growth after 10 years"],
 ];
 
-function money(value: number) {
+function money(value: number, currency = "USD") {
+  const sign = currency === "USD" ? "$" : `${currency} `;
   const size = Math.abs(value);
-  if (size >= 1e12) return `$${(value / 1e12).toFixed(2)} trillion`;
-  if (size >= 1e9) return `$${(value / 1e9).toFixed(1)} billion`;
-  if (size >= 1e6) return `$${(value / 1e6).toFixed(1)} million`;
-  return `$${value.toFixed(2)}`;
+  if (size >= 1e12) return `${sign}${(value / 1e12).toFixed(2)} trillion`;
+  if (size >= 1e9) return `${sign}${(value / 1e9).toFixed(1)} billion`;
+  if (size >= 1e6) return `${sign}${(value / 1e6).toFixed(1)} million`;
+  return `${sign}${value.toFixed(2)}`;
 }
 
-function show(metric: Metric) {
+function show(metric: Metric, currency?: string) {
   if (metric.value === null) return NOT_VERIFIED;
-  if (metric.kind === "money") return money(metric.value);
+  if (metric.kind === "money") return money(metric.value, currency);
   if (metric.kind === "percent") return `${(metric.value * 100).toFixed(1)}%`;
   return metric.value.toFixed(2);
 }
@@ -176,7 +178,7 @@ export default function LongTermPanel({ ticker }: { ticker: string }) {
             {report.metrics.map((metric) => (
               <tr key={metric.name}>
                 <td>{metric.name}</td>
-                <td>{show(metric)}</td>
+                <td>{show(metric, report.currency)}</td>
                 <td>
                   <Links sources={metric.sources} />
                 </td>
@@ -202,8 +204,8 @@ export default function LongTermPanel({ ticker }: { ticker: string }) {
                 {report.history.map((row) => (
                   <tr key={row.period_end}>
                     <td>{row.period_end}</td>
-                    <td>{row.revenue === null ? NOT_VERIFIED : money(row.revenue)}</td>
-                    <td>{row.net_income === null ? NOT_VERIFIED : money(row.net_income)}</td>
+                    <td>{row.revenue === null ? NOT_VERIFIED : money(row.revenue, report.currency)}</td>
+                    <td>{row.net_income === null ? NOT_VERIFIED : money(row.net_income, report.currency)}</td>
                     <td>
                       {row.url ? (
                         <a href={row.url} target="_blank" rel="noreferrer">

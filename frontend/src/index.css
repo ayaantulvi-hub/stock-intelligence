@@ -158,3 +158,7 @@ td.wrap { white-space: normal; min-width: 190px; }
 .why h4 { font-size: 1rem; margin: 0 0 4px; }
 .why ul { margin: 0; padding-left: 18px; }
 .step { padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 1.05rem; }
+.how-much { margin-top: 10px; }
+.how-much label { display: block; font-size: 0.9rem; color: var(--muted); max-width: 280px; }
+.how-much input { display: block; width: 100%; box-sizing: border-box; margin-top: 2px; }
+.how-much p { margin: 8px 0 0; color: var(--text); max-width: 62ch; }

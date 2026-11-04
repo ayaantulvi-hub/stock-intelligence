@@ -30,10 +30,14 @@ ACCESSION_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/"
 FACT_TAGS = {
     "us-gaap": (
         "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "RevenuesNetOfInterestExpense",
         "Revenues",
         "SalesRevenueNet",
         "GrossProfit",
         "NetIncomeLoss",
+        "ProfitLoss",
+        "NetIncomeLossAvailableToCommonStockholdersBasic",
         "Assets",
         "Liabilities",
         "StockholdersEquity",
@@ -44,8 +48,21 @@ FACT_TAGS = {
         "LongTermDebt",
         "CashAndCashEquivalentsAtCarryingValue",
     ),
+    "ifrs-full": (
+        "Revenue",
+        "GrossProfit",
+        "ProfitLoss",
+        "Assets",
+        "Equity",
+        "CashFlowsFromUsedInOperatingActivities",
+        "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+        "CashAndCashEquivalents",
+        "NoncurrentBorrowings",
+    ),
     "dei": ("EntityCommonStockSharesOutstanding",),
 }
+# A new holding company took over, so its filing history sits under the old number.
+PREDECESSORS = {2115436: 34088}
 MIN_SECONDS_BETWEEN_REQUESTS = 0.15
 
 
@@ -134,6 +151,14 @@ class SecProvider:
         return rows, Provenance("SEC EDGAR", url, retrieved, "end_of_day")
 
     def company_facts(self, cik: int) -> tuple[list[Fact], Provenance]:
+        """A company's figures, including any earlier company it replaced."""
+        facts, provenance = self._company_facts(cik)
+        if cik in PREDECESSORS:
+            earlier, _ = self._company_facts(PREDECESSORS[cik])
+            facts = earlier + facts
+        return facts, provenance
+
+    def _company_facts(self, cik: int) -> tuple[list[Fact], Provenance]:
         url = FACTS_URL.format(cik=cik)
         data = self._get(url, f"SEC facts CIK {cik}")
         retrieved = datetime.now(UTC)

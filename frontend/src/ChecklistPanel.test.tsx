@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
-import ChecklistPanel, { sharesForRisk } from "./ChecklistPanel";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import ChecklistPanel, { HowMuch, sharesForRisk } from "./ChecklistPanel";
 
 afterEach(() => {
   cleanup();
@@ -69,4 +69,17 @@ test("shows checks with their state", async () => {
   expect(await screen.findByText("90.00")).toBeTruthy();
   expect(screen.getByText("Fixture stop reason.")).toBeTruthy();
   expect(screen.getByText("No stop")).toBeTruthy();
+});
+
+test("suggests an amount from the money entered", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      status: 200,
+      json: async () => ({ levels: { price: 100, stop: 90 } }),
+    })),
+  );
+  render(<HowMuch ticker="AAA" />);
+  fireEvent.change(screen.getByLabelText(/Your total money/), { target: { value: "10000" } });
+  expect(await screen.findByText(/Up to 10 shares, about \$1000.00/)).toBeTruthy();
 });

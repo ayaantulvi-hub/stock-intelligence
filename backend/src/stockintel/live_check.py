@@ -301,7 +301,9 @@ def probe_tags() -> None:
 
 
 def main() -> None:
-    probe_tags()
+    from stockintel import audit
+
+    audit.run(create_engine(Settings().database_url))
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,

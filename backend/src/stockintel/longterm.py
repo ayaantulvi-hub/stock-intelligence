@@ -10,12 +10,25 @@ import pandas as pd
 CAPEX_TAGS = (
     "PaymentsToAcquirePropertyPlantAndEquipment",
     "PaymentsToAcquireProductiveAssets",
+    "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
 )
 REVENUE_TAGS = (
-    "RevenueFromContractWithCustomerExcludingAssessedTax",
     "Revenues",
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "RevenueFromContractWithCustomerIncludingAssessedTax",
+    "RevenuesNetOfInterestExpense",
     "SalesRevenueNet",
+    "Revenue",
 )
+INCOME_TAGS = ("NetIncomeLoss", "ProfitLoss", "NetIncomeLossAvailableToCommonStockholdersBasic")
+CASH_FLOW_TAGS = (
+    "NetCashProvidedByUsedInOperatingActivities",
+    "CashFlowsFromUsedInOperatingActivities",
+)
+EQUITY_TAGS = ("StockholdersEquity", "Equity")
+CASH_TAGS = ("CashAndCashEquivalentsAtCarryingValue", "CashAndCashEquivalents")
+DEBT_TAGS = ("LongTermDebtNoncurrent", "LongTermDebt", "NoncurrentBorrowings")
+YEARLY_FORMS = ("10-K", "10-K/A", "20-F", "20-F/A", "40-F")
 YEARS = 10
 GROWTH_CAP = 0.15
 CASE_GAP = 0.05
@@ -28,13 +41,13 @@ def _annual_flow(facts: pd.DataFrame, tag: str) -> pd.DataFrame:
     if rows.empty:
         return rows
     days = (pd.to_datetime(rows["period_end"]) - pd.to_datetime(rows["period_start"])).dt.days
-    rows = rows[days.between(350, 380) & (rows["form"].isin(["10-K", "10-K/A"]))]
+    rows = rows[days.between(350, 380) & rows["form"].isin(YEARLY_FORMS)]
     return rows.sort_values("filed").drop_duplicates("period_end").sort_values("period_end")
 
 
 def _year_end(facts: pd.DataFrame, tag: str) -> pd.DataFrame:
     rows = facts[(facts["tag"] == tag) & facts["period_start"].isna()]
-    rows = rows[rows["form"].isin(["10-K", "10-K/A"])]
+    rows = rows[rows["form"].isin(YEARLY_FORMS)]
     return rows.sort_values("filed").drop_duplicates("period_end").sort_values("period_end")
 
 
@@ -67,6 +80,24 @@ def _best_flow(facts: pd.DataFrame, tags: tuple[str, ...]) -> pd.DataFrame:
     return joined.sort_values("period_end")
 
 
+def _largest_flow(facts: pd.DataFrame, tags: tuple[str, ...]) -> pd.DataFrame:
+    """For revenue, some labels are only a part of the total, so take the largest each year."""
+    tables = [_annual_flow(facts, tag) for tag in tags]
+    tables = [table for table in tables if len(table)]
+    if not tables:
+        return pd.DataFrame()
+    joined = pd.concat(tables).sort_values("value", ascending=False)
+    return joined.drop_duplicates("period_end").sort_values("period_end")
+
+
+def _best_end(facts: pd.DataFrame, tags: tuple[str, ...]) -> pd.DataFrame:
+    tables = [_year_end(facts, tag) for tag in tags]
+    tables = [table for table in tables if len(table)]
+    if not tables:
+        return pd.DataFrame()
+    return pd.concat(tables).drop_duplicates("period_end").sort_values("period_end")
+
+
 def _same_year(first, second) -> bool:
     return first is not None and second is not None and first["period_end"] == second["period_end"]
 
@@ -91,17 +122,15 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
     if facts.empty:
         return empty
 
-    revenue_table = _best_flow(facts, REVENUE_TAGS)
+    revenue_table = _largest_flow(facts, REVENUE_TAGS)
     revenue = _latest(revenue_table)
     gross = _latest(_annual_flow(facts, "GrossProfit"))
-    income = _latest(_annual_flow(facts, "NetIncomeLoss"))
-    cash_flow = _latest(_annual_flow(facts, "NetCashProvidedByUsedInOperatingActivities"))
+    income = _latest(_best_flow(facts, INCOME_TAGS))
+    cash_flow = _latest(_best_flow(facts, CASH_FLOW_TAGS))
     capex = _latest(_best_flow(facts, CAPEX_TAGS))
-    equity = _latest(_year_end(facts, "StockholdersEquity"))
-    cash = _latest(_year_end(facts, "CashAndCashEquivalentsAtCarryingValue"))
-    debt = _latest(_year_end(facts, "LongTermDebtNoncurrent"))
-    if debt is None:
-        debt = _latest(_year_end(facts, "LongTermDebt"))
+    equity = _latest(_best_end(facts, EQUITY_TAGS))
+    cash = _latest(_best_end(facts, CASH_TAGS))
+    debt = _latest(_best_end(facts, DEBT_TAGS))
     shares_rows = facts[facts["tag"] == "EntityCommonStockSharesOutstanding"]
     shares = None if shares_rows.empty else shares_rows.sort_values("filed").iloc[-1]
 
@@ -116,7 +145,12 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
     free_cash = None
     if _same_year(cash_flow, capex):
         free_cash = float(cash_flow["value"] - capex["value"])
-    market_value = float(price * shares["value"]) if price and shares is not None else None
+    currency = None if revenue is None else revenue["unit"]
+    in_dollars = currency == "USD" or currency is None
+    # Shares trade in dollars. Figures in another currency can't be compared with the price.
+    market_value = (
+        float(price * shares["value"]) if price and shares is not None and in_dollars else None
+    )
 
     def share_of(value):
         return None if value is None or not market_value else value / market_value
@@ -125,7 +159,7 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
         value = None if row is None else float(row["value"])
         return _metric(name, value, "money", [] if row is None else [row])
 
-    income_table = _annual_flow(facts, "NetIncomeLoss")
+    income_table = _best_flow(facts, INCOME_TAGS)
     history = []
     if len(revenue_table) and len(income_table):
         joined = revenue_table[["period_end", "value"]].merge(
@@ -200,7 +234,12 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
     ]
 
     can_value = bool(
-        free_cash and free_cash > 0 and shares is not None and shares["value"] > 0 and price
+        free_cash
+        and free_cash > 0
+        and shares is not None
+        and shares["value"] > 0
+        and price
+        and in_dollars
     )
     start = 0.0 if growth is None else min(max(growth, 0.0), GROWTH_CAP)
     assumptions = {
@@ -228,6 +267,7 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
     return {
         "available": True,
         "price": price,
+        "currency": currency or "USD",
         "metrics": metrics,
         "history": history,
         "assumptions": assumptions,
@@ -271,10 +311,10 @@ def point_in_time(facts: pd.DataFrame) -> pd.DataFrame:
     revenue_free = _annual_flow(facts, "GrossProfit")
     parts = [
         series(revenue_free, "gross"),
-        series(_annual_flow(facts, "NetIncomeLoss"), "income"),
-        series(_annual_flow(facts, "NetCashProvidedByUsedInOperatingActivities"), "cash_flow"),
+        series(_best_flow(facts, INCOME_TAGS), "income"),
+        series(_best_flow(facts, CASH_FLOW_TAGS), "cash_flow"),
         series(_year_end(facts, "Assets"), "assets"),
-        series(_year_end(facts, "StockholdersEquity"), "equity"),
+        series(_best_end(facts, EQUITY_TAGS), "equity"),
     ]
     table = None
     for part in parts:
@@ -336,7 +376,7 @@ def quarterly_changes(facts: pd.DataFrame) -> pd.DataFrame:
         merged["available"] = pd.to_datetime(merged["filed"]) + pd.Timedelta(days=1)
         return merged[["period_end", "available", name]]
 
-    income = change(quarters(["NetIncomeLoss"]), "income_q")
+    income = change(quarters(list(INCOME_TAGS[:1])), "income_q")
     sales = change(quarters(REVENUE_TAGS), "revenue_q")
     table = income.merge(sales, on="period_end", how="outer", suffixes=("", "_sales"))
     table["available"] = table["available"].fillna(table["available_sales"])

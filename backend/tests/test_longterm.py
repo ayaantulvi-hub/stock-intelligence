@@ -363,3 +363,28 @@ def test_a_zero_share_count_gives_no_valuation():
     frame = company()
     frame.loc[frame["tag"] == "EntityCommonStockSharesOutstanding", "value"] = 0.0
     assert longterm.report(frame, 10.0)["cases"] == []
+
+
+def test_largest_revenue_label_is_used_when_one_is_only_a_part():
+    frame = pd.DataFrame([fact(REVENUE, 2.0, 2023), fact("Revenues", 16.0, 2023)])
+    assert metric(longterm.report(frame, 10.0), "Revenue")["value"] == 16.0
+
+
+def test_profit_label_used_when_net_income_is_absent():
+    frame = pd.DataFrame([fact("Revenues", 16.0, 2023), fact("ProfitLoss", 2.0, 2023)])
+    assert metric(longterm.report(frame, 10.0), "Net income")["value"] == 2.0
+
+
+def test_foreign_filer_figures_are_read_but_not_valued_against_a_dollar_price():
+    rows = company()
+    rows = rows[rows["tag"] != "EntityCommonStockSharesOutstanding"].copy()
+    rows["unit"] = "EUR"
+    rows["form"] = "20-F"
+    shares = pd.DataFrame(
+        [fact("EntityCommonStockSharesOutstanding", 10.0, 2023, start=False, unit="shares")]
+    )
+    result = longterm.report(pd.concat([rows, shares]), 10.0)
+    assert result["currency"] == "EUR"
+    assert metric(result, "Gross margin")["value"] == pytest.approx(0.5)
+    assert result["cases"] == []
+    assert metric(result, "Earnings yield")["value"] is None

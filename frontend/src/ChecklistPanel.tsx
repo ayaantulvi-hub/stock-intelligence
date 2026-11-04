@@ -170,6 +170,68 @@ function Sizer({ suggested }: { suggested: Suggested | null }) {
   );
 }
 
+const MONEY_KEY = "stock-intelligence-total-money";
+
+function remembered() {
+  try {
+    return window.localStorage.getItem(MONEY_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function HowMuch({ ticker }: { ticker: string }) {
+  const [money, setMoney] = useState(remembered);
+  const [levels, setLevels] = useState<Suggested | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/stocks/${encodeURIComponent(ticker)}/levels`)
+      .then((response) => (response.status === 200 ? response.json() : null))
+      .then((body) => setLevels(body?.levels ?? null))
+      .catch(() => setLevels(null));
+  }, [ticker]);
+
+  const change = (value: string) => {
+    setMoney(value);
+    try {
+      window.localStorage.setItem(MONEY_KEY, value);
+    } catch {
+      // The answer still works this visit. It just won't be remembered.
+    }
+  };
+  const result = levels && sharesForRisk(Number(money), 1, levels.price, levels.stop);
+  return (
+    <div className="how-much">
+      <label>
+        Your total money to invest ($)
+        <input
+          type="number"
+          min="0"
+          step="any"
+          value={money}
+          onChange={(event) => change(event.target.value)}
+        />
+      </label>
+      {result && result.shares > 0 && (
+        <p>
+          <strong>
+            Up to {result.shares} {result.shares === 1 ? "share" : "shares"}, about $
+            {result.cost.toFixed(2)}.
+          </strong>{" "}
+          That keeps this stock under 10% of your money, and a fall to the stop would lose about $
+          {result.loss.toFixed(2)}, or {((result.loss / Number(money)) * 100).toFixed(1)}% of it.
+        </p>
+      )}
+      {result && result.shares === 0 && (
+        <p>
+          One share costs more than the 10% limit allows with this much money. Consider a smaller
+          priced stock, a fund, or fractional shares.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function ChecklistPanel({ ticker }: { ticker: string }) {
   const [checks, setChecks] = useState<Check[] | null>(null);
   const [levels, setLevels] = useState<{ levels: Suggested | null; tested: Tested[] } | null>(null);
