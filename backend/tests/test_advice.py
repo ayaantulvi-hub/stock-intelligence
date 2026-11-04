@@ -25,9 +25,9 @@ def test_lean_direction(percentile, direction, expected):
 
 
 def test_tested_result_outranks_the_paper():
-    # The paper says high volatility is bad, but this fixture test says it did better.
-    tests = {"vol_60": {"t_stat": 4.0, "spread": 0.02}}
-    row = factor_leans([{"factor": "vol_60", "percentile": 90}], tests)["factors"][0]
+    # The paper says low momentum is bad, but this fixture test says it did better.
+    tests = {"mom_12_1": {"t_stat": -4.0, "spread": -0.02}}
+    row = factor_leans([{"factor": "mom_12_1", "percentile": 10}], tests)["factors"][0]
     assert row["lean"] == "Buy"
     assert row["proven"] is True
 
@@ -196,3 +196,11 @@ def test_checklist_works_for_a_stock_with_no_data(engine):
     checks = {check["topic"]: check for check in queries.stock_checklist(engine, "AAA")}
     assert checks["Data"]["state"] == "caution"
     assert queries.stock_checklist(engine, "ZZZ") is None
+
+
+def test_survivorship_suspect_pass_is_not_proven():
+    tests = {"size": {"t_stat": -5.9, "spread": -0.012}}
+    row = factor_leans([{"factor": "size", "percentile": 10}], tests)["factors"][0]
+    assert row["proven"] is False
+    assert row["lean"] == "No lean"
+    assert "distrusted" in row["evidence"]

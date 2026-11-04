@@ -84,6 +84,14 @@ needs at least 30 tested cases that beat the baseline.
 - The insider factor is a simpler measure than Cohen, Malloy & Pomorski: net open-market
   buying, ignoring planned sales. Their published figure does not apply to it directly.
 
+## Decision support
+
+- The pre-trade checklist shows Pass, Caution or Not verified, and is never scored.
+- The 15% margin of safety, 10% single-stock limit, 1% trade risk and debt limit are common
+  rules of thumb chosen as defaults, not tested results.
+- Factor test passes for size, volatility, beta and largest daily gain are distrusted. The
+  stock list holds only today's largest companies, which favours past small, wild winners.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

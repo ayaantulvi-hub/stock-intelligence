@@ -34,6 +34,11 @@ PAPER_DIRECTION = {
 }
 
 
+# The stock list is today's largest companies, so past small or wild stocks in it are the
+# ones that went on to win. A pass for these factors is likely that bias, not a real effect.
+SURVIVORSHIP_SUSPECT = {"size", "vol_60", "vol_20", "max_ret", "beta"}
+
+
 def lean_for(percentile: int | None, direction: int | None) -> str:
     if percentile is None or direction is None:
         return "No lean"
@@ -50,18 +55,23 @@ def factor_leans(drivers: list[dict], tests: dict[str, dict]) -> dict:
     for item in drivers:
         factor, percentile = item["factor"], item["percentile"]
         test = tests.get(factor)
-        proven = test is not None and abs(test["t_stat"]) >= MIN_Z
+        passed = test is not None and abs(test["t_stat"]) >= MIN_Z
+        suspect = passed and factor in SURVIVORSHIP_SUSPECT
+        proven = passed and not suspect
         paper = PAPER_DIRECTION.get(factor)
         if proven:
             direction = 1 if test["spread"] > 0 else -1
             evidence = "Passed testing in this app"
+        elif suspect:
+            direction = None
+            evidence = "Result distrusted: likely caused by the stock list"
         elif test is not None:
             direction = paper
             evidence = "Paper only: failed testing in this app"
         else:
             direction = paper
             evidence = "Paper only: not tested in this app yet"
-        if direction is None:
+        if direction is None and not suspect:
             evidence = "No expected direction"
         rows.append(
             {
