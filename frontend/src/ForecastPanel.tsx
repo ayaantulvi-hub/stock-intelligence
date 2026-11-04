@@ -35,7 +35,36 @@ type Ideas = {
   edge: boolean;
   buy: { ticker: string; name: string }[];
   sell: { ticker: string; name: string }[];
+  top: Pick[];
+  bottom: Pick[];
 };
+type Pick = { ticker: string; name: string; rank: number; price: number; reasons: string[] };
+
+function PickList({ title, picks, tone, onOpen }: {
+  title: string;
+  picks: Pick[];
+  tone: string;
+  onOpen?: (ticker: string) => void;
+}) {
+  return (
+    <div className="picks">
+      <h3 className={tone}>{title}</h3>
+      <ol>
+        {picks.map((pick) => (
+          <li key={pick.ticker}>
+            <button className="link" onClick={() => onOpen?.(pick.ticker)}>
+              {pick.ticker}
+            </button>{" "}
+            {pick.name}
+            <small>
+              {pick.reasons.length ? `Why: ${pick.reasons.join(", ")}` : "No single factor stands out"}
+            </small>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 type Track = {
   scored: number;
   written: number;
@@ -470,7 +499,13 @@ function ComparisonView({ comparison }: { comparison: Comparison }) {
   );
 }
 
-export function IdeasPanel({ part = "today" }: { part?: "today" | "record" }) {
+export function IdeasPanel({
+  part = "today",
+  onOpen,
+}: {
+  part?: "today" | "record";
+  onOpen?: (ticker: string) => void;
+}) {
   const [ideas, setIdeas] = useState<Ideas | null>(null);
   const [track, setTrack] = useState<Track | null>(null);
   const [comparison, setComparison] = useState<Comparison | null>(null);
@@ -498,7 +533,7 @@ export function IdeasPanel({ part = "today" }: { part?: "today" | "record" }) {
     <section>
       {part === "today" ? (
         <>
-      <h2>What to do today</h2>
+      <h2>What to buy and sell today</h2>
       {!ideas.target_session ? (
         <p>No forecasts yet. They are written once a day before the US market opens.</p>
       ) : ideas.edge ? (
@@ -513,13 +548,22 @@ export function IdeasPanel({ part = "today" }: { part?: "today" | "record" }) {
           </div>
         </div>
       ) : (
-        <div className="action">
-          <strong>No reliable edge</strong>
-          <p>
-            Testing has not shown the model beats simply holding, so it names no stocks to buy or
-            sell.
-          </p>
-        </div>
+        <>
+          <div className="action">
+            <strong>Unproven picks: use with care</strong>
+            <p>
+              The model hasn't passed testing yet (no reliable edge), so these are its best guesses,
+              not recommendations. Use them as a list to research or try in Practice.
+            </p>
+          </div>
+          <div className="pick-grid">
+            <PickList title="Strongest buy leans" picks={ideas.top} tone="ok" onOpen={onOpen} />
+            <PickList title="Strongest sell leans" picks={ideas.bottom} tone="bad" onOpen={onOpen} />
+          </div>
+          <small>
+            A sell lean means avoid or review it if you own it. Ranked for the next 20 days.
+          </small>
+        </>
       )}
         </>
       ) : (

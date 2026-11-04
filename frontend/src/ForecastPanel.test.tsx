@@ -114,7 +114,14 @@ test("simple view gives the call and explains the data in plain English", async 
 
 test("names no stocks when the model has no edge", async () => {
   stub({
-    "/api/ideas": { target_session: "2026-07-08", edge: false, buy: [], sell: [] },
+    "/api/ideas": {
+      target_session: "2026-07-08",
+      edge: false,
+      buy: [],
+      sell: [],
+      top: [{ ticker: "AAA", name: "Fixture", rank: 0.99, price: 10, reasons: ["Insider trades"] }],
+      bottom: [],
+    },
     "/api/track-record": {
       scored: 0,
       written: 0,
@@ -144,7 +151,8 @@ test("names no stocks when the model has no edge", async () => {
     },
   });
   render(<IdeasPanel />);
-  expect(await screen.findByText("No reliable edge")).toBeTruthy();
+  expect(await screen.findByText("Unproven picks: use with care")).toBeTruthy();
+  expect(screen.getByText("Why: Insider trades")).toBeTruthy();
   cleanup();
   render(<IdeasPanel part="record" />);
   expect(screen.queryByText("Buy candidates")).toBeNull();

@@ -10,7 +10,7 @@ afterEach(() => {
 
 function stub(routes: Record<string, [number, unknown]>) {
   const empty: Record<string, [number, unknown]> = {
-    "/api/ideas": [200, { target_session: null, edge: false, buy: [], sell: [] }],
+    "/api/ideas": [200, { target_session: null, edge: false, buy: [], sell: [], top: [], bottom: [] }],
     "/api/track-record": [200, { scored: 0, written: 0, brier: null, evaluations: [] }],
     "/api/model-comparison": [200, null],
     "/api/screener": [200, []],

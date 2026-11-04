@@ -287,6 +287,8 @@ def test_ideas_name_no_stocks_without_an_edge(engine, panel):
     result = queries.ideas(engine)
     assert result["edge"] is False
     assert result["buy"] == [] and result["sell"] == []
+    assert result["top"][0]["ticker"] == "S1"
+    assert "reasons" in result["top"][0]
 
 
 def test_confidence_is_none_without_an_edge():

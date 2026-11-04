@@ -19,14 +19,21 @@ test("empty portfolio explains what to do", async () => {
 });
 
 test("reliability says too early and shows missing scores as Not verified", async () => {
-  respond({
+  const body = {
     days: 0,
     grade: "Too early to say",
     overall: { count: 0, brier: null, baseline: null, range_hit: null },
     calibration: [],
     recent: {},
     sectors: [],
-  });
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => ({
+      status: url === "/api/reliability" ? 200 : 500,
+      json: async () => body,
+    })),
+  );
   render(<ReliabilityPage />);
   expect(await screen.findByText("Too early to say")).toBeTruthy();
   expect(screen.getByText(/nothing has been scored/)).toBeTruthy();

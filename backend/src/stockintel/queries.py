@@ -261,28 +261,49 @@ def action(rank_edge: bool, rank: float | None) -> str:
     return "Sell candidate" if rank <= 0.1 else "No action"
 
 
-def ideas(engine: Engine) -> dict:
-    """Stocks ranked for the next 20 days, only named if the ranking passed testing."""
+def ideas(engine: Engine, count: int = 10) -> dict:
+    """The tested list if the ranking passed, and always the model's strongest leans."""
+    empty = {"target_session": None, "edge": False, "buy": [], "sell": [], "top": [], "bottom": []}
     with engine.connect() as conn:
         target = conn.execute(text("SELECT max(target_session) FROM forecasts")).scalar()
         if target is None:
-            return {"target_session": None, "edge": False, "buy": [], "sell": []}
+            return empty
         rows = _rows(
             conn.execute(
                 text(
-                    """SELECT s.ticker, s.name, f.rank_20d, f.rank_edge
+                    """SELECT s.ticker, s.name, f.rank_20d, f.rank_edge, f.last_close, f.drivers
                        FROM forecasts f JOIN securities s ON s.id = f.security_id
-                       WHERE f.target_session = :target ORDER BY f.rank_20d DESC"""
+                       WHERE f.target_session = :target AND f.rank_20d IS NOT NULL
+                       ORDER BY f.rank_20d DESC"""
                 ),
                 {"target": target},
             )
         )
     edge = bool(rows and rows[0]["rank_edge"])
+    tests = latest_factor_tests(engine)
+
+    def card(row: dict, lean: str) -> dict:
+        reasons = [
+            item["name"]
+            for item in advice.factor_leans(row["drivers"], tests)["factors"]
+            if item["lean"] == lean
+        ][:3]
+        return {
+            "ticker": row["ticker"],
+            "name": row["name"],
+            "rank": row["rank_20d"],
+            "price": row["last_close"],
+            "reasons": reasons,
+        }
+
+    plain = [{"ticker": r["ticker"], "name": r["name"], "rank_20d": r["rank_20d"]} for r in rows]
     return {
         "target_session": target,
         "edge": edge,
-        "buy": [row for row in rows if row["rank_20d"] >= 0.9] if edge else [],
-        "sell": [row for row in rows if row["rank_20d"] <= 0.1] if edge else [],
+        "buy": [row for row in plain if row["rank_20d"] >= 0.9] if edge else [],
+        "sell": [row for row in plain if row["rank_20d"] <= 0.1] if edge else [],
+        "top": [card(row, "Buy") for row in rows[:count]],
+        "bottom": [card(row, "Sell") for row in rows[-count:][::-1]],
     }
 
 

@@ -344,7 +344,7 @@ export default function App() {
       )}
       {stock && <StockView stock={stock} />}
 
-      {!stock && !failed && <IdeasPanel />}
+      {!stock && !failed && <IdeasPanel onOpen={open} />}
       {!stock && !failed && <MarketMood />}
       {!stock && !failed && <Screener onOpen={open} />}
       {backtest && <BacktestView backtest={backtest} />}
