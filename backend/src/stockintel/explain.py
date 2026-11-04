@@ -21,6 +21,41 @@ def _versus(close: float, average: float, name: str) -> str:
     return f"Last close {close:.2f} against {name} {average:.2f}, a gap of {gap:+.1f}%."
 
 
+def _money(value: float) -> str:
+    size = abs(value)
+    sign = "-" if value < 0 else ""
+    if size >= 1e9:
+        return f"{sign}${size / 1e9:.1f} billion"
+    return f"{sign}${size / 1e6:.1f} million"
+
+
+def company_lines(history: list[dict]) -> list[dict]:
+    """The latest yearly results, from SEC filings."""
+    rows = [row for row in history if row["net_income"] is not None]
+    if not rows:
+        return []
+    latest = rows[-1]
+    income = latest["net_income"]
+    text = f"Net income was {_money(income)} in the year to {latest['period_end']}."
+    tone = "good" if income > 0 else "bad"
+    if len(rows) >= 2 and rows[-2]["net_income"] > 0:
+        change = (income / rows[-2]["net_income"] - 1) * 100
+        text += f" That is {change:+.0f}% on the year before."
+        tone = "good" if change >= 0 else "bad"
+    evidence = " ".join(f"{row['period_end']}: {_money(row['net_income'])}." for row in rows)
+    return [
+        _line(
+            "Company profit",
+            tone,
+            text,
+            "Net income is what is left after all costs and tax. "
+            "Over long periods, share prices tend to follow profits.",
+            f"From yearly SEC filings. {evidence}",
+            "This comes from filings, not the chart. See the Long-term tab.",
+        )
+    ]
+
+
 def verdict_lines(forecast: dict | None, evaluations: dict[str, dict]) -> list[dict]:
     """Why the What to do box says what it says, using the model's test results."""
     test = evaluations.get("rank_20d")
@@ -56,10 +91,11 @@ def story(
     blocked: bool,
     forecast: dict | None,
     evaluations: dict[str, dict] | None = None,
+    history: list[dict] | None = None,
 ) -> list[dict]:
     if summary is None:
         return []
-    lines = verdict_lines(forecast, evaluations or {})
+    lines = verdict_lines(forecast, evaluations or {}) + company_lines(history or [])
     close = summary["close"]
     above_200, above_50 = summary["above_200"], summary["above_50"]
     if above_200 is not None:

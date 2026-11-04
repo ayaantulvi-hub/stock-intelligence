@@ -61,7 +61,14 @@ def _ratio(top, bottom) -> float | None:
 
 def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None) -> dict:
     changes = changes or {}
-    empty = {"available": False, "metrics": [], "cases": [], "assumptions": {}, "price": price}
+    empty = {
+        "available": False,
+        "metrics": [],
+        "cases": [],
+        "assumptions": {},
+        "price": price,
+        "history": [],
+    }
     if facts.empty:
         return empty
 
@@ -176,6 +183,7 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
         "available": True,
         "price": price,
         "metrics": metrics,
+        "history": history,
         "assumptions": assumptions,
         "cases": cases,
         "valuation_inputs": [

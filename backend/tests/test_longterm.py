@@ -240,3 +240,11 @@ def test_insider_feed_reads_each_document_once_within_its_limit(security):
 def test_valuation_for_a_stock_with_no_facts(security):
     assert queries.valuation(security, "AAA", {})["available"] is False
     assert queries.valuation(security, "ZZZ", {}) is None
+
+
+def test_net_income_and_yearly_history_are_shown():
+    result = longterm.report(company(), 10.0)
+    assert metric(result, "Net income")["value"] == 13.31
+    assert metric(result, "Net income")["sources"]
+    assert result["history"][-1]["net_income"] == 13.31
+    assert result["history"][-1]["revenue"] == pytest.approx(133.1)

@@ -114,3 +114,14 @@ def test_tested_signal_shows_its_record():
         "baseline_win_rate": 0.582,
     }
     assert "58.0% of 12456" in story(FACTS, [signal], False, None)[-1]["evidence"]
+
+
+def test_company_profit_is_explained_with_its_numbers():
+    history = [
+        {"period_end": "2024-12-31", "net_income": 1e9},
+        {"period_end": "2025-12-31", "net_income": 1.5e9},
+    ]
+    line = story(FACTS, [], False, None, {}, history)[0]
+    assert line["topic"] == "Company profit"
+    assert "$1.5 billion" in line["text"] and "+50%" in line["text"]
+    assert line["tone"] == "good"

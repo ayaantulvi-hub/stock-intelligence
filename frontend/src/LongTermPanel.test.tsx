@@ -34,6 +34,9 @@ const body = {
     },
     { name: "Debt to equity", value: null, kind: "ratio", sources: [] },
   ],
+  history: [
+    { period_end: "2025-12-31", revenue: 2e9, net_income: 5e8, url: "https://fixture.test/b" },
+  ],
   insider_trades: [],
 };
 
@@ -45,6 +48,7 @@ test("shows cases with sourced figures and lets assumptions change", async () =>
   const link = screen.getByText(/10-K 2025-12-31/) as HTMLAnchorElement;
   expect(link.href).toBe("https://fixture.test/a");
   expect(screen.getAllByText(/Not verified/).length).toBeGreaterThan(0);
+  expect(screen.getByText("$500.0 million")).toBeTruthy();
   fireEvent.change(screen.getByLabelText(/Base growth/), { target: { value: "10" } });
   await waitFor(() =>
     expect(String(fetchMock.mock.calls.at(-1))).toContain("base_growth=0.1"),

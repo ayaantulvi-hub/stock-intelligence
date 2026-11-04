@@ -18,6 +18,7 @@ type Report = {
   available: boolean;
   price: number | null;
   metrics: Metric[];
+  history: { period_end: string; revenue: number | null; net_income: number | null; url: string | null }[];
   cases: Case[];
   assumptions: Record<string, number>;
   valuation_inputs?: Source[];
@@ -157,6 +158,41 @@ export default function LongTermPanel({ ticker }: { ticker: string }) {
           </tbody>
         </table>
       </div>
+      {report.history.length > 0 && (
+        <>
+          <h3>Results by year</h3>
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Year to</th>
+                  <th>Revenue</th>
+                  <th>Net income</th>
+                  <th>Filing</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.history.map((row) => (
+                  <tr key={row.period_end}>
+                    <td>{row.period_end}</td>
+                    <td>{row.revenue === null ? NOT_VERIFIED : money(row.revenue)}</td>
+                    <td>{row.net_income === null ? NOT_VERIFIED : money(row.net_income)}</td>
+                    <td>
+                      {row.url ? (
+                        <a href={row.url} target="_blank" rel="noreferrer">
+                          Open
+                        </a>
+                      ) : (
+                        NOT_VERIFIED
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
       <h3>Insider trades on the open market</h3>
       {report.insider_trades.length === 0 ? (
         <p>{NOT_VERIFIED}: none stored yet.</p>

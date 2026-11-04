@@ -311,6 +311,7 @@ def stock_story(engine: Engine, ticker: str) -> list[dict] | None:
         data["signals_blocked"],
         stock_forecast(engine, ticker),
         latest_evaluations(engine),
+        (valuation(engine, ticker, {}) or {}).get("history", []),
     )
 
 
