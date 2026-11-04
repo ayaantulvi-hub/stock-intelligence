@@ -222,12 +222,6 @@ class PracticeTrade(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
 
 
-class Judgment(BaseModel):
-    view: Literal["buy", "hold", "sell", "unsure"]
-    reason: str = Field(min_length=3, max_length=1000)
-    changes_mind: str = Field(min_length=3, max_length=1000)
-
-
 class JournalEntry(BaseModel):
     ticker: str
     decision: Literal["buy", "sell", "hold", "skip"]
@@ -239,33 +233,12 @@ def stock_events(ticker: str) -> list[dict]:
     return tools.company_events(get_engine(), ticker, datetime.now(UTC).date())
 
 
-@app.get("/api/stocks/{ticker}/judgment")
-def get_judgment(ticker: str) -> list[dict]:
-    return tools.judgments(get_engine(), ticker)
-
-
-@app.post("/api/stocks/{ticker}/judgment")
-def add_judgment(ticker: str, judgment: Judgment) -> list[dict]:
-    decision = queries.stock_decision(get_engine(), ticker)
-    if decision is None:
+@app.get("/api/stocks/{ticker}/experts")
+def stock_experts(ticker: str) -> dict:
+    result = queries.expert_review(get_engine(), ticker, datetime.now(UTC).date())
+    if result is None:
         raise HTTPException(404, "Not verified: this stock is not in the covered list")
-    saved = tools.add_judgment(
-        get_engine(),
-        ticker,
-        judgment.view,
-        judgment.reason,
-        judgment.changes_mind,
-        decision["call"],
-    )
-    if not saved:
-        raise HTTPException(404, "Not verified: no price is stored for this stock")
-    return tools.judgments(get_engine(), ticker)
-
-
-@app.get("/api/judgment-record")
-def judgment_record() -> dict:
-    rows = tools.judgments(get_engine())
-    return tools.judgment_record(rows, datetime.now(UTC).date())
+    return result
 
 
 @app.get("/api/portfolio")

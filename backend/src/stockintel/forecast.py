@@ -69,6 +69,7 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         "insider",
         "insider_cluster",
         "revenue_growth",
+        "fscore",
     ):
         factors[item] = np.nan
     if not company or "raw_close" not in frame:
@@ -97,6 +98,8 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         factors["profitability"] = merged["profitability"].to_numpy()
         factors["investment"] = merged["investment"].to_numpy()
         factors["accruals"] = merged["accruals"].to_numpy()
+        if "fscore" in merged:
+            factors["fscore"] = merged["fscore"].to_numpy()
         recent = (dates["date"] - merged["available"]).dt.days <= 60
         factors["earnings_drift"] = merged["income_change"].where(recent).to_numpy()
         if held is not None:

@@ -36,6 +36,7 @@ PAPER_DIRECTION = {
     "earnings_drift": 1,
     "insider": 1,
     "insider_cluster": 1,
+    "fscore": 1,
 }
 
 
@@ -227,6 +228,8 @@ def next_step(call: str, levels: dict | None, position: dict | None) -> str:
         if stop and target
         else "Set a sell target and a stop first."
     )
+    if call == "Hold off":
+        return "Don't buy for now. Read the reason above, then look at the next stock on the list."
     if call == "Wait":
         return "Do nothing for now, and check again after the next update."
     if call in {"Buy", "Leans buy"}:
@@ -242,12 +245,44 @@ def next_step(call: str, levels: dict | None, position: dict | None) -> str:
     return f"Keep holding. {exits}"
 
 
+def apply_experts(answer: dict, review: dict | None) -> dict:
+    """Serious trouble overrides a buy. This is a written rule, not a tested edge."""
+    blocked = review.get("blocked") if review else None
+    if not blocked:
+        return answer
+    if answer["call"] in {"Buy", "Leans buy"}:
+        return {
+            **answer,
+            "call": "Hold off",
+            "reason": f"The model likes it, but hold off because {blocked}.",
+            "proven": False,
+            "kind": "neutral",
+        }
+    if answer["owned"] and answer["call"] == "Hold":
+        return {
+            **answer,
+            "call": "Hold and review",
+            "reason": f"Review this holding because {blocked}.",
+            "proven": False,
+            "kind": "sell",
+        }
+    return answer
+
+
 def brief(
-    answer: dict, lines: list[dict], checks: list[dict], levels: dict | None, position: dict | None
+    answer: dict,
+    lines: list[dict],
+    checks: list[dict],
+    levels: dict | None,
+    position: dict | None,
+    review: dict | None = None,
 ) -> dict:
     """The decision, up to three reasons each way, and one next step."""
-    good = [line["text"] for line in lines if line["tone"] == "good"]
-    bad = [line["text"] for line in lines if line["tone"] == "bad"]
+    lenses = (review or {}).get("lenses", [])
+    good = [f"{item['name']} {item['reason']}" for item in lenses if item["verdict"] == "good"]
+    bad = [f"{item['name']} {item['reason']}" for item in lenses if item["verdict"] == "bad"]
+    good += [line["text"] for line in lines if line["tone"] == "good"]
+    bad += [line["text"] for line in lines if line["tone"] == "bad"]
     good += [
         check["text"]
         for check in checks

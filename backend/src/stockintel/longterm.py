@@ -5,6 +5,8 @@ None, shown as "Not verified". The DCF cases are arithmetic on stated assumption
 the user can change. They are not forecasts of what will happen.
 """
 
+import itertools
+
 import pandas as pd
 
 CAPEX_TAGS = (
@@ -323,10 +325,120 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
         "assumptions": assumptions,
         "cases": cases,
         "receipts": receipts,
+        "equity": None if equity is None else float(equity["value"]),
         "valuation_inputs": [
             _source(r) for r in [cash_flow, capex, debt, cash, shares] if r is not None
         ],
     }
+
+
+def _year_values(facts: pd.DataFrame, tags: tuple[str, ...], flow: bool = False) -> dict:
+    table = _best_flow(facts, tags) if flow else _best_end(facts, tags)
+    return {} if table.empty else dict(zip(table["period_end"], table["value"], strict=True))
+
+
+def fscore_table(facts: pd.DataFrame) -> pd.DataFrame:
+    """Piotroski's nine tests per year, dated the day after the filing. Needs 7 to score."""
+    columns = ["period_end", "available", "fscore", "tests"]
+    assets_table = _year_end(facts, "Assets")
+    if assets_table.empty:
+        return pd.DataFrame(columns=columns)
+    assets = dict(zip(assets_table["period_end"], assets_table["value"], strict=True))
+    filed = dict(zip(assets_table["period_end"], assets_table["filed"], strict=True))
+    income = _year_values(facts, INCOME_TAGS, True)
+    cash = _year_values(facts, CASH_FLOW_TAGS, True)
+    debt = _year_values(facts, DEBT_TAGS)
+    current_assets = _year_values(facts, ("AssetsCurrent", "CurrentAssets"))
+    current_debts = _year_values(facts, ("LiabilitiesCurrent", "CurrentLiabilities"))
+    gross = _year_values(facts, ("GrossProfit",), True)
+    revenues = revenue_table(facts)
+    revenue = (
+        {} if revenues.empty else dict(zip(revenues["period_end"], revenues["value"], strict=True))
+    )
+    rows = facts[facts["tag"] == "EntityCommonStockSharesOutstanding"].sort_values("filed")
+    ends = sorted(assets)
+
+    def shares_at(day):
+        known = rows[rows["filed"] <= day]
+        return None if known.empty else float(known.iloc[-1]["value"])
+
+    def share(top, year):
+        if year not in top or not assets.get(year):
+            return None
+        return top[year] / assets[year]
+
+    def divide(top, bottom, year):
+        if year not in top or not bottom.get(year):
+            return None
+        return top[year] / bottom[year]
+
+    def better(new, old, sign=1):
+        return None if new is None or old is None else sign * (new - old) > 0
+
+    output = []
+    for before, year in itertools.pairwise(ends):
+        if not 300 <= (year - before).days <= 430:
+            continue
+        roa, old_roa = share(income, year), share(income, before)
+        now_shares, old_shares = shares_at(filed[year]), shares_at(filed[before])
+        issued = None
+        if now_shares and old_shares and 0.5 < now_shares / old_shares < 1.5:
+            issued = now_shares <= old_shares * 1.001
+        checks = [
+            None if roa is None else roa > 0,
+            None if year not in cash else cash[year] > 0,
+            better(roa, old_roa),
+            None if year not in cash or year not in income else cash[year] > income[year],
+            better(share(debt, year), share(debt, before), -1),
+            better(
+                divide(current_assets, current_debts, year),
+                divide(current_assets, current_debts, before),
+            ),
+            issued,
+            better(divide(gross, revenue, year), divide(gross, revenue, before)),
+            better(share(revenue, year), share(revenue, before)),
+        ]
+        known = [check for check in checks if check is not None]
+        output.append(
+            {
+                "period_end": year,
+                "available": pd.Timestamp(filed[year]) + pd.Timedelta(days=1),
+                "fscore": float(sum(known)) if len(known) >= 7 else float("nan"),
+                "tests": len(known),
+            }
+        )
+    return pd.DataFrame(output, columns=columns)
+
+
+def altman_z(facts: pd.DataFrame, market_value: float | None) -> float | None:
+    """Altman's 1968 score. All five parts must come from the same year."""
+    if not market_value:
+        return None
+    assets = _latest(_year_end(facts, "Assets"))
+    if assets is None or not assets["value"]:
+        return None
+    year, total = assets["period_end"], float(assets["value"])
+    parts = {
+        "current": _year_values(facts, ("AssetsCurrent", "CurrentAssets")),
+        "owed_soon": _year_values(facts, ("LiabilitiesCurrent", "CurrentLiabilities")),
+        "retained": _year_values(facts, ("RetainedEarningsAccumulatedDeficit", "RetainedEarnings")),
+        "operating": _year_values(
+            facts, ("OperatingIncomeLoss", "ProfitLossFromOperatingActivities"), True
+        ),
+        "owed": _year_values(facts, ("Liabilities",)),
+    }
+    sales = revenue_table(facts)
+    if sales.empty or sales.iloc[-1]["period_end"] != year:
+        return None
+    if any(year not in part for part in parts.values()) or not parts["owed"][year]:
+        return None
+    return float(
+        1.2 * (parts["current"][year] - parts["owed_soon"][year]) / total
+        + 1.4 * parts["retained"][year] / total
+        + 3.3 * parts["operating"][year] / total
+        + 0.6 * market_value / parts["owed"][year]
+        + 1.0 * float(sales.iloc[-1]["value"]) / total
+    )
 
 
 def discounted_value(
@@ -382,8 +494,20 @@ def point_in_time(facts: pd.DataFrame) -> pd.DataFrame:
     table["investment"] = table["assets"] / table["assets"].shift(1) - 1
     table["accruals"] = (table["income"] - table["cash_flow"]) / table["assets"]
     table["income_change"] = (table["income"] - table["income"].shift(1)) / table["assets"]
+    scores = fscore_table(facts)[["period_end", "fscore"]]
+    table = table.merge(scores, on="period_end", how="left")
     return (
-        table[["available", "equity", "profitability", "investment", "accruals", "income_change"]]
+        table[
+            [
+                "available",
+                "equity",
+                "profitability",
+                "investment",
+                "accruals",
+                "income_change",
+                "fscore",
+            ]
+        ]
         .dropna(subset=["available"])
         .sort_values("available")
     )

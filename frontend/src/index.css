@@ -166,3 +166,12 @@ td.wrap { white-space: normal; min-width: 190px; }
 .weights li { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(70px, 2fr) 3.5rem; gap: 10px; align-items: center; margin: 6px 0; font-size: 0.9rem; }
 .meter.wide { width: 100%; margin: 0; }
 .meter.wide b { display: block; height: 100%; background: var(--text); border-radius: 4px; }
+
+.traps {
+  border-left: 3px solid var(--bad, #b3261e);
+  margin: 1rem 0;
+  padding-left: 0.75rem;
+}
+.traps small {
+  display: block;
+}

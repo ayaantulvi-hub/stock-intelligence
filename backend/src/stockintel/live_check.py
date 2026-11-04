@@ -500,8 +500,38 @@ def probe_events() -> None:
         print("events list", ticker, tools.company_events(engine, ticker, today)[:2])
 
 
+def probe_experts() -> None:
+    from datetime import UTC, datetime
+
+    from sqlalchemy import text as sql
+
+    from stockintel import experts, queries
+
+    engine = create_engine(Settings().database_url)
+    today = datetime.now(UTC).date()
+    blocks = experts.stored_blocks(engine)
+    print("experts blocked", len(blocks), list(blocks.items())[:25])
+    with engine.connect() as conn:
+        rows = conn.execute(
+            sql(
+                """SELECT DISTINCT ON (security_id) detail FROM expert_reviews
+                   ORDER BY security_id, id DESC"""
+            )
+        ).scalars()
+        tally: dict = {}
+        for detail in rows:
+            for item in detail:
+                key = (item["name"], item["verdict"])
+                tally[key] = tally.get(key, 0) + 1
+    print("experts tally", sorted(tally.items()))
+    for ticker in ("NVDA", "JPM", "F", "MSTR"):
+        review = queries.expert_review(engine, ticker, today)
+        print("experts", ticker, [(i["verdict"], i["reason"]) for i in review["lenses"]])
+        print("experts traps", ticker, [t["name"] for t in review["traps"]])
+
+
 def main() -> None:
-    probe_events()
+    probe_experts()
     main_full()
 
 

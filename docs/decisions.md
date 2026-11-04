@@ -181,6 +181,9 @@ needs at least 30 tested cases that beat the baseline.
 - SEC 8-K item numbers are stored from the submissions feed. Item 2.02 gives true past
   results days, and the next date is still an estimate because no free official source
   publishes upcoming dates.
-- Your judgment is append-only, stored beside the system's call, and never feeds the model.
+- Human judgement is simulated as an expert review: published methods run as written rules
+  on stored figures. Altman's danger zone, a Piotroski score of 2 or less, or a serious 8-K
+  in 90 days overrides a buy to Hold off. That override is a safety rule, not a tested edge.
+  The Piotroski score is also a model factor. The app can't contain every book or video.
 - Several insiders buying together is a tested factor. It affects ranking only if it earns
   weight in the weekly model test.

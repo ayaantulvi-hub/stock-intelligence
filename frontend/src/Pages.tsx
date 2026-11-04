@@ -368,38 +368,6 @@ type Reliability = {
   sectors: { sector: string; count: number; brier: number | null; baseline: number | null }[];
 };
 
-type JudgmentRecord = {
-  your_calls: number;
-  your_right: number;
-  system_calls: number;
-  system_right: number;
-  disagreed: number;
-  you_won: number;
-  days: number;
-};
-
-function JudgmentScore() {
-  const { data } = useData<JudgmentRecord>("/api/judgment-record");
-  if (!data) return null;
-  return (
-    <>
-      <h3>You against the system</h3>
-      {data.your_calls === 0 ? (
-        <p>
-          Your judgment calls are scored {data.days} days after you make them. None are old enough
-          yet.
-        </p>
-      ) : (
-        <p>
-          You were right on {data.your_right} of {data.your_calls} calls. The system was right on{" "}
-          {data.system_right} of {data.system_calls}. When you disagreed, you won {data.you_won} of{" "}
-          {data.disagreed}. Right means the price moved your way, before costs.
-        </p>
-      )}
-    </>
-  );
-}
-
 export function ReliabilityPage() {
   const { data, failed } = useData<Reliability>("/api/reliability");
   const { data: check } = useData<{
@@ -418,7 +386,6 @@ export function ReliabilityPage() {
         <strong>{data.grade}</strong>
         <p>A grade needs at least 60 trading days of locked forecasts.</p>
       </div>
-      <JudgmentScore />
       <div className="glance">
         <div>
           <small>Forecasts scored</small>

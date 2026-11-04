@@ -65,6 +65,9 @@ jobs:
       - name: Forecasts
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.forecasts) }}
         run: uv run --no-dev python -m stockintel.forecast daily
+      - name: Expert review
+        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.forecasts || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.experts
       - name: Check company figures
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.audit

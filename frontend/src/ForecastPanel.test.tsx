@@ -179,7 +179,7 @@ test("explains support and resistance in everyday words", async () => {
   expect(screen.getByText(/Think of a ceiling/)).toBeTruthy();
 });
 
-test("company events and your judgment show what was stored, not invented", async () => {
+test("company events and the expert review show what was stored", async () => {
   stub({
     "/api/stocks/AAA/story": [],
     "/api/stocks/AAA/forecast": null,
@@ -190,23 +190,23 @@ test("company events and your judgment show what was stored, not invented", asyn
         date: "2026-10-01",
         url: "https://www.sec.gov/fixture",
         source: "SEC EDGAR",
-        events: [{ item: "4.02", meaning: "Said earlier accounts should no longer be relied on", serious: true }],
+        events: [{ item: "4.02", meaning: "Fixture event", serious: true }],
       },
     ],
-    "/api/stocks/AAA/judgment": [
-      {
-        created_at: "2026-10-02T00:00:00Z",
-        view: "sell",
-        reason: "Fixture reason",
-        changes_mind: "Fixture change",
-        price: 10,
-        system_call: "Buy",
-        change_percent: null,
-      },
-    ],
+    "/api/stocks/AAA/experts": {
+      agree: 1,
+      against: 0,
+      unknown: 1,
+      traps: [{ name: "Chasing a jump", source: "Fixture paper", text: "Fixture trap." }],
+      lenses: [
+        { name: "Is it cheap?", source: "s", verdict: "good", reason: "Fixture reason.", teaches: "t" },
+        { name: "Could it go bust?", source: "s", verdict: "unknown", reason: "Not verified.", teaches: "t" },
+      ],
+    },
   });
   render(<ForecastPanel ticker="AAA" />);
   expect(await screen.findByText(/something serious/)).toBeTruthy();
-  expect(await screen.findByText(/Your judgment: sell, system said Buy/)).toBeTruthy();
-  expect(await screen.findByText(/Not verified, because the stock split/)).toBeTruthy();
+  expect(await screen.findByText("Expert review: 1 in favour, 0 against")).toBeTruthy();
+  expect(screen.getByText("Fixture trap.")).toBeTruthy();
+  expect(screen.getByText("Not verified")).toBeTruthy();
 });

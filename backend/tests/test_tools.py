@@ -243,25 +243,3 @@ def test_only_recent_serious_events_count():
         {"date": date(2026, 1, 1), "events": tools.read_items("1.03")},
     ]
     assert tools.serious_events(events, today) == ["Wrote down the value of something it owns"]
-
-
-def call(view, system, change, day=date(2026, 9, 1)):
-    return {"view": view, "system_call": system, "change_percent": change, "market_date": day}
-
-
-def test_judgments_are_scored_after_four_weeks_only():
-    today = date(2026, 11, 4)
-    rows = [
-        call("buy", "Sell", 5.0),
-        call("sell", "Buy", 5.0),
-        call("hold", "Buy", 5.0),
-        call("buy", "Buy", 9.0, date(2026, 11, 1)),
-        call("buy", "Buy", None),
-    ]
-    record = tools.judgment_record(rows, today)
-    assert record["your_calls"] == 2
-    assert record["your_right"] == 1
-    assert record["system_calls"] == 3
-    assert record["system_right"] == 2
-    assert record["disagreed"] == 2
-    assert record["you_won"] == 1

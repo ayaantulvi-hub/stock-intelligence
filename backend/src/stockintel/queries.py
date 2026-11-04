@@ -5,7 +5,18 @@ from datetime import UTC, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import advice, backtest, charts, explain, factors, longterm, signals, stops, tools
+from stockintel import (
+    advice,
+    backtest,
+    charts,
+    experts,
+    explain,
+    factors,
+    longterm,
+    signals,
+    stops,
+    tools,
+)
 from stockintel.market import is_stale, latest_expected_session
 from stockintel.profiles import PROFILES
 
@@ -281,6 +292,8 @@ def ideas(engine: Engine, count: int = 10) -> dict:
         )
     edge = bool(rows and rows[0]["rank_edge"])
     tests = latest_factor_tests(engine)
+    blocks = experts.stored_blocks(engine)
+    buyable = [row for row in rows if row["ticker"] not in blocks]
 
     def card(row: dict, lean: str) -> dict:
         reasons = [
@@ -300,9 +313,11 @@ def ideas(engine: Engine, count: int = 10) -> dict:
     return {
         "target_session": target,
         "edge": edge,
-        "buy": [row for row in plain if row["rank_20d"] >= 0.9] if edge else [],
+        "buy": [r for r in plain if r["rank_20d"] >= 0.9 and r["ticker"] not in blocks]
+        if edge
+        else [],
         "sell": [row for row in plain if row["rank_20d"] <= 0.1] if edge else [],
-        "top": [card(row, "Buy") for row in rows[:count]],
+        "top": [card(row, "Buy") for row in buyable[:count]],
         "bottom": [card(row, "Sell") for row in rows[-count:][::-1]],
     }
 
@@ -598,10 +613,14 @@ def screener(engine: Engine) -> list[dict]:
                WHERE f.target_session = (SELECT max(target_session) FROM forecasts)"""
     with engine.connect() as conn:
         rows = _rows(conn.execute(text(query)))
+    blocks = experts.stored_blocks(engine)
     output = []
     for row in rows:
         name = action(row.pop("rank_edge"), row["rank"])
-        output.append({**row, "action": name, "lean": advice.overall(name, row["rank"])["lean"]})
+        lean = advice.overall(name, row["rank"])["lean"]
+        if lean == "Buy" and row["ticker"] in blocks:
+            lean = "Hold off"
+        output.append({**row, "action": name, "lean": lean})
     return output
 
 
@@ -611,11 +630,15 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
         return None
     forecast = stock_forecast(engine, ticker)
     position = get_position(engine, ticker)
-    answer = advice.decision(
-        forecast["action"] if forecast else None,
-        forecast["rank_20d"] if forecast else None,
-        data["stale"],
-        position,
+    review = expert_review(engine, ticker, datetime.now(UTC).date())
+    answer = advice.apply_experts(
+        advice.decision(
+            forecast["action"] if forecast else None,
+            forecast["rank_20d"] if forecast else None,
+            data["stale"],
+            position,
+        ),
+        review,
     )
     levels = suggested_levels(engine, ticker) or {}
     return advice.brief(
@@ -624,6 +647,40 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
         stock_checklist(engine, ticker) or [],
         levels.get("levels"),
         position,
+        review,
+    )
+
+
+def expert_review(engine: Engine, ticker: str, today, owned: bool = True) -> dict | None:
+    """The expert lenses for one stock. `owned=False` leaves the holder's own position out."""
+    with engine.connect() as conn:
+        security = conn.execute(
+            text("SELECT id, sic FROM securities WHERE ticker = :t"), {"t": ticker.upper()}
+        ).first()
+        if security is None:
+            return None
+        rows = conn.execute(
+            text(
+                """SELECT DISTINCT ON (market_date) market_date, open, high, low, close,
+                     volume, div_cash, split_factor
+                   FROM price_bars WHERE security_id = :id
+                   ORDER BY market_date, id DESC"""
+            ),
+            {"id": security.id},
+        ).all()
+    if not rows:
+        return None
+    frame = charts.adjust(pd.DataFrame([row._mapping for row in rows]))
+    earnings = tools.next_earnings(engine, ticker, today)
+    return experts.review(
+        load_facts(engine, security.id),
+        valuation(engine, ticker, {}) or {},
+        frame,
+        sic=security.sic,
+        serious=tools.serious_events(tools.company_events(engine, ticker, today), today),
+        position=get_position(engine, ticker) if owned else None,
+        earnings_in=(earnings - today).days if earnings else None,
+        outside=experts.load_outside(engine),
     )
 
 

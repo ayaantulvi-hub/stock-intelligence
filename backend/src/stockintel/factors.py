@@ -245,6 +245,15 @@ REGISTER = [
         "https://www.nber.org/papers/w16454.pdf",
     ),
     Factor(
+        "fscore",
+        "Business health score",
+        "Quality",
+        "Piotroski (2000), Journal of Accounting Research",
+        LIVE,
+        "Nine accounting tests split cheap stocks into winners and losers",
+        "https://www.jstor.org/stable/2672906",
+    ),
+    Factor(
         "insider_cluster",
         "Several insiders buying together",
         "Events",
@@ -314,6 +323,7 @@ HIGH_MEANS = {
     "issuance": "Issued more new shares than most stocks",
     "earnings_drift": "Profit rose more than most stocks in a recent yearly report",
     "insider": "Insiders bought more on the open market than at most stocks",
+    "fscore": "Passed more business health tests than most stocks",
     "insider_cluster": "More different insiders bought recently than at most stocks",
 }
 

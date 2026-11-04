@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ChecklistPanel, { HowMuch } from "./ChecklistPanel";
 import PositionPanel from "./PositionPanel";
 
@@ -380,112 +380,71 @@ function CompanyEvents({ ticker }: { ticker: string }) {
   );
 }
 
-type Judgment = {
-  created_at: string;
-  view: string;
-  reason: string;
-  changes_mind: string;
-  price: number;
-  system_call: string;
-  change_percent: number | null;
+type Lens = { name: string; source: string; verdict: string; reason: string; teaches: string };
+type Trap = { name: string; source: string; text: string };
+type Review = { lenses: Lens[]; agree: number; against: number; unknown: number; traps: Trap[] };
+const VERDICTS: Record<string, [string, string]> = {
+  good: ["Yes", "ok"],
+  bad: ["No", "bad"],
+  mixed: ["Mixed", ""],
+  unknown: ["Not verified", ""],
 };
-const QUESTIONS = [
-  "Can I explain in one sentence how this company makes money?",
-  "Is there news the numbers can't see yet, such as a new product, lawsuit or leadership change?",
-  "Am I buying because of a reason, or because the price has been rising?",
-  "If it fell 20% tomorrow, would I buy more or panic?",
-];
 
-function YourJudgment({ ticker, systemCall }: { ticker: string; systemCall: string | null }) {
-  const url = `/api/stocks/${encodeURIComponent(ticker)}/judgment`;
-  const [rows, setRows] = useState<Judgment[]>([]);
-  const [form, setForm] = useState({ view: "buy", reason: "", changes_mind: "" });
-  const [error, setError] = useState<string | null>(null);
+function ExpertReview({ ticker }: { ticker: string }) {
+  const [review, setReview] = useState<Review | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    getJson<Judgment[]>(url)
-      .then((found) => setRows(found ?? []))
-      .catch(() => setError("Could not load your judgments."));
-  }, [url]);
-  const save = async (event: FormEvent) => {
-    event.preventDefault();
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    const result = await response.json();
-    if (response.status !== 200) {
-      setError(typeof result.detail === "string" ? result.detail : "Could not save.");
-      return;
-    }
-    setRows(result);
-    setError(null);
-    setForm({ view: "buy", reason: "", changes_mind: "" });
-  };
-  const latest = rows[0];
+    getJson<Review>(`/api/stocks/${encodeURIComponent(ticker)}/experts`)
+      .then(setReview)
+      .catch(() => setFailed(true));
+  }, [ticker]);
+  if (failed) return <p className="bad">Could not load the expert review. Refresh to try again.</p>;
+  if (!review?.lenses) return null;
   return (
-    <details className="fold">
-      <summary>
-        Your judgment
-        {latest && `: ${latest.view}, system said ${latest.system_call}`}
-      </summary>
-      <small>
-        The system can't see everything. Your view is saved beside its call and never changes the
-        model, so later you can see who was right.
-      </small>
-      <ul>
-        {QUESTIONS.map((question) => (
-          <li key={question}>{question}</li>
-        ))}
-      </ul>
-      <form onSubmit={save} className="inputs">
-        <label>
-          My view
-          <select value={form.view} onChange={(e) => setForm({ ...form, view: e.target.value })}>
-            <option value="buy">Buy</option>
-            <option value="hold">Hold</option>
-            <option value="sell">Sell</option>
-            <option value="unsure">Unsure</option>
-          </select>
-        </label>
-        <label>
-          Why?
-          <input
-            required
-            minLength={3}
-            value={form.reason}
-            onChange={(e) => setForm({ ...form, reason: e.target.value })}
-          />
-        </label>
-        <label>
-          What would change my mind?
-          <input
-            required
-            minLength={3}
-            value={form.changes_mind}
-            onChange={(e) => setForm({ ...form, changes_mind: e.target.value })}
-          />
-        </label>
-        <button type="submit" disabled={!systemCall}>
-          Save my judgment
-        </button>
-      </form>
-      {error && <p className="bad">{error}</p>}
-      {rows.length > 0 && (
-        <ul>
-          {rows.map((row) => (
-            <li key={row.created_at}>
-              {row.created_at.slice(0, 10)}: you said {row.view} at {row.price.toFixed(2)}, the
-              system said {row.system_call}.{" "}
-              {row.change_percent === null
-                ? "Change since: Not verified, because the stock split."
-                : `Change since: ${row.change_percent.toFixed(1)}%.`}{" "}
-              {row.reason} I'd change my mind if: {row.changes_mind}
-            </li>
-          ))}
-        </ul>
+    <>
+      {review.traps.length > 0 && (
+        <div className="traps">
+          <h4>Before you decide</h4>
+          <ul>
+            {review.traps.map((trap) => (
+              <li key={trap.name}>
+                <b>{trap.name}.</b> {trap.text} <small>{trap.source}</small>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
-    </details>
+      <details className="fold">
+        <summary>
+          Expert review: {review.agree} in favour, {review.against} against
+        </summary>
+        <small>
+          Published investing methods run as fixed rules on this company's real figures. They are
+          not the opinion of any named investor. Most are not proven in this app.
+        </small>
+        <div className="scroll">
+          <table>
+            <tbody>
+              {review.lenses.map((lens) => {
+                const [word, tone] = VERDICTS[lens.verdict];
+                return (
+                  <tr key={lens.name}>
+                    <td>{lens.name}</td>
+                    <td className={tone}>{word}</td>
+                    <td>
+                      {lens.reason}
+                      <small>
+                        {lens.teaches} {lens.source}.
+                      </small>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </>
   );
 }
 
@@ -558,7 +517,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
         )}
       </div>
       <CompanyEvents ticker={ticker} />
-      <YourJudgment ticker={ticker} systemCall={decision?.call ?? null} />
+      <ExpertReview ticker={ticker} />
       <details className="fold">
         <summary>{decision?.owned ? "Your position" : "I own this stock"}</summary>
         <PositionPanel ticker={ticker} onChange={loadDecision} />
