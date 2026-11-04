@@ -327,14 +327,18 @@ def warnings(report: dict) -> list[str]:
 
 
 def next_earnings(engine: Engine, ticker: str, today: date) -> date | None:
-    """An estimate: about 91 days after the last quarterly or yearly report."""
-    query = """SELECT max(f.filing_date) FROM filings f JOIN securities s ON s.id = f.security_id
-               WHERE s.ticker = :t AND f.form IN ('10-Q', '10-K')"""
+    """An estimate: companies tend to report on a similar date each year."""
+    query = """SELECT f.filing_date FROM filings f JOIN securities s ON s.id = f.security_id
+               WHERE s.ticker = :t AND f.form IN ('10-Q', '10-K') ORDER BY f.filing_date"""
     with engine.connect() as conn:
-        last = conn.execute(text(query), {"t": ticker.upper()}).scalar()
-    if last is None:
+        dates = list(conn.execute(text(query), {"t": ticker.upper()}).scalars())
+    if not dates:
         return None
-    estimate = last + timedelta(days=91)
+    for filed in dates:
+        same_time_next_year = filed + timedelta(days=364)
+        if today <= same_time_next_year <= today + timedelta(days=100):
+            return same_time_next_year
+    estimate = dates[-1] + timedelta(days=91)
     return estimate if estimate >= today else None
 
 

@@ -39,6 +39,7 @@ FACT_TAGS = {
         "StockholdersEquity",
         "NetCashProvidedByUsedInOperatingActivities",
         "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
         "LongTermDebtNoncurrent",
         "LongTermDebt",
         "CashAndCashEquivalentsAtCarryingValue",

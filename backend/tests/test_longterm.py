@@ -326,3 +326,34 @@ def test_stock_with_trades_but_no_facts_does_not_crash():
     assert longterm.shares_history(pd.DataFrame()).empty
     assert longterm.point_in_time(pd.DataFrame()).empty
     assert longterm.quarterly_changes(pd.DataFrame()).empty
+
+
+def test_a_retired_revenue_label_is_not_used_for_new_years():
+    frame = pd.DataFrame(
+        [
+            fact(REVENUE, 26.0, 2021),
+            fact("Revenues", 60.0, 2022),
+            fact("Revenues", 130.0, 2023),
+            fact("GrossProfit", 97.0, 2023),
+        ]
+    )
+    result = longterm.report(frame, 10.0)
+    assert metric(result, "Revenue")["value"] == 130.0
+    assert metric(result, "Gross margin")["value"] == pytest.approx(97 / 130)
+
+
+def test_figures_from_different_years_are_never_combined():
+    frame = pd.DataFrame([fact(REVENUE, 26.0, 2021), fact("GrossProfit", 153.0, 2023)])
+    assert metric(longterm.report(frame, 10.0), "Gross margin")["value"] is None
+
+
+def test_old_capital_spending_cannot_inflate_free_cash_flow():
+    frame = pd.DataFrame([fact(OCF, 100.0, 2023), fact(CAPEX, 1.0, 2020)])
+    assert metric(longterm.report(frame, 10.0), "Free cash flow")["value"] is None
+
+
+def test_capital_spending_label_change_is_followed():
+    frame = pd.DataFrame(
+        [fact(OCF, 100.0, 2023), fact("PaymentsToAcquireProductiveAssets", 6.0, 2023)]
+    )
+    assert metric(longterm.report(frame, 10.0), "Free cash flow")["value"] == 94.0

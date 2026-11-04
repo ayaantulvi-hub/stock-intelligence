@@ -7,6 +7,10 @@ the user can change. They are not forecasts of what will happen.
 
 import pandas as pd
 
+CAPEX_TAGS = (
+    "PaymentsToAcquirePropertyPlantAndEquipment",
+    "PaymentsToAcquireProductiveAssets",
+)
 REVENUE_TAGS = (
     "RevenueFromContractWithCustomerExcludingAssessedTax",
     "Revenues",
@@ -53,8 +57,23 @@ def _metric(name: str, value: float | None, kind: str, sources: list) -> dict:
     return {"name": name, "value": value, "kind": kind, "sources": [_source(s) for s in sources]}
 
 
+def _best_flow(facts: pd.DataFrame, tags: tuple[str, ...]) -> pd.DataFrame:
+    """Companies change labels over time, so join them, preferring earlier tags for a year."""
+    tables = [_annual_flow(facts, tag) for tag in tags]
+    tables = [table for table in tables if len(table)]
+    if not tables:
+        return pd.DataFrame()
+    joined = pd.concat(tables).drop_duplicates("period_end")
+    return joined.sort_values("period_end")
+
+
+def _same_year(first, second) -> bool:
+    return first is not None and second is not None and first["period_end"] == second["period_end"]
+
+
 def _ratio(top, bottom) -> float | None:
-    if top is None or bottom is None or bottom["value"] == 0:
+    # A ratio of two different years would be meaningless, so it stays Not verified.
+    if not _same_year(top, bottom) or bottom["value"] == 0:
         return None
     return float(top["value"] / bottom["value"])
 
@@ -72,16 +91,12 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
     if facts.empty:
         return empty
 
-    revenue_table = pd.DataFrame()
-    for tag in REVENUE_TAGS:
-        revenue_table = _annual_flow(facts, tag)
-        if len(revenue_table):
-            break
+    revenue_table = _best_flow(facts, REVENUE_TAGS)
     revenue = _latest(revenue_table)
     gross = _latest(_annual_flow(facts, "GrossProfit"))
     income = _latest(_annual_flow(facts, "NetIncomeLoss"))
     cash_flow = _latest(_annual_flow(facts, "NetCashProvidedByUsedInOperatingActivities"))
-    capex = _latest(_annual_flow(facts, "PaymentsToAcquirePropertyPlantAndEquipment"))
+    capex = _latest(_best_flow(facts, CAPEX_TAGS))
     equity = _latest(_year_end(facts, "StockholdersEquity"))
     cash = _latest(_year_end(facts, "CashAndCashEquivalentsAtCarryingValue"))
     debt = _latest(_year_end(facts, "LongTermDebtNoncurrent"))
@@ -99,7 +114,7 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
             growth_sources = [first, last]
 
     free_cash = None
-    if cash_flow is not None and capex is not None:
+    if _same_year(cash_flow, capex):
         free_cash = float(cash_flow["value"] - capex["value"])
     market_value = float(price * shares["value"]) if price and shares is not None else None
 

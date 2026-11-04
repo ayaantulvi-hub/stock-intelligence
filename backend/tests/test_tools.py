@@ -193,7 +193,7 @@ def test_warning_signs():
     assert tools.warnings({"metrics": [], "history": []}) == []
 
 
-def test_earnings_estimate_is_about_a_quarter_after_the_last_report(engine):
+def test_earnings_estimate_uses_last_year_then_a_quarter(engine):
     security = seed(engine)
     with engine.begin() as conn:
         fetch = conn.execute(
@@ -211,7 +211,8 @@ def test_earnings_estimate_is_about_a_quarter_after_the_last_report(engine):
             {"s": security, "f": fetch},
         )
     assert tools.next_earnings(engine, "AAA", date(2026, 6, 1)) == date(2026, 7, 31)
-    assert tools.next_earnings(engine, "AAA", date(2026, 9, 1)) is None
+    assert tools.next_earnings(engine, "AAA", date(2027, 4, 1)) == date(2027, 4, 30)
+    assert tools.next_earnings(engine, "AAA", date(2027, 9, 1)) is None
 
 
 def test_market_mood_with_no_data_is_not_verified(engine):
