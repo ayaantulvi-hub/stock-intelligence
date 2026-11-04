@@ -575,21 +575,20 @@ export function IdeasPanel({
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      getJson<Ideas>("/api/ideas"),
-      getJson<Track>("/api/track-record"),
-      getJson<Comparison | null>("/api/model-comparison"),
-    ])
-      .then(([nextIdeas, nextTrack, nextComparison]) => {
-        setIdeas(nextIdeas);
-        setTrack(nextTrack);
-        setComparison(nextComparison);
-      })
+    // Each part loads alone, so a problem with one can't hide the buy and sell lists.
+    getJson<Ideas>("/api/ideas")
+      .then(setIdeas)
       .catch(() => setFailed(true));
+    getJson<Track>("/api/track-record")
+      .then(setTrack)
+      .catch(() => setTrack(null));
+    getJson<Comparison | null>("/api/model-comparison")
+      .then(setComparison)
+      .catch(() => setComparison(null));
   }, []);
 
   if (failed) return <p className="bad">Forecast summary failed to load. Not verified.</p>;
-  if (!ideas || !track) return null;
+  if (!ideas) return null;
   const list = (items: Ideas["buy"]) =>
     items.length ? items.map((item) => item.ticker).join(", ") : "None";
   return (
@@ -629,7 +628,7 @@ export function IdeasPanel({
         </>
       )}
         </>
-      ) : (
+      ) : track ? (
         <>
       <h3>Model track record</h3>
       <div className="glance">
@@ -664,7 +663,7 @@ export function IdeasPanel({
       </div>
           {comparison && <ComparisonView comparison={comparison} />}
         </>
-      )}
+      ) : null}
     </section>
   );
 }

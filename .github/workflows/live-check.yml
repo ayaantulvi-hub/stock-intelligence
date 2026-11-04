@@ -23,4 +23,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv sync
+      - run: uv run alembic upgrade head
       - run: uv run python -m stockintel.live_check
