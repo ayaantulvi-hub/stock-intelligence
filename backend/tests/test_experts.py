@@ -78,8 +78,27 @@ def test_altman_needs_every_part():
     assert longterm.altman_z(healthy(), None) is None
 
 
-def test_banks_get_no_altman_score():
+def test_banks_and_utilities_get_no_altman_score():
     assert experts.altman(healthy(), 200.0, 6021)["verdict"] == experts.UNKNOWN
+    assert experts.altman(healthy(), 200.0, 4911)["verdict"] == experts.UNKNOWN
+
+
+def test_a_company_with_no_filings_is_reviewed_without_crashing():
+    frame = prices(np.linspace(50, 100, 300))
+    result = experts.review(pd.DataFrame(), {}, frame, sic=None, serious=[])
+    assert result["unknown"] >= 4
+    assert result["blocked"] is None
+
+
+def test_altman_danger_alone_does_not_block():
+    danger = experts.lens("Could it go bust?", "s", experts.BAD, "Danger.", "t")
+    assert experts.block_reason([{**danger, "z": 1.0}]) is None
+
+
+def test_routine_filing_warns_but_only_severe_ones_block():
+    assert experts.block_reason([experts.filings_lens(["Changed its auditor"])]) is None
+    severe = experts.filings_lens(["Said earlier accounts should no longer be relied on"])
+    assert "serious filing" in experts.block_reason([severe])
 
 
 def test_graham_number():
@@ -114,7 +133,8 @@ def verdict_for(call, owned=False):
 
 def test_serious_trouble_overrides_a_buy_and_says_why():
     danger = experts.lens("Could it go bust?", "s", experts.BAD, "Danger zone.", "t")
-    review = {"blocked": experts.block_reason([{**danger, "z": 1.0}])}
+    health = experts.lens("Health", "s", experts.MIXED, "Scores 3.", "t")
+    review = {"blocked": experts.block_reason([{**health, "score": 3}, {**danger, "z": 1.0}])}
     result = advice.apply_experts(verdict_for("Buy"), review)
     assert result["call"] == "Hold off"
     assert result["proven"] is False

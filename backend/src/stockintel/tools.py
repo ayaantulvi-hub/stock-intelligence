@@ -227,6 +227,10 @@ EVENT_MEANINGS = {
     "8.01": ("Reported other news", False),
 }
 SERIOUS_DAYS = 90
+# These alone can change whether a company is safe to own. Others are worth a warning, since
+# a restructuring or a new auditor can be routine.
+SEVERE_ITEMS = ("1.03", "2.04", "3.01", "4.02")
+SEVERE_EVENTS = {EVENT_MEANINGS[item][0] for item in SEVERE_ITEMS}
 
 
 def read_items(items: str) -> list[dict]:

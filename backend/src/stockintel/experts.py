@@ -18,9 +18,11 @@ from sqlalchemy import Engine, text
 from stockintel import longterm
 from stockintel.charts import sma
 from stockintel.db import get_engine
+from stockintel.tools import SEVERE_EVENTS
 
 GOOD, BAD, MIXED, UNKNOWN = "good", "bad", "mixed", "unknown"
 F_STRONG, F_WEAK = 7, 2
+Z_NEEDS_HEALTH = 4
 Z_SAFE, Z_DISTRESS = 2.99, 1.81
 GRAHAM_LIMIT = 22.5
 SURGE = 0.25
@@ -59,8 +61,14 @@ def piotroski(facts: pd.DataFrame) -> dict:
 def altman(facts: pd.DataFrame, market_value: float | None, sic: int | None) -> dict:
     name, source = "Could it go bust?", "Altman (1968)"
     teaches = "A formula from company accounts that separated failing firms from healthy ones."
-    if sic is not None and 6000 <= sic <= 6999:
-        return lens(name, source, UNKNOWN, "Not verified: the formula doesn't suit banks.", teaches)
+    if sic is not None and (6000 <= sic <= 6999 or 4900 <= sic <= 4999):
+        return lens(
+            name,
+            source,
+            UNKNOWN,
+            "Not verified: the formula doesn't suit banks or utilities.",
+            teaches,
+        )
     value = longterm.altman_z(facts, market_value)
     if value is None:
         return lens(name, source, UNKNOWN, "Not verified: a figure it needs is missing.", teaches)
@@ -163,7 +171,8 @@ def filings_lens(serious: list[str]) -> dict:
     name, source = "Any trouble in its filings?", "SEC Form 8-K"
     teaches = "Experienced investors read what a company must report before trusting the numbers."
     if serious:
-        return lens(name, source, BAD, "; ".join(serious) + ".", teaches)
+        severe = any(event in SEVERE_EVENTS for event in serious)
+        return {**lens(name, source, BAD, "; ".join(serious) + ".", teaches), "severe": severe}
     return lens(name, source, GOOD, "Nothing serious in the last 90 days.", teaches)
 
 
@@ -225,14 +234,16 @@ def mental_traps(
 
 def block_reason(lenses: list[dict]) -> str | None:
     """A rule that overrides a buy. Each is a sign of serious trouble, not a matter of taste."""
+    health = next((item["score"] for item in lenses if "score" in item), None)
     for item in lenses:
         if item["verdict"] != BAD:
             continue
-        if "z" in item:
-            return f"its accounts are in Altman's danger zone ({item['reason']})"
-        if item.get("score", F_WEAK + 1) <= F_WEAK:
+        # Debt-funded finance arms can trip this score alone, so weak health must agree.
+        if "z" in item and health is not None and health <= Z_NEEDS_HEALTH:
+            return f"its accounts are in Altman's danger zone and its health score is {health}"
+        if "score" in item and item["score"] <= F_WEAK:
             return f"it fails most business health tests ({item['reason']})"
-        if item["name"] == "Any trouble in its filings?":
+        if item.get("severe"):
             return f"of a serious filing: {item['reason']}"
     return None
 

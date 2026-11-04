@@ -129,6 +129,8 @@ def _bank_revenue(facts: pd.DataFrame) -> pd.DataFrame:
 
 
 def revenue_table(facts: pd.DataFrame) -> pd.DataFrame:
+    if facts.empty:
+        return pd.DataFrame()
     bank = _bank_revenue(facts)
     largest = _largest_flow(facts, REVENUE_TAGS)
     if bank.empty:
@@ -340,6 +342,8 @@ def _year_values(facts: pd.DataFrame, tags: tuple[str, ...], flow: bool = False)
 def fscore_table(facts: pd.DataFrame) -> pd.DataFrame:
     """Piotroski's nine tests per year, dated the day after the filing. Needs 7 to score."""
     columns = ["period_end", "available", "fscore", "tests"]
+    if facts.empty:
+        return pd.DataFrame(columns=columns)
     assets_table = _year_end(facts, "Assets")
     if assets_table.empty:
         return pd.DataFrame(columns=columns)
@@ -412,7 +416,7 @@ def fscore_table(facts: pd.DataFrame) -> pd.DataFrame:
 
 def altman_z(facts: pd.DataFrame, market_value: float | None) -> float | None:
     """Altman's 1968 score. All five parts must come from the same year."""
-    if not market_value:
+    if not market_value or facts.empty:
         return None
     assets = _latest(_year_end(facts, "Assets"))
     if assets is None or not assets["value"]:
