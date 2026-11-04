@@ -15,6 +15,7 @@ from stockintel.providers.base import (
     EconomicProvider,
     FeedError,
     FilingsProvider,
+    NotAvailable,
     PriceBar,
     PriceProvider,
     Provenance,
@@ -61,6 +62,7 @@ class Run:
         self.engine, self.feed = engine, feed
         self.attempted = self.ok = self.added = 0
         self.errors: list[str] = []
+        self.paused = False
         with engine.begin() as conn:
             self.id = conn.execute(
                 text("INSERT INTO feed_runs (feed) VALUES (:feed) RETURNING id"), {"feed": feed}
@@ -71,6 +73,10 @@ class Run:
             self.errors.insert(0, fatal)
         if fatal or (self.attempted and not self.ok):
             status = "error"
+        elif self.paused and len(self.errors) == 1:
+            # Reaching the hourly limit mid-run is expected. The next run carries on.
+            status = "ok"
+            self.errors = [f"Hourly limit reached after {self.ok} stocks. The next run continues."]
         elif self.errors:
             status = "partial"
         else:
@@ -229,6 +235,7 @@ def run_prices(
             bars, provenance = provider.daily_bars(security.ticker, start, expected)
         except RateLimited as exc:
             run.errors.append(str(exc))
+            run.paused = True
             break  # Further requests would fail too, and may extend the block.
         except FeedError as exc:
             run.errors.append(str(exc))
@@ -312,6 +319,10 @@ def run_facts(engine: Engine, provider) -> str:
         run.attempted += 1
         try:
             facts, provenance = provider.company_facts(security.cik)
+        except NotAvailable:
+            # Some companies publish no structured figures. They show as Not verified.
+            run.ok += 1
+            continue
         except RateLimited as exc:
             run.errors.append(str(exc))
             break

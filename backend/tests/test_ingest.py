@@ -435,3 +435,19 @@ def test_chart_with_no_bars_is_empty_not_filled(stocks):
     result = queries.chart(stocks, "BBB", "daily")
     assert result["candles"] == []
     assert result["latest_bar"] is None
+
+
+def test_hourly_limit_mid_run_is_not_a_failure(stocks):
+    provider = FixturePrices(
+        {"AAA": [bar(d) for d in SESSIONS]}, {"BBB": RateLimited("Tiingo BBB: rate limit")}
+    )
+    assert run_prices(stocks, provider, START, 45, NOW) == "ok"
+    assert "next run continues" in last_run(stocks, "prices").message
+
+
+def test_missing_record_raises_not_available():
+    from stockintel.providers.base import NotAvailable
+
+    provider = SecProvider("a@b.test", client(lambda r: httpx.Response(404)))
+    with pytest.raises(NotAvailable):
+        provider.company_facts(1)

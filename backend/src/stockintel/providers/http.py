@@ -2,7 +2,7 @@
 
 import httpx
 
-from stockintel.providers.base import FeedError, RateLimited
+from stockintel.providers.base import FeedError, NotAvailable, RateLimited
 
 
 def get_json(client: httpx.Client, url: str, name: str, **kwargs) -> object:
@@ -12,6 +12,8 @@ def get_json(client: httpx.Client, url: str, name: str, **kwargs) -> object:
         raise FeedError(f"{name}: request failed ({type(exc).__name__})") from None
     if response.status_code == 429:
         raise RateLimited(f"{name}: rate limit reached (HTTP 429)")
+    if response.status_code == 404:
+        raise NotAvailable(f"{name}: no record at the source")
     if response.status_code != 200:
         raise FeedError(f"{name}: HTTP {response.status_code}")
     try:

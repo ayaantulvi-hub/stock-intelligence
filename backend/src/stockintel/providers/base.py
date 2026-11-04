@@ -9,6 +9,10 @@ class FeedError(Exception):
     """A source failed or returned something unusable. Nothing from it is stored."""
 
 
+class NotAvailable(FeedError):
+    """The source has no such record. Normal for some companies, and not an outage."""
+
+
 class RateLimited(FeedError):
     """The source refused because a request limit was reached."""
 
