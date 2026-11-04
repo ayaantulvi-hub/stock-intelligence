@@ -274,6 +274,13 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  const goHome = () => {
+    setStock(null);
+    setResults(null);
+    setStockError(null);
+    setQuery("");
+  };
+
   const search = async (event: FormEvent) => {
     event.preventDefault();
     setStock(null);
@@ -302,7 +309,14 @@ export default function App() {
       <p>Verified data, tested signals and scored forecasts. Not financial advice.</p>
       <div className="tabs pages" role="group" aria-label="Pages">
         {PAGES.map((name) => (
-          <button key={name} aria-pressed={name === page} onClick={() => setPage(name)}>
+          <button
+            key={name}
+            aria-pressed={name === page}
+            onClick={() => {
+              setPage(name);
+              goHome();
+            }}
+          >
             {name}
           </button>
         ))}
@@ -339,7 +353,14 @@ export default function App() {
           ))}
         </ul>
       )}
-      {stock && <StockView stock={stock} />}
+      {stock && (
+        <>
+          <p>
+            <button onClick={goHome}>Back to today's list</button>
+          </p>
+          <StockView stock={stock} />
+        </>
+      )}
 
       {!stock && !failed && <IdeasPanel onOpen={open} />}
       {!stock && !failed && <Screener onOpen={open} />}
