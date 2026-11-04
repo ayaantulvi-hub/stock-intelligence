@@ -574,7 +574,7 @@ export function IdeasPanel({
             <strong>Unproven picks: use with care</strong>
             <p>
               The model hasn't passed testing yet (no reliable edge), so these are its best guesses,
-              not recommendations. Use them as a list to research or try in Practice.
+              not recommendations. Use them as a list to research or try in your simulator.
             </p>
           </div>
           <div className="pick-grid">

@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { PortfolioPage, PracticePage, ReliabilityPage, Screener } from "./Pages";
+import { PortfolioPage, ReliabilityPage, Screener } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -37,24 +37,6 @@ test("reliability says too early and shows missing scores as Not verified", asyn
   render(<ReliabilityPage />);
   expect(await screen.findByText("Too early to say")).toBeTruthy();
   expect(screen.getByText(/nothing has been scored/)).toBeTruthy();
-});
-
-test("a refused practice trade shows the reason", async () => {
-  const state = { cash: 10000, total: 10000, return_percent: 0, holdings: [], trades: [] };
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (_url: string, options?: RequestInit) =>
-      options?.method === "POST"
-        ? { status: 422, json: async () => ({ detail: "Not enough practice cash." }) }
-        : { status: 200, json: async () => state },
-    ),
-  );
-  render(<PracticePage />);
-  fireEvent.change(await screen.findByLabelText("Ticker"), { target: { value: "AAA" } });
-  fireEvent.change(screen.getByLabelText("Shares"), { target: { value: "1" } });
-  fireEvent.change(screen.getByLabelText("Why?"), { target: { value: "Fixture" } });
-  fireEvent.click(screen.getByText("Place practice trade"));
-  expect(await screen.findByText("Not enough practice cash.")).toBeTruthy();
 });
 
 test("screener filters by lean and opens a stock", async () => {

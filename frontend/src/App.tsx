@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
-import { AlertsPage, JournalPage, MarketMood, PortfolioPage, PracticePage, ReliabilityPage, Screener, WatchButton } from "./Pages";
+import { AlertsPage, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 type Status = {
@@ -142,7 +142,7 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
-const PAGES = ["Today", "My portfolio", "Practice", "Journal", "Alerts", "How reliable?"];
+const PAGES = ["Today", "My portfolio", "Journal", "Alerts", "How reliable?"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
@@ -310,7 +310,6 @@ export default function App() {
         ))}
       </div>
       {page === "My portfolio" && <PortfolioPage />}
-      {page === "Practice" && <PracticePage />}
       {page === "Journal" && <JournalPage />}
       {page === "Alerts" && <AlertsPage />}
       {page === "How reliable?" && <ReliabilityPage />}
