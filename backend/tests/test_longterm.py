@@ -8,8 +8,9 @@ import pytest
 from sqlalchemy import text
 
 from stockintel import longterm, queries
-from stockintel.ingest import run_facts, run_fomc, run_history, run_insiders
+from stockintel.ingest import run_facts, run_fed, run_history, run_insiders
 from stockintel.providers.base import Fact, FeedError, InsiderDocument, InsiderTrade, Provenance
+from stockintel.providers.fed import FedProvider, parse_page
 from stockintel.providers.sec import SecProvider
 
 
@@ -283,8 +284,8 @@ class FixtureFloats:
         return [(1, 5.0), (2, 9.0), (2, 3.0)], PROVENANCE
 
 
-class FixtureDates:
-    def release_dates(self, release_id):
+class FixtureFed:
+    def meetings(self, first_year):
         return [date(2026, 1, 28), date(2026, 3, 18)], PROVENANCE
 
 
@@ -300,17 +301,20 @@ def test_past_sizes_are_ranked_and_stored_once(engine):
 
 
 def test_fed_dates_are_stored_once(engine):
-    assert run_fomc(engine, FixtureDates()) == "ok"
-    assert run_fomc(engine, FixtureDates()) == "ok"
+    assert run_fed(engine, FixtureFed()) == "ok"
+    assert run_fed(engine, FixtureFed()) == "ok"
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT count(*) FROM fomc_dates")).scalar() == 2
+        assert conn.execute(text("SELECT count(*) FROM fed_meetings")).scalar() == 2
 
 
-def test_fred_release_dates_keep_the_key_out_of_the_url():
-    from stockintel.providers.fred import FredProvider
+def test_fed_calendar_page_is_read():
+    html = """<h4>2026 FOMC Meetings</h4>
+    <div><strong>December</strong></div><div class="fomc-meeting__date col-xs-4">8-9*</div>
+    <a href="/newsevents/pressreleases/monetary20260128a.htm">Statement</a>"""
+    assert parse_page(html) == {date(2026, 12, 9), date(2026, 1, 28)}
 
-    payload = {"release_dates": [{"release_id": 101, "date": "2026-01-28"}]}
-    provider = FredProvider("secret-key", client(lambda r: httpx.Response(200, json=payload)))
-    days, source = provider.release_dates(101)
-    assert days == [date(2026, 1, 28)]
-    assert "secret-key" not in source.source_url
+
+def test_fed_calendar_with_no_dates_is_an_error():
+    provider = FedProvider(client(lambda r: httpx.Response(200, text="<html></html>")))
+    with pytest.raises(FeedError):
+        provider.meetings(2026)

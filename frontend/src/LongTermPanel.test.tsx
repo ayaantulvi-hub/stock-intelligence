@@ -38,6 +38,8 @@ const body = {
     { period_end: "2025-12-31", revenue: 2e9, net_income: 5e8, url: "https://fixture.test/b" },
   ],
   insider_trades: [],
+  warnings: ["Fixture warning."],
+  next_earnings: "2026-07-31",
 };
 
 test("shows cases with sourced figures and lets assumptions change", async () => {
@@ -49,6 +51,8 @@ test("shows cases with sourced figures and lets assumptions change", async () =>
   expect(link.href).toBe("https://fixture.test/a");
   expect(screen.getAllByText(/Not verified/).length).toBeGreaterThan(0);
   expect(screen.getByText("$500.0 million")).toBeTruthy();
+  expect(screen.getByText("Fixture warning.")).toBeTruthy();
+  expect(screen.getByText(/around 2026-07-31 \(estimate\)/)).toBeTruthy();
   fireEvent.change(screen.getByLabelText(/Base growth/), { target: { value: "10" } });
   await waitFor(() =>
     expect(String(fetchMock.mock.calls.at(-1))).toContain("base_growth=0.1"),

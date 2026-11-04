@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
+import { AlertsPage, JournalPage, MarketMood, PortfolioPage, PracticePage, ReliabilityPage, WatchButton } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel } from "./ForecastPanel";
 
 type Status = {
@@ -141,6 +142,8 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
+const PAGES = ["Today", "My portfolio", "Practice", "Journal", "Alerts", "How reliable?"];
+
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
 function StockView({ stock }: { stock: Stock }) {
@@ -155,6 +158,7 @@ function StockView({ stock }: { stock: Stock }) {
           Stale: expected prices for {stock.latest_expected_session}. Do not rely on this data.
         </p>
       )}
+      <WatchButton ticker={stock.ticker} />
       <div className="tabs pages" role="group" aria-label="Stock page">
         {TABS.map((name) => (
           <button key={name} aria-pressed={name === tab} onClick={() => setTab(name)}>
@@ -243,6 +247,7 @@ export default function App() {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [economic, setEconomic] = useState<Economic[]>([]);
   const [backtest, setBacktest] = useState<Backtest | null>(null);
+  const [page, setPage] = useState(PAGES[0]);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Listing[] | null>(null);
@@ -297,6 +302,20 @@ export default function App() {
     <main>
       <h1>Stock Intelligence</h1>
       <p>Verified data, tested signals and scored forecasts. Not financial advice.</p>
+      <div className="tabs pages" role="group" aria-label="Pages">
+        {PAGES.map((name) => (
+          <button key={name} aria-pressed={name === page} onClick={() => setPage(name)}>
+            {name}
+          </button>
+        ))}
+      </div>
+      {page === "My portfolio" && <PortfolioPage />}
+      {page === "Practice" && <PracticePage />}
+      {page === "Journal" && <JournalPage />}
+      {page === "Alerts" && <AlertsPage />}
+      {page === "How reliable?" && <ReliabilityPage />}
+      {page === "Today" && (
+        <>
       {failed && <p className="bad">Cannot reach the API. Status is not verified.</p>}
       {!failed && !status && <p>Checking…</p>}
 
@@ -325,6 +344,7 @@ export default function App() {
       )}
       {stock && <StockView stock={stock} />}
 
+      {!stock && !failed && <MarketMood />}
       {!stock && !failed && <IdeasPanel />}
       {backtest && <BacktestView backtest={backtest} />}
 
@@ -393,6 +413,8 @@ export default function App() {
             ))}
           </dl>
         </section>
+      )}
+        </>
       )}
       <p>
         <small>

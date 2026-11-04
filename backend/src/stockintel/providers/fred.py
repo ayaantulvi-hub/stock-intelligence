@@ -14,7 +14,6 @@ from stockintel.providers.base import FeedError, Observation, Provenance
 from stockintel.providers.http import get_json
 
 BASE = "https://api.stlouisfed.org/fred/series/observations"
-DATES = "https://api.stlouisfed.org/fred/release/dates"
 
 
 class FredProvider:
@@ -51,22 +50,3 @@ class FredProvider:
             raise FeedError(f"FRED {series_id}: unexpected response shape") from None
         safe_url = f"{BASE}?{urlencode(query)}"
         return observations, Provenance("FRED", safe_url, retrieved, "end_of_day")
-
-    def release_dates(self, release_id: int) -> tuple[list[date], Provenance]:
-        """Past and scheduled dates of a release."""
-        query = {
-            "release_id": release_id,
-            "include_release_dates_with_no_data": "true",
-            "sort_order": "asc",
-            "limit": 10000,
-            "file_type": "json",
-        }
-        url = f"{DATES}?{urlencode({**query, 'api_key': self.api_key})}"
-        data = get_json(self.client, url, f"FRED release {release_id}")
-        retrieved = datetime.now(UTC)
-        try:
-            days = [date.fromisoformat(row["date"]) for row in data["release_dates"]]
-        except (KeyError, TypeError, ValueError):
-            raise FeedError(f"FRED release {release_id}: unexpected response shape") from None
-        safe_url = f"{DATES}?{urlencode(query)}"
-        return days, Provenance("FRED", safe_url, retrieved, "end_of_day")

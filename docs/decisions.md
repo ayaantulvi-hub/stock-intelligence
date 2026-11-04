@@ -122,8 +122,15 @@ needs at least 30 tested cases that beat the baseline.
 
 ## Fed dates
 
-- FRED release 101 returned 3,896 dates, nearly every day, so it does not identify meetings.
-  The Fed factor stays off until the official meeting calendar is connected.
+- FRED release 101 returned nearly every day, so it does not identify meetings. Dates now
+  come from the Federal Reserve's own calendar pages.
+
+## Tools
+
+- Alerts cover held and watched stocks, and are sent as GitHub issues.
+- Practice trades fill at the latest close from a $10,000 pretend balance.
+- A reliability grade needs 60 trading days. Overconfidence correction starts at that point.
+- Next earnings is an estimate: 91 days after the last quarterly or yearly report.
 
 ## Known risks
 

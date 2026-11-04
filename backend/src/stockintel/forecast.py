@@ -28,6 +28,7 @@ from stockintel.market import (
     session_open,
     sessions_between,
 )
+from stockintel.tools import MIN_LIVE_DAYS, shrink_factor
 
 FLAT_BAND = 0.001
 RANK_HORIZON = 20
@@ -179,7 +180,14 @@ def build_panel(
     known = slope.sort_index().shift(1).reindex(dates, method="ffill")
     panel["yield_slope"] = panel["date"].map(known)
     all_days = pd.DatetimeIndex(sorted(panel["date"].unique()))
-    for item in ("vix", "credit_spread", "oil_20d", "inflation_expected", "jobless_claims"):
+    for item in (
+        "vix",
+        "credit_spread",
+        "oil_20d",
+        "inflation_expected",
+        "jobless_claims",
+        "fomc",
+    ):
         known_values = None
         if macro is not None and item in macro:
             known_values = macro[item].reindex(all_days, method="ffill")
@@ -427,6 +435,15 @@ def load_macro(engine: Engine) -> pd.DataFrame:
     if "ICSA" in wide:
         macro["jobless_claims"] = wide["ICSA"].dropna().pct_change(4).shift(5, freq="D")
     macro = macro.sort_index().ffill()
+    if not macro.empty:
+        with engine.connect() as conn:
+            fed = [row[0] for row in conn.execute(text("SELECT decision_date FROM fed_meetings"))]
+        if fed:
+            # Meetings are scheduled in advance, so the day before each can be flagged.
+            eve = pd.to_datetime(fed) - pd.Timedelta(days=1)
+            days = macro.index.union(eve)
+            macro = macro.reindex(days).ffill()
+            macro["fomc"] = pd.Series(1.0, index=eve).reindex(days, fill_value=0.0)
     return macro
 
 
@@ -533,6 +550,17 @@ def next_session(day: date) -> date:
     return sessions_between(day + timedelta(days=1), day + timedelta(days=10))[0]
 
 
+def correction(engine: Engine, usual_up: float) -> float:
+    """Pull stated chances back if past forecasts proved overconfident."""
+    query = """SELECT f.p_up, s.outcome = 'up' AS hit, f.target_session
+               FROM forecast_scores s JOIN forecasts f ON f.id = s.forecast_id"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query)).all()
+    if len({row.target_session for row in rows}) < MIN_LIVE_DAYS:
+        return 1.0
+    return shrink_factor([(row.p_up, row.hit) for row in rows], usual_up)
+
+
 def current_champion(engine: Engine) -> dict:
     """The latest winner of the model comparison. Boosting is used until one has run."""
     query = """SELECT model, edge FROM model_comparisons WHERE selected
@@ -571,10 +599,15 @@ def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
     ranks = pd.Series(predict(latest[rank_columns]), index=latest.index).rank(pct=True)
     day_edge = bool(evaluations.get("next_day", {}).get("edge", False))
     rank_edge = bool(current_champion(engine)["edge"])
+    pull = correction(engine, base.get("up", 0.5))
     written = 0
     with engine.begin() as conn:
         for index, row in latest.iterrows():
-            chances = {key: float(probabilities.loc[index, key]) for key in ("up", "flat", "down")}
+            chances = {
+                key: base.get(key, 0.0)
+                + pull * (float(probabilities.loc[index, key]) - base.get(key, 0.0))
+                for key in ("up", "flat", "down")
+            }
             written += conn.execute(
                 text(
                     """INSERT INTO forecasts (created_at, security_id, as_of_session, target_session,

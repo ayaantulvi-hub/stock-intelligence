@@ -23,6 +23,8 @@ type Report = {
   assumptions: Record<string, number>;
   valuation_inputs?: Source[];
   insider_trades: Trade[];
+  warnings: string[];
+  next_earnings: string | null;
 };
 
 const INPUTS: [string, string][] = [
@@ -94,6 +96,21 @@ export default function LongTermPanel({ ticker }: { ticker: string }) {
   }
   return (
     <div>
+      <h3>Warning signs</h3>
+      {report.warnings.length === 0 ? (
+        <p>None of the warning rules fired on the latest yearly figures.</p>
+      ) : (
+        <ul>
+          {report.warnings.map((warning) => (
+            <li key={warning} className="bad">
+              {warning}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p>
+        Next earnings: {report.next_earnings ? `around ${report.next_earnings} (estimate)` : NOT_VERIFIED}
+      </p>
       <h3>Bull, Base and Bear value per share</h3>
       <p>
         What the shares would be worth if these assumptions came true. These are calculations, not

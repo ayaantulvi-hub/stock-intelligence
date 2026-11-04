@@ -186,6 +186,8 @@ def _metric(report: dict, name: str) -> float | None:
 def checklist(
     *,
     stale: bool,
+    latest_bar=None,
+    expected=None,
     action: str | None,
     above_200: bool | None,
     report: dict,
@@ -199,7 +201,12 @@ def checklist(
         _check(
             "Data",
             "caution" if stale else "pass",
-            "Prices are out of date." if stale else "Prices are up to date.",
+            (
+                f"The latest price here is {latest_bar}, but {expected} should be in. "
+                "The update has not reached this stock yet, so signals are blocked."
+                if stale
+                else "Prices are up to date."
+            ),
         )
     ]
     if action in {"Buy candidate", "Sell candidate"}:

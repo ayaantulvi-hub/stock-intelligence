@@ -86,7 +86,6 @@ def test_quoted_effects_have_a_link():
 def test_factors_that_need_missing_data_are_marked_and_not_used():
     assert "news_sentiment" not in factors.LIVE_IDS
     assert "implied_move" not in factors.LIVE_IDS
-    assert "fomc" not in factors.LIVE_IDS
     assert "value" in factors.LIVE_IDS
 
 

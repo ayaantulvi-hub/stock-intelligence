@@ -20,6 +20,7 @@ from stockintel.providers.base import (
     Provenance,
     RateLimited,
 )
+from stockintel.providers.fed import FedProvider
 from stockintel.providers.fred import FredProvider
 from stockintel.providers.sec import SecProvider
 from stockintel.providers.tiingo import TiingoProvider
@@ -43,7 +44,7 @@ ECONOMIC_SERIES = (
     "T10YIE",
     "ICSA",
 )
-FOMC_RELEASE = 101
+FIRST_FED_YEAR = 2009
 FIRST_FLOAT_YEAR = 2009
 # FRED rejects full version history for these daily series.
 CURRENT_VALUES_ONLY = {"DGS2", "DGS10", "VIXCLS", "BAA10Y", "DCOILWTICO", "T10YIE", "ICSA"}
@@ -455,20 +456,20 @@ def run_history(engine: Engine, provider, now: datetime) -> str:
     return run.finish()
 
 
-def run_fomc(engine: Engine, provider) -> str:
-    run = Run(engine, "fomc")
+def run_fed(engine: Engine, provider) -> str:
+    run = Run(engine, "fed")
     run.attempted = 1
     try:
-        days, provenance = provider.release_dates(FOMC_RELEASE)
+        days, provenance = provider.meetings(FIRST_FED_YEAR)
     except FeedError as exc:
         return run.finish(str(exc))
     with engine.begin() as conn:
-        known = set(conn.execute(text("SELECT announced FROM fomc_dates")).scalars())
+        known = set(conn.execute(text("SELECT decision_date FROM fed_meetings")).scalars())
         new = [day for day in days if day not in known]
         if new:
             fetch_id = add_fetch(conn, provenance)
             conn.execute(
-                text("INSERT INTO fomc_dates (announced, fetch_id) VALUES (:day, :fetch_id)"),
+                text("INSERT INTO fed_meetings (decision_date, fetch_id) VALUES (:day, :fetch_id)"),
                 [{"day": day, "fetch_id": fetch_id} for day in new],
             )
     run.ok, run.added = 1, len(new)
@@ -540,7 +541,7 @@ def main() -> None:
             "facts",
             "insiders",
             "history",
-            "fomc",
+            "fed",
         ],
     )
     parser.add_argument("--limit", type=int, default=45, help="stocks or documents per run")
@@ -565,8 +566,8 @@ def main() -> None:
             )
         elif args.feed == "history":
             status = run_history(engine, SecProvider(settings.sec_contact_email), now)
-        elif args.feed == "fomc":
-            status = run_fomc(engine, FredProvider(settings.fred_api_key))
+        elif args.feed == "fed":
+            status = run_fed(engine, FedProvider())
         elif args.feed == "facts":
             status = run_facts(engine, SecProvider(settings.sec_contact_email))
         elif args.feed == "insiders":

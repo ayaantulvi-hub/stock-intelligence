@@ -3,6 +3,7 @@
 import base64
 import binascii
 import secrets
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +11,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from stockintel import queries
+from stockintel import queries, tools
 from stockintel.charts import TIMEFRAMES
 from stockintel.config import get_settings
 from stockintel.db import get_engine
@@ -190,6 +191,84 @@ def track_record() -> dict:
 @app.get("/api/model-comparison")
 def model_comparison() -> dict | None:
     return queries.model_comparison(get_engine())
+
+
+class PracticeTrade(BaseModel):
+    ticker: str
+    side: Literal["buy", "sell"]
+    shares: float = Field(gt=0)
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class JournalEntry(BaseModel):
+    ticker: str
+    decision: Literal["buy", "sell", "hold", "skip"]
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+@app.get("/api/portfolio")
+def portfolio() -> dict:
+    return tools.portfolio(get_engine())
+
+
+@app.get("/api/practice")
+def practice() -> dict:
+    return tools.practice_state(get_engine())
+
+
+@app.post("/api/practice")
+def practice_trade(trade: PracticeTrade) -> dict:
+    refused = tools.practice_trade(
+        get_engine(), trade.ticker, trade.side, trade.shares, trade.reason
+    )
+    if refused:
+        raise HTTPException(422, refused)
+    return tools.practice_state(get_engine())
+
+
+@app.get("/api/journal")
+def journal() -> list[dict]:
+    return tools.journal(get_engine())
+
+
+@app.post("/api/journal")
+def add_journal(entry: JournalEntry) -> list[dict]:
+    if not tools.add_journal(get_engine(), entry.ticker, entry.decision, entry.reason):
+        raise HTTPException(422, "Not verified: no price for this stock")
+    return tools.journal(get_engine())
+
+
+@app.get("/api/alerts")
+def alerts() -> list[dict]:
+    return tools.alerts(get_engine())
+
+
+@app.get("/api/watchlist")
+def watchlist() -> list[str]:
+    return tools.watched(get_engine())
+
+
+@app.put("/api/watchlist/{ticker}")
+def add_watch(ticker: str) -> list[str]:
+    if not tools.watch(get_engine(), ticker, True):
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return tools.watched(get_engine())
+
+
+@app.delete("/api/watchlist/{ticker}")
+def remove_watch(ticker: str) -> list[str]:
+    tools.watch(get_engine(), ticker, False)
+    return tools.watched(get_engine())
+
+
+@app.get("/api/reliability")
+def reliability() -> dict:
+    return tools.reliability(get_engine())
+
+
+@app.get("/api/market-mood")
+def market_mood() -> dict:
+    return tools.market_mood(get_engine())
 
 
 @app.get("/api/factors")

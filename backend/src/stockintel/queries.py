@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import advice, backtest, charts, explain, longterm, signals
+from stockintel import advice, backtest, charts, explain, longterm, signals, tools
 from stockintel.market import is_stale, latest_expected_session
 from stockintel.profiles import PROFILES
 
@@ -16,7 +16,7 @@ FEEDS = {
     "facts": "SEC EDGAR",
     "insiders": "SEC EDGAR",
     "history": "SEC EDGAR",
-    "fomc": "FRED",
+    "fed": "Federal Reserve",
     "economic": "FRED",
 }
 PROVENANCE = "d.name AS source, f.source_url, f.retrieved_at, f.data_status"
@@ -365,7 +365,13 @@ def valuation(engine: Engine, ticker: str, changes: dict) -> dict | None:
     report = longterm.report(
         load_facts(engine, security.id), price.close if price else None, changes
     )
-    return {**report, "ticker": security.ticker, "insider_trades": trades}
+    return {
+        **report,
+        "ticker": security.ticker,
+        "insider_trades": trades,
+        "warnings": tools.warnings(report),
+        "next_earnings": tools.next_earnings(engine, security.ticker, datetime.now(UTC).date()),
+    }
 
 
 def latest_factor_tests(engine: Engine) -> dict[str, dict]:
@@ -485,13 +491,15 @@ def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
     summary = data["summary"] or {}
     return advice.checklist(
         stale=data["stale"],
+        latest_bar=data["latest_bar"],
+        expected=data["latest_expected_session"],
         action=forecast["action"] if forecast else None,
         above_200=summary.get("above_200"),
         report=report,
         insider_net=net,
         last_earnings_days=(datetime.now(UTC).date() - filed).days if filed else None,
         position=position,
-        portfolio_share=mine / total if mine and total else None,
+        portfolio_share=mine / total if mine and total and len(holdings) > 1 else None,
     )
 
 
