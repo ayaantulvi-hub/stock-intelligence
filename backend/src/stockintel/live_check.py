@@ -168,8 +168,58 @@ def probe_sec_shapes() -> None:
     print(body[:2500].decode("utf8", "replace"))
 
 
+def probe_history() -> None:
+    """Measure what free sources offer for past stock lists, sectors and Fed dates."""
+    agent = f"stock-intelligence {os.environ['SEC_CONTACT_EMAIL']}"
+    status, body = fetch(
+        "https://www.sec.gov/files/company_tickers_exchange.json", {"User-Agent": agent}
+    )
+    tickers = json.loads(body)
+    current = {row[0] for row in tickers["data"]}
+    top_now = []
+    for row in tickers["data"]:
+        if row[3] in ("NYSE", "Nasdaq") and row[0] not in top_now:
+            top_now.append(row[0])
+    top_now = set(top_now[:480])
+    for period in ("CY2012Q2I", "CY2016Q2I", "CY2020Q2I"):
+        url = f"https://data.sec.gov/api/xbrl/frames/dei/EntityPublicFloat/USD/{period}.json"
+        status, body = fetch(url, {"User-Agent": agent})
+        print("frame", period, status)
+        if status != 200:
+            continue
+        data = json.loads(body)["data"]
+        ranked = sorted(data, key=lambda row: row["val"], reverse=True)[:500]
+        print(" rows", len(data), "fields", sorted(data[0]))
+        print(" in today's list", sum(r["cik"] in top_now for r in ranked))
+        print(" still listed", sum(r["cik"] in current for r in ranked))
+        print(" gone", [r["entityName"] for r in ranked if r["cik"] not in current][:8])
+    status, body = fetch(
+        "https://data.sec.gov/submissions/CIK0000320193.json", {"User-Agent": agent}
+    )
+    data = json.loads(body)
+    print("sic", data.get("sic"), data.get("sicDescription"), "tickers", data.get("tickers"))
+    query = urllib.parse.urlencode(
+        {"api_key": os.environ["FRED_API_KEY"], "file_type": "json", "limit": 1000}
+    )
+    status, body = fetch(f"https://api.stlouisfed.org/fred/releases?{query}")
+    print("fred releases", status)
+    if status == 200:
+        for row in json.loads(body)["releases"]:
+            if "FOMC" in row["name"] or "Open Market" in row["name"]:
+                print(" release", row["id"], row["name"])
+    for series in ("VIXCLS", "BAA10Y", "DCOILWTICO", "T10YIE", "ICSA"):
+        query = urllib.parse.urlencode(
+            {"series_id": series, "api_key": os.environ["FRED_API_KEY"], "file_type": "json"}
+        )
+        status, body = fetch(f"https://api.stlouisfed.org/fred/series?{query}")
+        row = json.loads(body)["seriess"][0] if status == 200 else {}
+        print(
+            series, status, row.get("frequency_short"), "copyright" in row.get("notes", "").lower()
+        )
+
+
 def main() -> None:
-    check_adjustment()
+    probe_history()
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,
