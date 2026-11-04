@@ -17,7 +17,8 @@ from stockintel.charts import levels
 from stockintel.db import get_engine
 
 ATR_DAYS = 14
-DEFAULT_MULTIPLE = 2.0
+# Tested weekly. Tighter stops were hit far more often and cut returns, so 3 is the default.
+DEFAULT_MULTIPLE = 3.0
 REWARD_TO_RISK = 2.0
 HOLD_DAYS = 60
 ENTRY_EVERY = 20

@@ -30,12 +30,12 @@ def test_true_range_counts_overnight_gaps():
     assert stops.average_true_range(table, 1).iloc[2] == 11
 
 
-def test_stop_defaults_to_twice_the_daily_range():
+def test_stop_defaults_to_three_daily_ranges():
     table = frame([100.0] * 40)
     result = stops.suggest(table)
     assert result["atr"] == 2
-    assert result["stop"] == 96
-    assert result["target"] == 108
+    assert result["stop"] == 94
+    assert result["target"] == 112
 
 
 def test_target_is_twice_the_risk():

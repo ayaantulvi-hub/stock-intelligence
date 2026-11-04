@@ -140,9 +140,17 @@ needs at least 30 tested cases that beat the baseline.
 
 ## Stops
 
-- Suggested stop: just under support if that is 1 to 3 daily ranges away, otherwise 2 average
+- Suggested stop: just under support if that is 1 to 3 daily ranges away, otherwise 3 average
   daily ranges below the price. Suggested target: twice the risk. These are rules, not
   predictions. Stop distances are tested weekly across all stocks, not per stock.
+
+## Stop test, 4 November 2026
+
+- 27,264 trades on 245 stocks, held up to 60 days. No stop averaged +4.7%, 4 ranges +3.5%,
+  3 ranges +3.1%, 2 ranges +2.3%, 1.5 ranges +1.8%. Survivorship bias favours holding, as
+  companies that collapsed are missing.
+- The no-stop worst trade of -136% is impossible, so some adjusted prices are wrong. Check
+  large dividends and spin-offs in the adjustment before relying on worst-case figures.
 
 ## Known risks
 
