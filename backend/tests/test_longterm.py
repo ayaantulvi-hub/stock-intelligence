@@ -388,3 +388,74 @@ def test_foreign_filer_figures_are_read_but_not_valued_against_a_dollar_price():
     assert metric(result, "Gross margin")["value"] == pytest.approx(0.5)
     assert result["cases"] == []
     assert metric(result, "Earnings yield")["value"] is None
+
+
+def yearly(tag, value, end="2025-12-31", start="2025-01-01", form="10-K", unit="USD"):
+    return {
+        "tag": tag,
+        "unit": unit,
+        "period_start": None if start is None else pd.Timestamp(start).date(),
+        "period_end": pd.Timestamp(end).date(),
+        "value": value,
+        "accession_number": "a",
+        "fiscal_period": "FY",
+        "form": form,
+        "filed": pd.Timestamp("2026-02-01").date(),
+        "document_url": "https://www.sec.gov/test-fixture",
+    }
+
+
+def test_bank_revenue_is_net_interest_plus_other_income():
+    """TEST FIXTURE figures."""
+    facts = pd.DataFrame(
+        [
+            yearly("InterestIncomeExpenseNet", 6.0),
+            yearly("NoninterestIncome", 3.0),
+            yearly("NetIncomeLoss", 2.0),
+        ]
+    )
+    metrics = {m["name"]: m["value"] for m in longterm.report(facts, 10.0)["metrics"]}
+    assert metrics["Revenue"] == 9.0
+    assert metrics["Net profit margin"] == pytest.approx(2 / 9)
+
+
+def test_foreign_bank_gross_income_is_not_shown_as_a_gross_margin():
+    facts = pd.DataFrame(
+        [
+            yearly("GrossProfit", 50.0, form="20-F"),
+            yearly("InterestRevenueExpense", 30.0, form="20-F"),
+            yearly("ProfitLoss", 10.0, form="20-F"),
+        ]
+    )
+    metrics = {m["name"]: m["value"] for m in longterm.report(facts, 10.0)["metrics"]}
+    assert metrics["Revenue"] == 50.0
+    assert metrics["Gross margin"] is None
+
+
+def test_yearly_accounts_attached_to_a_6k_count_but_quarters_do_not():
+    facts = pd.DataFrame(
+        [
+            yearly("Revenue", 100.0, form="6-K"),
+            yearly("ProfitLoss", 10.0, form="6-K"),
+            yearly("Revenue", 25.0, end="2026-03-31", start="2026-01-01", form="6-K"),
+        ]
+    )
+    metrics = {m["name"]: m["value"] for m in longterm.report(facts, 10.0)["metrics"]}
+    assert metrics["Revenue"] == 100.0
+
+
+def test_receipt_filers_get_no_value_from_price_times_shares():
+    """One receipt can stand for several shares, so the sum would be wrong."""
+    facts = pd.DataFrame(
+        [
+            yearly("Revenue", 100.0, form="20-F"),
+            yearly("ProfitLoss", 10.0, form="20-F"),
+            yearly("EntityCommonStockSharesOutstanding", 50.0, start=None, form="20-F"),
+        ]
+    )
+    result = longterm.report(facts, 10.0)
+    metrics = {m["name"]: m["value"] for m in result["metrics"]}
+    assert metrics["Earnings yield"] is None
+    assert result["cases"] == []
+    assert result["receipts"] is True
+    assert longterm.shares_history(facts).empty

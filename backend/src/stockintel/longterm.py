@@ -18,7 +18,11 @@ REVENUE_TAGS = (
     "RevenueFromContractWithCustomerIncludingAssessedTax",
     "RevenuesNetOfInterestExpense",
     "SalesRevenueNet",
+    "RegulatedAndUnregulatedOperatingRevenue",
     "Revenue",
+    "RevenueAndOperatingIncome",
+    "RevenueFromContractsWithCustomers",
+    "RevenueFromSaleOfGoods",
 )
 INCOME_TAGS = ("NetIncomeLoss", "ProfitLoss", "NetIncomeLossAvailableToCommonStockholdersBasic")
 CASH_FLOW_TAGS = (
@@ -29,9 +33,15 @@ EQUITY_TAGS = ("StockholdersEquity", "Equity")
 CASH_TAGS = ("CashAndCashEquivalentsAtCarryingValue", "CashAndCashEquivalents")
 DEBT_TAGS = ("LongTermDebtNoncurrent", "LongTermDebt", "NoncurrentBorrowings")
 YEARLY_FORMS = ("10-K", "10-K/A", "20-F", "20-F/A", "40-F")
+# Some Canadian companies attach their yearly accounts to a 6-K, not the 40-F itself.
+ATTACHED_YEARLY = "6-K"
+# An American depositary receipt can stand for several shares or a fraction of one, and the
+# ratio is not in these figures. A price times shares would be wrong for these filers.
+RECEIPT_FORMS = ("20-F", "20-F/A")
 YEARS = 10
 GROWTH_CAP = 0.15
 CASE_GAP = 0.05
+BANK_GROSS_INCOME = "GrossProfit (gross income of a bank)"
 DEFAULTS = {"discount_rate": 0.09, "terminal_growth": 0.025}
 
 
@@ -41,13 +51,16 @@ def _annual_flow(facts: pd.DataFrame, tag: str) -> pd.DataFrame:
     if rows.empty:
         return rows
     days = (pd.to_datetime(rows["period_end"]) - pd.to_datetime(rows["period_start"])).dt.days
-    rows = rows[days.between(350, 380) & rows["form"].isin(YEARLY_FORMS)]
+    rows = rows[days.between(350, 380) & rows["form"].isin((*YEARLY_FORMS, ATTACHED_YEARLY))]
     return rows.sort_values("filed").drop_duplicates("period_end").sort_values("period_end")
 
 
 def _year_end(facts: pd.DataFrame, tag: str) -> pd.DataFrame:
     rows = facts[(facts["tag"] == tag) & facts["period_start"].isna()]
-    rows = rows[rows["form"].isin(YEARLY_FORMS)]
+    yearly = rows["form"].isin(YEARLY_FORMS)
+    if "fiscal_period" in rows:
+        yearly = yearly | ((rows["form"] == ATTACHED_YEARLY) & (rows["fiscal_period"] == "FY"))
+    rows = rows[yearly]
     return rows.sort_values("filed").drop_duplicates("period_end").sort_values("period_end")
 
 
@@ -90,6 +103,37 @@ def _largest_flow(facts: pd.DataFrame, tags: tuple[str, ...]) -> pd.DataFrame:
     return joined.drop_duplicates("period_end").sort_values("period_end")
 
 
+def _bank_revenue(facts: pd.DataFrame) -> pd.DataFrame:
+    """Banks have no revenue line. Their usual measure is net interest plus other income."""
+    interest = _annual_flow(facts, "InterestIncomeExpenseNet")
+    other = _annual_flow(facts, "NoninterestIncome")
+    if len(interest) and len(other):
+        joined = interest.merge(
+            other[["period_end", "value"]], on="period_end", suffixes=("", "_other")
+        )
+        joined["value"] = joined["value"] + joined["value_other"]
+        joined["tag"] = "InterestIncomeExpenseNet + NoninterestIncome"
+        return joined.drop(columns="value_other")
+    # Foreign banks report this total as gross income, under the gross profit label.
+    gross = _annual_flow(facts, "GrossProfit")
+    interest = _annual_flow(facts, "InterestRevenueExpense")
+    if len(gross) and len(interest):
+        joined = gross.merge(
+            interest[["period_end", "value"]], on="period_end", suffixes=("", "_interest")
+        )
+        joined = joined[joined["value_interest"].abs() >= joined["value"] * 0.3]
+        return joined.drop(columns="value_interest").assign(tag=BANK_GROSS_INCOME)
+    return pd.DataFrame()
+
+
+def revenue_table(facts: pd.DataFrame) -> pd.DataFrame:
+    bank = _bank_revenue(facts)
+    largest = _largest_flow(facts, REVENUE_TAGS)
+    if bank.empty:
+        return largest
+    return pd.concat([bank, largest]).drop_duplicates("period_end").sort_values("period_end")
+
+
 def _best_end(facts: pd.DataFrame, tags: tuple[str, ...]) -> pd.DataFrame:
     tables = [_year_end(facts, tag) for tag in tags]
     tables = [table for table in tables if len(table)]
@@ -122,9 +166,11 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
     if facts.empty:
         return empty
 
-    revenue_table = _largest_flow(facts, REVENUE_TAGS)
-    revenue = _latest(revenue_table)
+    revenues = revenue_table(facts)
+    revenue = _latest(revenues)
     gross = _latest(_annual_flow(facts, "GrossProfit"))
+    if revenue is not None and revenue["tag"] == BANK_GROSS_INCOME:
+        gross = None
     income = _latest(_best_flow(facts, INCOME_TAGS))
     cash_flow = _latest(_best_flow(facts, CASH_FLOW_TAGS))
     capex = _latest(_best_flow(facts, CAPEX_TAGS))
@@ -133,11 +179,15 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
     debt = _latest(_best_end(facts, DEBT_TAGS))
     shares_rows = facts[facts["tag"] == "EntityCommonStockSharesOutstanding"]
     shares = None if shares_rows.empty else shares_rows.sort_values("filed").iloc[-1]
+    newest = income if income is not None else revenue
+    receipts = newest is not None and newest["form"] in RECEIPT_FORMS
+    if receipts:
+        shares = None
 
     growth = None
     growth_sources = []
-    if len(revenue_table) >= 4:
-        last, first = revenue_table.iloc[-1], revenue_table.iloc[-4]
+    if len(revenues) >= 4:
+        last, first = revenues.iloc[-1], revenues.iloc[-4]
         if first["value"] > 0 and last["value"] > 0:
             growth = float((last["value"] / first["value"]) ** (1 / 3) - 1)
             growth_sources = [first, last]
@@ -161,8 +211,8 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
 
     income_table = _best_flow(facts, INCOME_TAGS)
     history = []
-    if len(revenue_table) and len(income_table):
-        joined = revenue_table[["period_end", "value"]].merge(
+    if len(revenues) and len(income_table):
+        joined = revenues[["period_end", "value"]].merge(
             income_table[["period_end", "value", "document_url"]],
             on="period_end",
             how="outer",
@@ -272,6 +322,7 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
         "history": history,
         "assumptions": assumptions,
         "cases": cases,
+        "receipts": receipts,
         "valuation_inputs": [
             _source(r) for r in [cash_flow, capex, debt, cash, shares] if r is not None
         ],
@@ -339,6 +390,7 @@ def shares_history(facts: pd.DataFrame) -> pd.DataFrame:
     if facts.empty:
         return pd.DataFrame()
     rows = facts[facts["tag"] == "EntityCommonStockSharesOutstanding"]
+    rows = rows[~rows["form"].isin(RECEIPT_FORMS)]
     if rows.empty:
         return pd.DataFrame()
     table = rows.sort_values("filed").drop_duplicates("period_end")

@@ -178,3 +178,31 @@ test("explains support and resistance in everyday words", async () => {
   expect(screen.getByText(/Think of a floor/)).toBeTruthy();
   expect(screen.getByText(/Think of a ceiling/)).toBeTruthy();
 });
+
+test("company events and your judgment show what was stored, not invented", async () => {
+  stub({
+    "/api/stocks/AAA/events": [
+      {
+        date: "2026-10-01",
+        url: "https://www.sec.gov/fixture",
+        source: "SEC EDGAR",
+        events: [{ item: "4.02", meaning: "Said earlier accounts should no longer be relied on", serious: true }],
+      },
+    ],
+    "/api/stocks/AAA/judgment": [
+      {
+        created_at: "2026-10-02T00:00:00Z",
+        view: "sell",
+        reason: "Fixture reason",
+        changes_mind: "Fixture change",
+        price: 10,
+        system_call: "Buy",
+        change_percent: null,
+      },
+    ],
+  });
+  render(<ForecastPanel ticker="AAA" />);
+  expect(await screen.findByText(/something serious/)).toBeTruthy();
+  expect(await screen.findByText(/Your judgment: sell, system said Buy/)).toBeTruthy();
+  expect(await screen.findByText(/Not verified, because the stock split/)).toBeTruthy();
+});

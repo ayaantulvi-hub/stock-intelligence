@@ -13,6 +13,7 @@ from sqlalchemy import Engine, text
 
 from stockintel.db import get_engine
 from stockintel.market import latest_expected_session
+from stockintel.tools import read_items
 
 MOVE_LIMIT = 3.0
 
@@ -101,6 +102,22 @@ def check_events(conn, stock, since: date) -> None:
             f"{stock.ticker} filed a {row.form} on {row.filing_date}: {row.document_url}",
             f"filing:{row.accession_number}",
         )
+    for row in conn.execute(
+        text(
+            """SELECT items, filing_date, accession_number, document_url FROM filing_events
+               WHERE security_id = :id AND filing_date >= :since"""
+        ),
+        {"id": stock.id, "since": since},
+    ):
+        for event in read_items(row.items):
+            if event["serious"]:
+                add(
+                    conn,
+                    stock.ticker,
+                    "event",
+                    f"{stock.ticker}: {event['meaning']} ({row.filing_date}): {row.document_url}",
+                    f"event:{row.accession_number}:{event['item']}",
+                )
     for row in conn.execute(
         text(
             """SELECT owner, shares, price, accession_number, line FROM insider_transactions

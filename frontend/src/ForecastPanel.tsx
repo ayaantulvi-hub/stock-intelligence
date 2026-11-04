@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import ChecklistPanel, { HowMuch } from "./ChecklistPanel";
 import PositionPanel from "./PositionPanel";
 
@@ -334,6 +334,161 @@ export function FactorsPanel({ ticker }: { ticker: string }) {
   return <FactorTable forecast={forecast} factors={factors} />;
 }
 
+type FiledEvent = {
+  date: string;
+  url: string;
+  source: string;
+  events: { item: string; meaning: string; serious: boolean }[];
+};
+
+function CompanyEvents({ ticker }: { ticker: string }) {
+  const [rows, setRows] = useState<FiledEvent[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    getJson<FiledEvent[]>(`/api/stocks/${encodeURIComponent(ticker)}/events`)
+      .then(setRows)
+      .catch(() => setFailed(true));
+  }, [ticker]);
+  const serious = rows?.some((row) => row.events.some((item) => item.serious)) ?? false;
+  return (
+    <details className="fold">
+      <summary>
+        What the company reported {serious && <span className="bad">(something serious)</span>}
+      </summary>
+      <small>
+        Big events a US company must report to the regulator within days. This shows the type of
+        event. Open the filing for the detail.
+      </small>
+      {failed && <p className="bad">Could not load company events. Refresh to try again.</p>}
+      {rows?.length === 0 && <p>No events are stored for the last 180 days.</p>}
+      <ul>
+        {rows?.map((row) => (
+          <li key={row.url}>
+            {row.date}:{" "}
+            {row.events.map((item) => (
+              <span key={item.item} className={item.serious ? "bad" : ""}>
+                {item.meaning}.{" "}
+              </span>
+            ))}
+            <a href={row.url} target="_blank" rel="noreferrer">
+              Filing ({row.source})
+            </a>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+type Judgment = {
+  created_at: string;
+  view: string;
+  reason: string;
+  changes_mind: string;
+  price: number;
+  system_call: string;
+  change_percent: number | null;
+};
+const QUESTIONS = [
+  "Can I explain in one sentence how this company makes money?",
+  "Is there news the numbers can't see yet, such as a new product, lawsuit or leadership change?",
+  "Am I buying because of a reason, or because the price has been rising?",
+  "If it fell 20% tomorrow, would I buy more or panic?",
+];
+
+function YourJudgment({ ticker, systemCall }: { ticker: string; systemCall: string | null }) {
+  const url = `/api/stocks/${encodeURIComponent(ticker)}/judgment`;
+  const [rows, setRows] = useState<Judgment[]>([]);
+  const [form, setForm] = useState({ view: "buy", reason: "", changes_mind: "" });
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    getJson<Judgment[]>(url)
+      .then((found) => setRows(found ?? []))
+      .catch(() => setError("Could not load your judgments."));
+  }, [url]);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const result = await response.json();
+    if (response.status !== 200) {
+      setError(typeof result.detail === "string" ? result.detail : "Could not save.");
+      return;
+    }
+    setRows(result);
+    setError(null);
+    setForm({ view: "buy", reason: "", changes_mind: "" });
+  };
+  const latest = rows[0];
+  return (
+    <details className="fold">
+      <summary>
+        Your judgment
+        {latest && `: ${latest.view}, system said ${latest.system_call}`}
+      </summary>
+      <small>
+        The system can't see everything. Your view is saved beside its call and never changes the
+        model, so later you can see who was right.
+      </small>
+      <ul>
+        {QUESTIONS.map((question) => (
+          <li key={question}>{question}</li>
+        ))}
+      </ul>
+      <form onSubmit={save} className="inputs">
+        <label>
+          My view
+          <select value={form.view} onChange={(e) => setForm({ ...form, view: e.target.value })}>
+            <option value="buy">Buy</option>
+            <option value="hold">Hold</option>
+            <option value="sell">Sell</option>
+            <option value="unsure">Unsure</option>
+          </select>
+        </label>
+        <label>
+          Why?
+          <input
+            required
+            minLength={3}
+            value={form.reason}
+            onChange={(e) => setForm({ ...form, reason: e.target.value })}
+          />
+        </label>
+        <label>
+          What would change my mind?
+          <input
+            required
+            minLength={3}
+            value={form.changes_mind}
+            onChange={(e) => setForm({ ...form, changes_mind: e.target.value })}
+          />
+        </label>
+        <button type="submit" disabled={!systemCall}>
+          Save my judgment
+        </button>
+      </form>
+      {error && <p className="bad">{error}</p>}
+      {rows.length > 0 && (
+        <ul>
+          {rows.map((row) => (
+            <li key={row.created_at}>
+              {row.created_at.slice(0, 10)}: you said {row.view} at {row.price.toFixed(2)}, the
+              system said {row.system_call}.{" "}
+              {row.change_percent === null
+                ? "Change since: Not verified, because the stock split."
+                : `Change since: ${row.change_percent.toFixed(1)}%.`}{" "}
+              {row.reason} I'd change my mind if: {row.changes_mind}
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
+  );
+}
+
 export function ForecastPanel({ ticker }: { ticker: string }) {
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
@@ -402,6 +557,8 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
           </>
         )}
       </div>
+      <CompanyEvents ticker={ticker} />
+      <YourJudgment ticker={ticker} systemCall={decision?.call ?? null} />
       <details className="fold">
         <summary>{decision?.owned ? "Your position" : "I own this stock"}</summary>
         <PositionPanel ticker={ticker} onChange={loadDecision} />

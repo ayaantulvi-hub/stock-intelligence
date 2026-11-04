@@ -228,3 +228,40 @@ def test_endpoints_refuse_bad_input(engine, monkeypatch):
     assert client.put("/api/watchlist/ZZZ").status_code == 404
     assert client.put("/api/watchlist/AAA").json() == ["AAA"]
     assert client.delete("/api/watchlist/AAA").json() == []
+
+
+def test_filing_items_become_plain_words():
+    found = tools.read_items("2.02,4.02,9.01")
+    assert [item["item"] for item in found] == ["2.02", "4.02"]
+    assert found[1]["serious"] is True
+
+
+def test_only_recent_serious_events_count():
+    today = date(2026, 11, 4)
+    events = [
+        {"date": date(2026, 10, 1), "events": tools.read_items("2.02,2.06")},
+        {"date": date(2026, 1, 1), "events": tools.read_items("1.03")},
+    ]
+    assert tools.serious_events(events, today) == ["Wrote down the value of something it owns"]
+
+
+def call(view, system, change, day=date(2026, 9, 1)):
+    return {"view": view, "system_call": system, "change_percent": change, "market_date": day}
+
+
+def test_judgments_are_scored_after_four_weeks_only():
+    today = date(2026, 11, 4)
+    rows = [
+        call("buy", "Sell", 5.0),
+        call("sell", "Buy", 5.0),
+        call("hold", "Buy", 5.0),
+        call("buy", "Buy", 9.0, date(2026, 11, 1)),
+        call("buy", "Buy", None),
+    ]
+    record = tools.judgment_record(rows, today)
+    assert record["your_calls"] == 2
+    assert record["your_right"] == 1
+    assert record["system_calls"] == 3
+    assert record["system_right"] == 2
+    assert record["disagreed"] == 2
+    assert record["you_won"] == 1

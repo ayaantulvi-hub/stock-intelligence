@@ -323,3 +323,16 @@ def test_screener_lists_each_stock_with_its_lean(engine, panel):
     assert [row["ticker"] for row in rows] == ["S1"]
     assert rows[0]["action"] == "No reliable edge"
     assert rows[0]["lean"] in {"Buy", "Mixed", "Sell"}
+
+
+def test_insider_cluster_counts_different_buyers_in_90_days():
+    """TEST FIXTURE trades."""
+    trades = pd.DataFrame(
+        {
+            "available": pd.to_datetime(["2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"]),
+            "net_value": [10.0, 10.0, 10.0, -10.0],
+            "owner": ["A", "A", "B", "C"],
+        }
+    )
+    days = pd.Series(pd.to_datetime(["2026-01-01", "2026-01-10", "2026-04-03"]))
+    assert forecast.insider_buyers(trades, days).tolist() == [0, 2, 1]

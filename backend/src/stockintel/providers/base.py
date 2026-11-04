@@ -45,6 +45,7 @@ class Filing:
     report_date: date | None
     accepted_at: datetime | None
     document_url: str
+    items: str | None = None
 
 
 @dataclass(frozen=True)

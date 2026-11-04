@@ -350,3 +350,23 @@ def test_pattern_score_lasts_ten_candles():
     assert score.iloc[position] == 1
     assert score.iloc[position + 9] == 1
     assert score.iloc[position + 10] == 0
+
+
+def test_a_payout_on_a_reverse_split_day_stays_positive():
+    """TEST FIXTURE modelled on Motorola, January 2011: a 1 for 7 split with a spin-off."""
+    bars = pd.DataFrame(
+        {
+            "market_date": [date(2011, 1, 3), date(2011, 1, 4)],
+            "open": [9.0, 39.0],
+            "high": [9.2, 40.0],
+            "low": [8.9, 38.0],
+            "close": [9.11, 39.77],
+            "volume": [700.0, 100.0],
+            "div_cash": [0.0, 27.27375],
+            "split_factor": [1.0, 1 / 7],
+        }
+    )
+    result = adjust(bars)
+    assert (result[["open", "high", "low", "close"]] > 0).all().all()
+    # 63.77 before the split, less the 27.27 payout, leaves 36.50 in today's terms.
+    assert result["close"].iloc[0] == pytest.approx(36.50, abs=0.01)

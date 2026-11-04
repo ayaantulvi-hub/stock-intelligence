@@ -35,8 +35,11 @@ PAPER_DIRECTION = {
     "issuance": -1,
     "earnings_drift": 1,
     "insider": 1,
+    "insider_cluster": 1,
 }
 
+
+CLUSTER_BUYERS = 3
 
 # The stock list is today's largest companies, so past small or wild stocks in it are the
 # ones that went on to win. A pass for these factors is likely that bias, not a real effect.
@@ -357,6 +360,8 @@ def checklist(
     report: dict,
     insider_net: float | None,
     last_earnings_days: int | None,
+    insider_buyers: int = 0,
+    serious_events: list[str] | None = None,
     position: dict | None,
     portfolio_share: float | None,
 ) -> list[dict]:
@@ -431,8 +436,22 @@ def checklist(
                 "Insiders",
                 "pass" if insider_net >= 0 else "caution",
                 f"Insiders were net {'buyers' if insider_net >= 0 else 'sellers'} of "
-                f"${abs(insider_net):,.0f} in 90 days, leaving out planned sales.",
+                f"${abs(insider_net):,.0f} in 90 days, leaving out planned sales."
+                + (
+                    f" {insider_buyers} different insiders bought, which research finds "
+                    "more telling than one person buying."
+                    if insider_buyers >= CLUSTER_BUYERS
+                    else ""
+                ),
             )
+        )
+    if serious_events:
+        checks.append(
+            _check("Company news", "caution", "In the last 90 days: " + "; ".join(serious_events))
+        )
+    elif serious_events is not None:
+        checks.append(
+            _check("Company news", "pass", "No serious events in its filings in the last 90 days.")
         )
     if last_earnings_days is None:
         checks.append(_check("Earnings", "unknown", "The last report date is not stored."))

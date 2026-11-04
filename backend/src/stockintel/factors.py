@@ -245,6 +245,15 @@ REGISTER = [
         "https://www.nber.org/papers/w16454.pdf",
     ),
     Factor(
+        "insider_cluster",
+        "Several insiders buying together",
+        "Events",
+        "Alldredge & Blank (2019), Journal of Financial Research",
+        LIVE,
+        "Trades clustered among colleagues carried more information than lone trades",
+        "https://ideas.repec.org/a/bla/jfnres/v42y2019i2p331-360.html",
+    ),
+    Factor(
         "fomc",
         "Drift before Fed announcements",
         "Events",
@@ -305,6 +314,7 @@ HIGH_MEANS = {
     "issuance": "Issued more new shares than most stocks",
     "earnings_drift": "Profit rose more than most stocks in a recent yearly report",
     "insider": "Insiders bought more on the open market than at most stocks",
+    "insider_cluster": "More different insiders bought recently than at most stocks",
 }
 
 

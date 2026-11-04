@@ -34,6 +34,9 @@ FACT_TAGS = {
         "RevenuesNetOfInterestExpense",
         "Revenues",
         "SalesRevenueNet",
+        "RegulatedAndUnregulatedOperatingRevenue",
+        "InterestIncomeExpenseNet",
+        "NoninterestIncome",
         "GrossProfit",
         "NetIncomeLoss",
         "ProfitLoss",
@@ -50,6 +53,10 @@ FACT_TAGS = {
     ),
     "ifrs-full": (
         "Revenue",
+        "RevenueAndOperatingIncome",
+        "RevenueFromSaleOfGoods",
+        "RevenueFromContractsWithCustomers",
+        "InterestRevenueExpense",
         "GrossProfit",
         "ProfitLoss",
         "Assets",
@@ -119,6 +126,7 @@ class SecProvider:
                 recent["reportDate"],
                 recent["acceptanceDateTime"],
                 recent["primaryDocument"],
+                recent.get("items") or [""] * len(recent["form"]),
                 strict=True,
             )
             filings = [
@@ -131,8 +139,9 @@ class SecProvider:
                     document_url=ARCHIVE_URL.format(
                         cik=cik, accession=accession.replace("-", ""), document=document
                     ),
+                    items=items or None,
                 )
-                for accession, form, filed, report, accepted, document in rows
+                for accession, form, filed, report, accepted, document, items in rows
                 if form in FORMS
             ]
         except (KeyError, TypeError, ValueError):

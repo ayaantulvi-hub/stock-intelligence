@@ -493,6 +493,13 @@ def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
             ),
             {"id": security_id},
         ).scalar()
+        buyers = conn.execute(
+            text(
+                """SELECT count(DISTINCT owner) FROM insider_transactions
+                   WHERE security_id = :id AND code = 'P' AND filed >= current_date - 90"""
+            ),
+            {"id": security_id},
+        ).scalar()
         filed = conn.execute(
             text(
                 """SELECT max(filing_date) FROM filings
@@ -511,6 +518,8 @@ def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
     total = sum(row.worth or 0 for row in holdings)
     mine = next((row.worth for row in holdings if row.security_id == security_id), None)
     summary = data["summary"] or {}
+    today = datetime.now(UTC).date()
+    events = tools.company_events(engine, ticker, today)
     return advice.checklist(
         stale=data["stale"],
         latest_bar=data["latest_bar"],
@@ -519,6 +528,8 @@ def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
         above_200=summary.get("above_200"),
         report=report,
         insider_net=net,
+        insider_buyers=buyers,
+        serious_events=tools.serious_events(events, today),
         last_earnings_days=(datetime.now(UTC).date() - filed).days if filed else None,
         position=position,
         portfolio_share=mine / total if mine and total and len(holdings) > 1 else None,

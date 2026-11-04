@@ -47,14 +47,24 @@ def check(report: dict, today: date) -> list[str]:
         problems.append("The latest yearly figures are over 500 days old.")
     if len(set(newest)) == 2:
         problems.append("Revenue and net income come from different years.")
-    if revenue is not None and revenue <= 0:
-        problems.append("Revenue is zero or negative.")
+    # Zero is real for a drug developer with nothing on sale yet. Negative never is.
+    if revenue is not None and revenue < 0:
+        problems.append("Revenue is negative.")
     margin = value("Gross margin")
     if margin is not None and not -1 <= margin <= 1:
         problems.append("Gross margin is outside what is possible.")
-    if gross is not None and revenue is not None and gross > revenue:
+    same_year = latest_period("Gross profit") == latest_period("Revenue")
+    if gross is not None and revenue is not None and same_year and gross > revenue:
         problems.append("Gross profit is larger than revenue.")
-    if income is not None and revenue is not None and revenue > 0 and abs(income) > revenue * 3:
+    same_year = latest_period("Net income") == latest_period("Revenue")
+    # Large losses happen, such as a fall in the value of holdings. Such profits rarely do.
+    if (
+        income is not None
+        and revenue is not None
+        and revenue > 0
+        and same_year
+        and (income > revenue * 3)
+    ):
         problems.append("Net income is unusually large compared with revenue.")
     return problems
 

@@ -41,7 +41,6 @@ def test_the_nvda_bug_would_be_caught():
     )
     assert "Revenue and net income come from different years." in found
     assert "Gross margin is outside what is possible." in found
-    assert "Gross profit is larger than revenue." in found
 
 
 def test_old_figures_are_flagged():
@@ -57,3 +56,23 @@ def test_old_figures_are_flagged():
 def test_missing_figures_are_flagged():
     assert "Revenue could not be found." in check(report(metric("Net income", 1.0)), TODAY)
     assert check({"available": False}, TODAY) == ["No company figures are stored."]
+
+
+def test_a_company_with_nothing_on_sale_is_not_flagged():
+    assert check(report(metric("Revenue", 0.0), metric("Net income", -5.0)), TODAY) == []
+
+
+def test_a_large_loss_is_not_flagged():
+    assert check(report(metric("Revenue", 1.0), metric("Net income", -8.0)), TODAY) == []
+
+
+def test_figures_from_different_years_are_not_compared_for_size():
+    found = check(
+        report(
+            metric("Revenue", 10.0, date(2025, 1, 25)),
+            metric("Net income", 40.0),
+            metric("Gross profit", 30.0),
+        ),
+        TODAY,
+    )
+    assert found == ["Revenue and net income come from different years."]

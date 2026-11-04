@@ -21,7 +21,11 @@ def adjust(bars: pd.DataFrame) -> pd.DataFrame:
     Needs oldest-first rows with open, high, low, close, volume, div_cash and split_factor.
     """
     frame = bars.copy()
-    previous_close = frame["close"].shift(1)
+    # A split and a payout can share a day. The payout is in post-split dollars, so the
+    # previous close must be too, or the factor can turn negative.
+    previous_close = (frame["close"].shift(1) / frame["split_factor"]).where(
+        frame["split_factor"] > 0
+    )
     # Each event changes every earlier price, so factors accumulate from the newest bar back.
     split_step = 1 / frame["split_factor"]
     dividend_step = (1 - frame["div_cash"] / previous_close).fillna(1)

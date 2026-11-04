@@ -21,6 +21,7 @@ type Report = {
   metrics: Metric[];
   history: { period_end: string; revenue: number | null; net_income: number | null; url: string | null }[];
   cases: Case[];
+  receipts?: boolean;
   assumptions: Record<string, number>;
   valuation_inputs?: Source[];
   insider_trades: Trade[];
@@ -129,7 +130,11 @@ export default function LongTermPanel({ ticker }: { ticker: string }) {
         predictions. Change any number to see the effect.
       </p>
       {report.cases.length === 0 ? (
-        <p>Not verified: a value can't be worked out, usually because cash flow is negative.</p>
+        <p>
+          {report.receipts
+            ? "Not verified: this is a foreign company traded through receipts. One receipt can stand for several shares, so value per share can't be worked out from these figures."
+            : "Not verified: a value can't be worked out, usually because cash flow is negative."}
+        </p>
       ) : (
         <div className="glance">
           {report.cases.map((item) => (

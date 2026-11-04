@@ -90,7 +90,7 @@ def check_adjustment() -> None:
 
     headers = {"Authorization": f"Token {os.environ['TIINGO_API_TOKEN']}"}
     engine = create_engine(Settings().database_url)
-    for ticker in ("AAPL", "NVDA", "JPM", "WMT", "XOM"):
+    for ticker in ("AAPL", "NVDA", "MSI", "HLT", "TMUS", "ABT"):
         with engine.connect() as conn:
             rows = conn.execute(
                 sql(
@@ -303,7 +303,6 @@ def probe_tags() -> None:
 
 def probe_adjustments() -> None:
     """List dividends and splits that would make adjusted prices impossible or suspect."""
-    from stockintel.forecast import load_frames  # noqa: F401
     from sqlalchemy import text as sql
 
     engine = create_engine(Settings().database_url)
@@ -333,7 +332,9 @@ def probe_adjustments() -> None:
     jumps = [
         r
         for r in rows
-        if r.prev and r.split_factor == 1 and not 0.5 <= r.close / r.prev <= 1.6
+        if r.prev
+        and r.split_factor == 1
+        and not 0.5 <= r.close / r.prev <= 1.6
         and r.div_cash < 0.15 * r.prev
     ]
     print("adj jumps", len(jumps))
@@ -355,10 +356,38 @@ def probe_flagged() -> None:
     for ticker, detail in issues:
         flagged.setdefault(ticker, []).append(detail)
     print("flag all", {k: [d[:22] for d in v] for k, v in flagged.items()})
-    words = ("revenue", "sales", "netincome", "profitloss", "grossprofit", "interestincome",
-             "premiums", "income")
-    for ticker in ("FITB", "XEL", "LHX", "TFC", "CNI", "HONA", "FNV", "BIIB", "RVMD", "MSTR",
-                   "NVS", "HSBC", "TM", "SAN", "UBS", "BBVA", "IBN", "BSP", "VYLR", "ARGX"):
+    words = (
+        "revenue",
+        "sales",
+        "netincome",
+        "profitloss",
+        "grossprofit",
+        "interestincome",
+        "premiums",
+        "income",
+    )
+    for ticker in (
+        "FITB",
+        "XEL",
+        "LHX",
+        "TFC",
+        "CNI",
+        "HONA",
+        "FNV",
+        "BIIB",
+        "RVMD",
+        "MSTR",
+        "NVS",
+        "HSBC",
+        "TM",
+        "SAN",
+        "UBS",
+        "BBVA",
+        "IBN",
+        "BSP",
+        "VYLR",
+        "ARGX",
+    ):
         with engine.connect() as conn:
             row = conn.execute(
                 sql("SELECT cik FROM securities WHERE ticker = :t"), {"t": ticker}
@@ -376,7 +405,14 @@ def probe_flagged() -> None:
             f"https://data.sec.gov/api/xbrl/companyfacts/CIK{row.cik:010d}.json",
             {"User-Agent": agent},
         )
-        print("tags", ticker, row.cik, status, flagged.get(ticker), [tuple(map(str, f)) for f in forms])
+        print(
+            "tags",
+            ticker,
+            row.cik,
+            status,
+            flagged.get(ticker),
+            [tuple(map(str, f)) for f in forms],
+        )
         if status != 200:
             continue
         data = json.loads(body)
@@ -386,20 +422,68 @@ def probe_flagged() -> None:
                 if any(word in tag.lower() for word in words):
                     for unit, rows in concept["units"].items():
                         yearly = [
-                            r for r in rows
+                            r
+                            for r in rows
                             if r.get("start")
-                            and 350 <= (date.fromisoformat(r["end"]) - date.fromisoformat(r["start"])).days <= 380
+                            and 350
+                            <= (date.fromisoformat(r["end"]) - date.fromisoformat(r["start"])).days
+                            <= 380
                         ]
                         if yearly:
                             top = max(yearly, key=lambda r: r["end"])
-                            found.append((top["end"], top["val"], taxonomy, tag, unit, top.get("form")))
+                            found.append(
+                                (top["end"], top["val"], taxonomy, tag, unit, top.get("form"))
+                            )
         for item in sorted(found, key=lambda x: (x[0], abs(x[1])), reverse=True)[:9]:
             print("tags  ", item)
 
 
+def probe_remaining() -> None:
+    """After a reload, list what the SEC offers for companies still flagged for revenue."""
+    from sqlalchemy import text as sql
+
+    agent = f"stock-intelligence {os.environ['SEC_CONTACT_EMAIL']}"
+    engine = create_engine(Settings().database_url)
+    with engine.connect() as conn:
+        rows = conn.execute(
+            sql(
+                """SELECT DISTINCT v.ticker, s.cik FROM validation_issues v
+                   JOIN securities s ON s.ticker = v.ticker
+                   WHERE v.feed = 'audit' AND (v.detail LIKE 'Revenue%')"""
+            )
+        ).all()
+    for ticker, cik in rows:
+        status, body = fetch(
+            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json", {"User-Agent": agent}
+        )
+        if status != 200:
+            print("left", ticker, status)
+            continue
+        found = []
+        for taxonomy, tags in json.loads(body)["facts"].items():
+            for tag, concept in tags.items():
+                if "revenue" in tag.lower() or "sales" in tag.lower():
+                    for unit, items in concept["units"].items():
+                        full = [
+                            r
+                            for r in items
+                            if r.get("start")
+                            and 350
+                            <= (date.fromisoformat(r["end"]) - date.fromisoformat(r["start"])).days
+                            <= 380
+                        ]
+                        if full:
+                            top = max(full, key=lambda r: r["end"])
+                            found.append((top["end"], top["val"], tag, unit, top.get("form")))
+        print("left", ticker, sorted(found, reverse=True, key=lambda x: (x[0], abs(x[1])))[:3])
+
+
 def main() -> None:
-    probe_adjustments()
-    probe_flagged()
+    from stockintel import audit
+
+    audit.run(create_engine(Settings().database_url))
+    check_adjustment()
+    probe_remaining()
     sys.exit(0)
 
 

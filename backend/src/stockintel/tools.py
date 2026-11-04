@@ -202,6 +202,178 @@ def journal(engine: Engine) -> list[dict]:
     return [{**row, "change_percent": (row["latest"] / row["price"] - 1) * 100} for row in rows]
 
 
+# From the SEC's Form 8-K. Serious ones can change the case for owning a stock.
+EVENT_MEANINGS = {
+    "1.01": ("Signed a major agreement", False),
+    "1.02": ("Ended a major agreement", False),
+    "1.03": ("Bankruptcy or receivership", True),
+    "1.05": ("Reported a serious cybersecurity incident", True),
+    "2.01": ("Completed buying or selling a large business", False),
+    "2.02": ("Reported results", False),
+    "2.03": ("Took on a major new debt", False),
+    "2.04": ("Something made a debt come due early", True),
+    "2.05": ("Started a restructuring, usually with job cuts or closures", True),
+    "2.06": ("Wrote down the value of something it owns", True),
+    "3.01": ("Received a warning about its stock listing", True),
+    "3.02": ("Sold shares without a public offering", False),
+    "3.03": ("Changed shareholders' rights", False),
+    "4.01": ("Changed its auditor", True),
+    "4.02": ("Said earlier accounts should no longer be relied on", True),
+    "5.01": ("Control of the company changed", True),
+    "5.02": ("A director or senior officer joined or left", False),
+    "5.03": ("Changed its company rules or financial year", False),
+    "5.07": ("Reported a shareholder vote", False),
+    "7.01": ("Shared information with investors", False),
+    "8.01": ("Reported other news", False),
+}
+SERIOUS_DAYS = 90
+
+
+def read_items(items: str) -> list[dict]:
+    """Turn a filing's item numbers into words. Unknown numbers are left out."""
+    found = []
+    for item in dict.fromkeys(part.strip() for part in items.split(",")):
+        if item in EVENT_MEANINGS:
+            meaning, serious = EVENT_MEANINGS[item]
+            found.append({"item": item, "meaning": meaning, "serious": serious})
+    return found
+
+
+def company_events(engine: Engine, ticker: str, today: date, days: int = 180) -> list[dict]:
+    query = """SELECT e.filing_date, e.form, e.items, e.document_url, d.name AS source
+               FROM filing_events e
+               JOIN securities s ON s.id = e.security_id
+               JOIN fetches f ON f.id = e.fetch_id
+               JOIN data_sources d ON d.id = f.source_id
+               WHERE s.ticker = :t AND e.filing_date >= :since
+               ORDER BY e.filing_date DESC, e.id DESC LIMIT 20"""
+    with engine.connect() as conn:
+        rows = _rows(
+            conn.execute(text(query), {"t": ticker.upper(), "since": today - timedelta(days=days)})
+        )
+    output = []
+    for row in rows:
+        events = read_items(row["items"])
+        if events:
+            output.append(
+                {
+                    "date": row["filing_date"],
+                    "url": row["document_url"],
+                    "source": row["source"],
+                    "events": events,
+                }
+            )
+    return output
+
+
+def serious_events(events: list[dict], today: date) -> list[str]:
+    return [
+        item["meaning"]
+        for row in events
+        if (today - row["date"]).days <= SERIOUS_DAYS
+        for item in row["events"]
+        if item["serious"]
+    ]
+
+
+def add_judgment(
+    engine: Engine, ticker: str, view: str, reason: str, changes_mind: str, system_call: str
+) -> bool:
+    with engine.begin() as conn:
+        security_id = _security(conn, ticker)
+        if security_id is None:
+            return False
+        bar = conn.execute(
+            text(
+                """SELECT close, market_date FROM price_bars WHERE security_id = :id
+                   ORDER BY market_date DESC, id DESC LIMIT 1"""
+            ),
+            {"id": security_id},
+        ).first()
+        if bar is None:
+            return False
+        conn.execute(
+            text(
+                """INSERT INTO judgments (security_id, view, reason, changes_mind, price,
+                     market_date, system_call)
+                   VALUES (:id, :view, :reason, :changes_mind, :price, :day, :system_call)"""
+            ),
+            {
+                "id": security_id,
+                "view": view,
+                "reason": reason,
+                "changes_mind": changes_mind,
+                "price": bar.close,
+                "day": bar.market_date,
+                "system_call": system_call,
+            },
+        )
+    return True
+
+
+def judgments(engine: Engine, ticker: str | None = None) -> list[dict]:
+    query = """SELECT j.created_at, s.ticker, j.view, j.reason, j.changes_mind, j.price,
+                 j.market_date, j.system_call,
+                 (SELECT b.close FROM price_bars b WHERE b.security_id = j.security_id
+                  ORDER BY b.market_date DESC, b.id DESC LIMIT 1) AS latest,
+                 (SELECT sum(CASE WHEN b.split_factor <> 1 THEN 1 ELSE 0 END)
+                  FROM price_bars b WHERE b.security_id = j.security_id
+                    AND b.market_date > j.market_date) AS splits
+               FROM judgments j JOIN securities s ON s.id = j.security_id
+               WHERE (CAST(:t AS text) IS NULL OR s.ticker = :t)
+               ORDER BY j.id DESC LIMIT 100"""
+    with engine.connect() as conn:
+        rows = _rows(conn.execute(text(query), {"t": ticker.upper() if ticker else None}))
+    return [
+        {
+            **row,
+            # A split makes the old price not comparable, so the change stays unverified.
+            "change_percent": None if row["splits"] else (row["latest"] / row["price"] - 1) * 100,
+        }
+        for row in rows
+    ]
+
+
+JUDGMENT_DAYS = 28
+
+
+def _right(call: str, change: float) -> bool | None:
+    text_call = call.lower()
+    if "buy" in text_call:
+        return change > 0
+    if "sell" in text_call:
+        return change < 0
+    return None
+
+
+def judgment_record(rows: list[dict], today: date) -> dict:
+    """Compare calls once four weeks have passed. Hold and unsure calls aren't counted."""
+    yours = system = yours_right = system_right = disagreed = you_won = 0
+    for row in rows:
+        change = row["change_percent"]
+        if change is None or (today - row["market_date"]).days < JUDGMENT_DAYS:
+            continue
+        mine, theirs = _right(row["view"], change), _right(row["system_call"], change)
+        if mine is not None:
+            yours += 1
+            yours_right += mine
+        if theirs is not None:
+            system += 1
+            system_right += theirs
+        if mine is not None and theirs is not None and mine != theirs:
+            disagreed += 1
+            you_won += mine
+    return {
+        "your_calls": yours,
+        "your_right": yours_right,
+        "system_calls": system,
+        "system_right": system_right,
+        "disagreed": disagreed,
+        "you_won": you_won,
+        "days": JUDGMENT_DAYS,
+    }
+
+
 def alerts(engine: Engine) -> list[dict]:
     with engine.connect() as conn:
         return _rows(
@@ -327,11 +499,20 @@ def warnings(report: dict) -> list[str]:
 
 
 def next_earnings(engine: Engine, ticker: str, today: date) -> date | None:
-    """An estimate: companies tend to report on a similar date each year."""
+    """An estimate: companies tend to report on a similar date each year.
+
+    A results announcement (8-K item 2.02) is the true earnings day. The later 10-Q is the
+    fallback for companies with no such history stored.
+    """
+    announced = """SELECT e.filing_date FROM filing_events e
+                   JOIN securities s ON s.id = e.security_id
+                   WHERE s.ticker = :t AND e.items LIKE '%2.02%' ORDER BY e.filing_date"""
     query = """SELECT f.filing_date FROM filings f JOIN securities s ON s.id = f.security_id
                WHERE s.ticker = :t AND f.form IN ('10-Q', '10-K') ORDER BY f.filing_date"""
     with engine.connect() as conn:
-        dates = list(conn.execute(text(query), {"t": ticker.upper()}).scalars())
+        dates = list(conn.execute(text(announced), {"t": ticker.upper()}).scalars())
+        if len(dates) < 4:
+            dates = list(conn.execute(text(query), {"t": ticker.upper()}).scalars())
     if not dates:
         return None
     for filed in dates:

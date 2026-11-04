@@ -67,6 +67,7 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         "issuance",
         "earnings_drift",
         "insider",
+        "insider_cluster",
         "revenue_growth",
     ):
         factors[item] = np.nan
@@ -116,6 +117,7 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
             daily.reindex(dates["date"].unique(), fill_value=0.0).rolling(90, min_periods=1).sum()
         )
         factors["insider"] = dates["date"].map(window).to_numpy() / dollars.to_numpy()
+        factors["insider_cluster"] = insider_buyers(trades, dates["date"])
 
 
 def build_panel(
@@ -379,7 +381,7 @@ def load_company(engine: Engine) -> dict[str, dict]:
             ).all()
             trades = conn.execute(
                 text(
-                    """SELECT filed, code, shares, price FROM insider_transactions
+                    """SELECT filed, code, shares, price, owner FROM insider_transactions
                        WHERE security_id = :id AND price IS NOT NULL
                          AND (code = 'P' OR (code = 'S' AND NOT planned_sale))"""
                 ),
@@ -397,6 +399,20 @@ def load_company(engine: Engine) -> dict[str, dict]:
     return output
 
 
+def insider_buyers(trades: pd.DataFrame, days: pd.Series) -> np.ndarray:
+    """How many different insiders had bought in the 90 days up to each date."""
+    counts = np.zeros(len(days))
+    buys = trades[(trades["net_value"] > 0) & trades["owner"].notna()]
+    values = days.to_numpy()
+    for _, group in buys.groupby("owner"):
+        held = np.zeros(len(days), dtype=bool)
+        for day in group["available"]:
+            start = np.datetime64(day)
+            held |= (values >= start) & (values < start + np.timedelta64(90, "D"))
+        counts += held
+    return counts
+
+
 def insider_values(trades: pd.DataFrame) -> pd.DataFrame:
     if trades.empty:
         return trades
@@ -405,6 +421,7 @@ def insider_values(trades: pd.DataFrame) -> pd.DataFrame:
         {
             "available": pd.to_datetime(trades["filed"]) + pd.Timedelta(days=1),
             "net_value": sign * trades["shares"].to_numpy() * trades["price"].to_numpy(),
+            "owner": trades["owner"].to_numpy() if "owner" in trades else None,
         }
     )
 

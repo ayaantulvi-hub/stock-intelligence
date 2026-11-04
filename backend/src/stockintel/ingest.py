@@ -293,6 +293,41 @@ def run_filings(engine: Engine, provider: FilingsProvider, now: datetime) -> str
                         for filing in new
                     ],
                 )
+            known_events = set(
+                conn.execute(
+                    text("SELECT accession_number FROM filing_events WHERE security_id = :id"),
+                    {"id": security.id},
+                ).scalars()
+            )
+            events = [
+                filing
+                for filing in filings
+                if filing.items
+                and filing.form in ("8-K", "8-K/A")
+                and filing.accession_number not in known_events
+            ]
+            if events:
+                event_fetch = add_fetch(conn, provenance)
+                conn.execute(
+                    text(
+                        """INSERT INTO filing_events (security_id, fetch_id, accession_number,
+                             form, filing_date, items, document_url)
+                           VALUES (:security_id, :fetch_id, :accession_number, :form,
+                             :filing_date, :items, :document_url)"""
+                    ),
+                    [
+                        {
+                            "security_id": security.id,
+                            "fetch_id": event_fetch,
+                            "accession_number": filing.accession_number,
+                            "form": filing.form,
+                            "filing_date": filing.filing_date,
+                            "items": filing.items,
+                            "document_url": filing.document_url,
+                        }
+                        for filing in events
+                    ],
+                )
             conn.execute(
                 text(
                     """UPDATE securities SET last_filing_fetch_at = :now,
