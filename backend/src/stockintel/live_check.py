@@ -460,7 +460,7 @@ def probe_remaining() -> None:
             print("left", ticker, status)
             continue
         found = []
-        for taxonomy, tags in json.loads(body)["facts"].items():
+        for tags in json.loads(body)["facts"].values():
             for tag, concept in tags.items():
                 if "revenue" in tag.lower() or "sales" in tag.lower():
                     for unit, items in concept["units"].items():

@@ -116,7 +116,7 @@ test("simple view gives the call and explains the data in plain English", async 
   expect(screen.getByText("Fixture meaning.")).toBeTruthy();
   expect(screen.getByText("Fixture factor meaning.")).toBeTruthy();
   expect(screen.getByText("Insider trades")).toBeTruthy();
-  expect(screen.getByText("Buy")).toBeTruthy();
+  expect(screen.getAllByText("Buy").length).toBeGreaterThan(0);
   expect(screen.getByText("Fixture chart note.")).toBeTruthy();
   expect(await screen.findByText("Leans buy")).toBeTruthy();
   expect(screen.getByText(/Unproven, so treat it as a guess/)).toBeTruthy();
@@ -181,6 +181,10 @@ test("explains support and resistance in everyday words", async () => {
 
 test("company events and your judgment show what was stored, not invented", async () => {
   stub({
+    "/api/stocks/AAA/story": [],
+    "/api/stocks/AAA/forecast": null,
+    "/api/stocks/AAA/leans": null,
+    "/api/stocks/AAA/decision": null,
     "/api/stocks/AAA/events": [
       {
         date: "2026-10-01",
