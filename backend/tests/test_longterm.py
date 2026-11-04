@@ -357,3 +357,9 @@ def test_capital_spending_label_change_is_followed():
         [fact(OCF, 100.0, 2023), fact("PaymentsToAcquireProductiveAssets", 6.0, 2023)]
     )
     assert metric(longterm.report(frame, 10.0), "Free cash flow")["value"] == 94.0
+
+
+def test_a_zero_share_count_gives_no_valuation():
+    frame = company()
+    frame.loc[frame["tag"] == "EntityCommonStockSharesOutstanding", "value"] = 0.0
+    assert longterm.report(frame, 10.0)["cases"] == []

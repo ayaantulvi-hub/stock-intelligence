@@ -265,7 +265,9 @@ def show_stock(ticker: str) -> None:
 
 
 def main() -> None:
-    show_stock("NVDA")
+    from stockintel import audit
+
+    audit.run(create_engine(Settings().database_url))
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,

@@ -199,7 +199,9 @@ def report(facts: pd.DataFrame, price: float | None, changes: dict | None = None
         ),
     ]
 
-    can_value = bool(free_cash and free_cash > 0 and shares is not None and price)
+    can_value = bool(
+        free_cash and free_cash > 0 and shares is not None and shares["value"] > 0 and price
+    )
     start = 0.0 if growth is None else min(max(growth, 0.0), GROWTH_CAP)
     assumptions = {
         "bear_growth": max(start - CASE_GAP, 0.0),
