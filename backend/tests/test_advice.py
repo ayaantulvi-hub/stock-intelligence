@@ -204,3 +204,19 @@ def test_survivorship_suspect_pass_is_not_proven():
     assert row["proven"] is False
     assert row["lean"] == "No lean"
     assert "distrusted" in row["evidence"]
+
+
+@pytest.mark.parametrize(
+    "action, rank, lean, proven",
+    [
+        ("No reliable edge", 0.85, "Buy", False),
+        ("No reliable edge", 0.15, "Sell", False),
+        ("No reliable edge", 0.5, "Mixed", False),
+        ("Buy candidate", 0.95, "Buy", True),
+        ("Sell candidate", 0.05, "Sell", True),
+        ("No reliable edge", None, "No lean", False),
+    ],
+)
+def test_overall_lean_is_marked_unless_tested(action, rank, lean, proven):
+    result = advice.overall(action, rank)
+    assert (result["lean"], result["proven"], result["decision"]) == (lean, proven, action)

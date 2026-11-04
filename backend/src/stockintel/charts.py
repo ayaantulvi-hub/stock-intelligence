@@ -210,6 +210,131 @@ class Pattern:
     detail: str
 
 
+PATTERNS = (
+    ("Double top", "bearish"),
+    ("Double bottom", "bullish"),
+    ("Head and shoulders", "bearish"),
+    ("Inverse head and shoulders", "bullish"),
+    ("Ascending triangle", "bullish"),
+    ("Descending triangle", "bearish"),
+)
+SAME_LEVEL = 0.015
+SHOULDER_LEVEL = 0.03
+MIN_DEPTH = 0.03
+MIN_HEAD = 0.02
+MIN_GAP, MAX_GAP = 10, 60
+
+
+def _pivots(values: np.ndarray, sign: int) -> list[int]:
+    """Turning points, as positions. sign 1 finds peaks and -1 finds troughs."""
+    found = []
+    data = values * sign
+    for i in range(PIVOT_WINDOW, len(data) - PIVOT_WINDOW):
+        around = data[i - PIVOT_WINDOW : i + PIVOT_WINDOW + 1]
+        if data[i] == around.max() and data[i] > data[i - 1]:
+            found.append(i)
+    return found
+
+
+def _near(a: float, b: float, tolerance: float) -> bool:
+    return abs(a / b - 1) <= tolerance
+
+
+def chart_patterns(frame: pd.DataFrame) -> list[tuple[str, str, int, float]]:
+    """Find completed shapes as (name, direction, position, cancellation level).
+
+    A shape completes when the close crosses its key line. A turning point only counts
+    once PIVOT_WINDOW later candles have closed, so nothing here uses future prices.
+    """
+    highs = frame["high"].to_numpy(dtype=float)
+    lows = frame["low"].to_numpy(dtype=float)
+    close = frame["close"].to_numpy(dtype=float)
+    peaks, troughs = _pivots(highs, 1), _pivots(lows, -1)
+    found: list[tuple[str, str, int, float]] = []
+    seen: set[tuple[str, float]] = set()
+
+    def add(name, direction, position, level, key):
+        if (name, key) not in seen:
+            seen.add((name, key))
+            found.append((name, direction, position, float(level)))
+
+    def crossed_down(line: float, moment: int) -> bool:
+        return bool(close[moment - 1] >= line > close[moment])
+
+    def crossed_up(line: float, moment: int) -> bool:
+        return bool(close[moment - 1] <= line < close[moment])
+
+    p, t = 0, 0
+    known_peaks: list[int] = []
+    known_troughs: list[int] = []
+    for now in range(1, len(close)):
+        while p < len(peaks) and peaks[p] + PIVOT_WINDOW <= now:
+            known_peaks.append(peaks[p])
+            p += 1
+        while t < len(troughs) and troughs[t] + PIVOT_WINDOW <= now:
+            known_troughs.append(troughs[t])
+            t += 1
+        crossed_down = lambda line: close[now - 1] >= line > close[now]
+        crossed_up = lambda line: close[now - 1] <= line < close[now]
+        if len(known_peaks) >= 2:
+            a, b = known_peaks[-2], known_peaks[-1]
+            between = [i for i in known_troughs if a < i < b]
+            if MIN_GAP <= b - a <= MAX_GAP and between and now - b <= MAX_GAP:
+                neck = lows[between].min()
+                top = max(highs[a], highs[b])
+                if (
+                    _near(highs[a], highs[b], SAME_LEVEL)
+                    and neck <= top * (1 - MIN_DEPTH)
+                    and crossed_down(neck, now)
+                ):
+                    add("Double top", "bearish", now, top, b)
+        if len(known_troughs) >= 2:
+            a, b = known_troughs[-2], known_troughs[-1]
+            between = [i for i in known_peaks if a < i < b]
+            if MIN_GAP <= b - a <= MAX_GAP and between and now - b <= MAX_GAP:
+                neck = highs[between].max()
+                bottom = min(lows[a], lows[b])
+                if (
+                    _near(lows[a], lows[b], SAME_LEVEL)
+                    and neck >= bottom * (1 + MIN_DEPTH)
+                    and crossed_up(neck, now)
+                ):
+                    add("Double bottom", "bullish", now, bottom, b)
+        if len(known_peaks) >= 3 and len(known_troughs) >= 2:
+            left, head, right = known_peaks[-3:]
+            dips = [i for i in known_troughs if left < i < right]
+            if dips and now - right <= MAX_GAP and right - left <= MAX_GAP * 2:
+                neck = lows[dips].min()
+                if (
+                    highs[head] >= max(highs[left], highs[right]) * (1 + MIN_HEAD)
+                    and _near(highs[left], highs[right], SHOULDER_LEVEL)
+                    and crossed_down(neck, now)
+                ):
+                    add("Head and shoulders", "bearish", now, highs[right], right)
+        if len(known_troughs) >= 3 and len(known_peaks) >= 2:
+            left, head, right = known_troughs[-3:]
+            rises = [i for i in known_peaks if left < i < right]
+            if rises and now - right <= MAX_GAP and right - left <= MAX_GAP * 2:
+                neck = highs[rises].max()
+                if (
+                    lows[head] <= min(lows[left], lows[right]) * (1 - MIN_HEAD)
+                    and _near(lows[left], lows[right], SHOULDER_LEVEL)
+                    and crossed_up(neck, now)
+                ):
+                    add("Inverse head and shoulders", "bullish", now, lows[right], right)
+        if len(known_peaks) >= 2 and len(known_troughs) >= 2:
+            a, b = known_peaks[-2], known_peaks[-1]
+            c, d = known_troughs[-2], known_troughs[-1]
+            recent = now - min(a, c) <= MAX_GAP * 2
+            flat_top = _near(highs[a], highs[b], SAME_LEVEL) and lows[d] > lows[c] * 1.01
+            flat_base = _near(lows[c], lows[d], SAME_LEVEL) and highs[b] < highs[a] * 0.99
+            if recent and flat_top and crossed_up(max(highs[a], highs[b]), now):
+                add("Ascending triangle", "bullish", now, lows[d], b)
+            if recent and flat_base and crossed_down(min(lows[c], lows[d]), now):
+                add("Descending triangle", "bearish", now, highs[b], d)
+    return found
+
+
 def pattern_history(frame: pd.DataFrame) -> pd.DataFrame:
     """Where each rule was confirmed on every candle, as one true/false column per rule.
 
@@ -223,7 +348,7 @@ def pattern_history(frame: pd.DataFrame) -> pd.DataFrame:
     previous_close, previous_open = close.shift(1), open_.shift(1)
     up = (close > open_) & (previous_close < previous_open)
     down = (close < open_) & (previous_close > previous_open)
-    return pd.DataFrame(
+    flags = pd.DataFrame(
         {
             ("Golden cross", "bullish"): (short.shift(1) <= long.shift(1)) & (short > long),
             ("Death cross", "bearish"): (short.shift(1) >= long.shift(1)) & (short < long),
@@ -239,6 +364,20 @@ def pattern_history(frame: pd.DataFrame) -> pd.DataFrame:
             & (close <= previous_open),
         }
     )
+    for key in PATTERNS:
+        flags[key] = False
+    for name, direction, position, _ in chart_patterns(frame):
+        flags.iloc[position, flags.columns.get_loc((name, direction))] = True
+    return flags
+
+
+def pattern_score(frame: pd.DataFrame, days: int = 10) -> pd.Series:
+    """Plus 1 after a bullish shape and minus 1 after a bearish one, for `days` candles."""
+    score = pd.Series(0.0, index=frame.index)
+    for _, direction, position, _ in chart_patterns(frame):
+        value = 1.0 if direction == "bullish" else -1.0
+        score.iloc[position : position + days] = value
+    return score
 
 
 def detect_patterns(frame: pd.DataFrame) -> list[Pattern]:
@@ -325,6 +464,10 @@ def detect_patterns(frame: pd.DataFrame) -> list[Pattern]:
             latest["high"],
             "Down candle covers last up candle",
         )
+
+    for name, direction, position, level in chart_patterns(frame):
+        if position == len(frame) - 1:
+            add(name, direction, "confirmed", level, f"{name} completed on this candle")
 
     for level in levels(frame.iloc[:-1]):
         if level.kind == "resistance":

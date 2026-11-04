@@ -224,7 +224,7 @@ def test_writes_no_edge_forecasts_with_real_range(engine, panel):
     assert row["confidence"] == "None"
     assert row["p_up"] + row["p_flat"] + row["p_down"] == pytest.approx(1)
     assert row["range_low"] < row["last_close"] < row["range_high"]
-    assert len(row["drivers"]) == 14
+    assert len(row["drivers"]) == 15
     assert row["action"] == "No reliable edge"
 
 

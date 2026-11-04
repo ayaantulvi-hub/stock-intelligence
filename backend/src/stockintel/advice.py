@@ -23,6 +23,7 @@ PAPER_DIRECTION = {
     "max_ret": -1,
     "illiquidity": 1,
     "above_200": 1,
+    "chart_pattern": 1,
     "value": 1,
     "size": -1,
     "profitability": 1,
@@ -98,6 +99,21 @@ def factor_leans(drivers: list[dict], tests: dict[str, dict]) -> dict:
         "paper_buy": count("Buy", False),
         "paper_sell": count("Sell", False),
     }
+
+
+def overall(action: str, rank: float | None) -> dict:
+    """The decision, plus the model's lean across all factors, clearly marked if unproven."""
+    if action in {"Buy candidate", "Sell candidate"}:
+        return {"decision": action, "lean": action.split()[0], "proven": True, "rank": rank}
+    if rank is None:
+        lean = "No lean"
+    elif rank >= 0.7:
+        lean = "Buy"
+    elif rank <= 0.3:
+        lean = "Sell"
+    else:
+        lean = "Mixed"
+    return {"decision": action, "lean": lean, "proven": False, "rank": rank}
 
 
 def position_view(position: dict, price: float, action: str, cases: list[dict]) -> dict:

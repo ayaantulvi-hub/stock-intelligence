@@ -277,3 +277,76 @@ def test_summary_leaves_unknown_values_blank():
     assert result["above_200"] is None
     assert result["rsi_state"] is None
     assert result["percent_to_resistance"] is None
+
+
+def shape(points):
+    """Build a daily path through (position, price) points. A TEST FIXTURE."""
+    closes = np.interp(range(points[-1][0] + 1), *zip(*points, strict=True))
+    frame = frame_of(list(closes))
+    frame["high"] = frame["close"] + 0.2
+    frame["low"] = frame["close"] - 0.2
+    return frame
+
+
+def names(frame):
+    return {(item[0], item[1]) for item in charts.chart_patterns(frame)}
+
+
+def test_double_top_completes_on_the_break_of_the_low_between():
+    frame = shape([(0, 80), (15, 100), (30, 90), (45, 100), (70, 80)])
+    found = [item for item in charts.chart_patterns(frame) if item[0] == "Double top"]
+    assert len(found) == 1
+    position = found[0][2]
+    assert frame["close"].iloc[position] < 90 < frame["close"].iloc[position - 1] + 1
+    assert found[0][3] == pytest.approx(100.2)
+
+
+def test_double_bottom():
+    frame = shape([(0, 120), (15, 100), (30, 110), (45, 100), (70, 125)])
+    assert ("Double bottom", "bullish") in names(frame)
+
+
+def test_head_and_shoulders():
+    frame = shape([(0, 80), (15, 100), (30, 90), (45, 110), (60, 90), (75, 100), (100, 75)])
+    assert ("Head and shoulders", "bearish") in names(frame)
+
+
+def test_inverse_head_and_shoulders():
+    frame = shape([(0, 120), (15, 100), (30, 110), (45, 90), (60, 110), (75, 100), (100, 125)])
+    assert ("Inverse head and shoulders", "bullish") in names(frame)
+
+
+def test_ascending_triangle():
+    frame = shape([(0, 90), (12, 100), (24, 92), (36, 100), (48, 95), (65, 106)])
+    assert ("Ascending triangle", "bullish") in names(frame)
+
+
+def test_descending_triangle():
+    frame = shape([(0, 110), (12, 100), (24, 108), (36, 100), (48, 105), (65, 94)])
+    assert ("Descending triangle", "bearish") in names(frame)
+
+
+def test_peaks_at_very_different_heights_are_not_a_double_top():
+    frame = shape([(0, 80), (15, 100), (30, 90), (45, 120), (70, 80)])
+    assert ("Double top", "bearish") not in names(frame)
+
+
+def test_unfinished_shape_does_not_fire():
+    frame = shape([(0, 80), (15, 100), (30, 90), (45, 100), (55, 95)])
+    assert ("Double top", "bearish") not in names(frame)
+
+
+def test_completed_shape_appears_as_a_live_signal():
+    frame = shape([(0, 80), (15, 100), (30, 90), (45, 100), (70, 80)])
+    position = next(i[2] for i in charts.chart_patterns(frame) if i[0] == "Double top")
+    live = detect_patterns(frame.iloc[: position + 1].reset_index(drop=True))
+    assert any(item.name == "Double top" for item in live)
+
+
+def test_pattern_score_lasts_ten_candles():
+    frame = shape([(0, 120), (15, 100), (30, 110), (45, 100), (70, 125), (90, 130)])
+    position = next(i[2] for i in charts.chart_patterns(frame) if i[0] == "Double bottom")
+    score = charts.pattern_score(frame)
+    assert score.iloc[position] == 1
+    assert score.iloc[position + 9] == 1
+    assert score.iloc[position + 10] == 0

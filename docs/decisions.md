@@ -92,6 +92,14 @@ needs at least 30 tested cases that beat the baseline.
 - Factor test passes for size, volatility, beta and largest daily gain are distrusted. The
   stock list holds only today's largest companies, which favours past small, wild winners.
 
+## Chart patterns
+
+- Double tops and bottoms, head and shoulders (both ways) and ascending and descending
+  triangles are found by fixed rules. A turning point counts only after 5 later candles.
+- They are backtested like other signals and feed the model as one factor. Lo, Mamaysky &
+  Wang (2000) found some information in such patterns, 1962 to 1996. Flags and cups are not
+  built. The rule thresholds are choices, set before testing.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

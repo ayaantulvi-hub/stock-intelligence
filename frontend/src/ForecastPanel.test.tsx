@@ -84,6 +84,7 @@ test("simple view gives the call and explains the data in plain English", async 
       proven_sell: 0,
       paper_buy: 1,
       paper_sell: 0,
+      overall: { decision: "No reliable edge", lean: "Buy", proven: false, rank: 0.85 },
     },
     "/api/stocks/AAA/story": [
       {
@@ -103,7 +104,8 @@ test("simple view gives the call and explains the data in plain English", async 
   expect(screen.getByText("Insider trades")).toBeTruthy();
   expect(screen.getByText("Buy")).toBeTruthy();
   expect(screen.getByText("Fixture chart note.")).toBeTruthy();
-  expect(screen.getAllByText("No reliable edge").length).toBe(2);
+  expect(screen.getAllByText("No reliable edge").length).toBe(3);
+  expect(screen.getByText(/leans Buy, ranking this stock higher than 85%/)).toBeTruthy();
 });
 
 test("names no stocks when the model has no edge", async () => {

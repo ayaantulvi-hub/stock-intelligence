@@ -127,6 +127,7 @@ type Leans = {
   proven_sell: number;
   paper_buy: number;
   paper_sell: number;
+  overall: { decision: string; lean: string; proven: boolean; rank: number | null };
 };
 
 function LeanTable({ leans }: { leans: Leans }) {
@@ -151,9 +152,22 @@ function LeanTable({ leans }: { leans: Leans }) {
           <strong>{leans.paper_sell}</strong>
         </div>
       </div>
+      <div className={`action ${leans.overall.proven ? (leans.overall.lean === "Buy" ? "buy" : "sell") : ""}`}>
+        <small>Overall decision</small>
+        <strong>{leans.overall.decision}</strong>
+        <p>
+          {leans.overall.proven
+            ? "This passed testing."
+            : `The model weighing all factors leans ${leans.overall.lean}${
+                leans.overall.rank === null
+                  ? ""
+                  : `, ranking this stock higher than ${Math.round(leans.overall.rank * 100)}% of those covered for the next 20 days`
+              }. This lean is unproven, so don't treat it as a decision.`}
+        </p>
+      </div>
       <small>
         Proven means the factor passed testing in this app. Unproven only reflects what a paper
-        found, so don't count it the same way. These are not added up into a call.
+        found, so don't count it the same way. The overall decision comes from the tested model, not from counting these rows.
       </small>
       <div className="scroll">
         <table>

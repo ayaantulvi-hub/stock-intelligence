@@ -374,7 +374,10 @@ def stock_leans(engine: Engine, ticker: str) -> dict | None:
     forecast = stock_forecast(engine, ticker)
     if forecast is None:
         return None
-    return advice.factor_leans(forecast["drivers"], latest_factor_tests(engine))
+    return {
+        **advice.factor_leans(forecast["drivers"], latest_factor_tests(engine)),
+        "overall": advice.overall(forecast["action"], forecast["rank_20d"]),
+    }
 
 
 def get_position(engine: Engine, ticker: str) -> dict | None:

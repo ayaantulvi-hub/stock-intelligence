@@ -34,6 +34,18 @@ const TERMS: [string, string][] = [
     "When the 50-day average rises above the 200-day average. A death cross is when it drops below.",
   ],
   [
+    "Double top or bottom",
+    "A double top is two peaks at about the same price, then a fall through the low between them. A double bottom is the upside-down version.",
+  ],
+  [
+    "Head and shoulders",
+    "Three peaks with the middle one highest, then a fall through the line under them. The inverse version is the same shape upside down.",
+  ],
+  [
+    "Triangle",
+    "Prices squeeze between a flat line and a sloping one. An ascending triangle has a flat ceiling and rising floors. A descending one has a flat floor and falling ceilings.",
+  ],
+  [
     "Momentum",
     "The tendency of stocks that have been rising to keep rising for a while, and of falling ones to keep falling. It often fails.",
   ],

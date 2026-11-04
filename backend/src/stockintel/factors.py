@@ -122,6 +122,15 @@ REGISTER = [
         LIVE,
     ),
     Factor(
+        "chart_pattern",
+        "Recent chart pattern",
+        "Technical",
+        "Lo, Mamaysky & Wang (2000), Journal of Finance",
+        LIVE,
+        "Several technical indicators gave incremental information, 1962 to 1996",
+        "https://www.nber.org/papers/w7613",
+    ),
+    Factor(
         "yield_slope",
         "10-year minus 2-year Treasury yield",
         "Economy",
@@ -233,6 +242,7 @@ HIGH_MEANS = {
     "rsi": "Stronger recent buying than most stocks",
     "macd_hist": "Stronger short-term trend than most stocks",
     "above_200": "Further above its 200-day average than most stocks",
+    "chart_pattern": "Recently completed a bullish chart pattern",
     "value": "Priced cheaply against its accounting value, compared with most stocks",
     "size": "A larger company than most covered stocks",
     "profitability": "Earns more gross profit per dollar of assets than most stocks",
@@ -250,7 +260,7 @@ def register() -> list[dict]:
 
 def stock_factors(frame: pd.DataFrame, market_returns: pd.Series | None = None) -> pd.DataFrame:
     """One row per candle, using only that candle and earlier ones."""
-    from stockintel.charts import macd, rsi, sma
+    from stockintel.charts import macd, pattern_score, rsi, sma
 
     close, volume = frame["close"], frame["volume"]
     daily = close.pct_change(fill_method=None)
@@ -269,6 +279,7 @@ def stock_factors(frame: pd.DataFrame, market_returns: pd.Series | None = None) 
     result["rsi"] = rsi(close)
     result["macd_hist"] = macd(close)["histogram"] / close
     result["above_200"] = close / sma(close, 200) - 1
+    result["chart_pattern"] = pattern_score(frame)
     if market_returns is not None:
         market = pd.Series(market_returns.to_numpy(), index=frame.index)
         result["beta"] = daily.rolling(252).cov(market) / market.rolling(252).var()
