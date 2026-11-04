@@ -68,7 +68,7 @@ const COLUMNS: [keyof Row, string][] = [
 export function Screener({ onOpen }: { onOpen: (ticker: string) => void }) {
   const { data, failed } = useData<Row[]>("/api/screener");
   const [filter, setFilter] = useState("");
-  const [lean, setLean] = useState("All");
+  const [lean, setLean] = useState("Buy");
   const [sort, setSort] = useState<keyof Row>("rank");
   const [ascending, setAscending] = useState(false);
   if (failed) return <Failed />;

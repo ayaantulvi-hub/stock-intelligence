@@ -55,7 +55,7 @@ function PickList({ title, picks, tone, onOpen }: {
             <button className="link" onClick={() => onOpen?.(pick.ticker)}>
               {pick.ticker}
             </button>{" "}
-            {pick.name}
+            {pick.name}, upside rank {Math.round(pick.rank * 100)}
             <small>
               {pick.reasons.length ? `Why: ${pick.reasons.join(", ")}` : "No single factor stands out"}
             </small>
@@ -620,8 +620,8 @@ export function IdeasPanel({
             </p>
           </div>
           <div className="pick-grid">
-            <PickList title="Strongest buy leans" picks={ideas.top} tone="ok" onOpen={onOpen} />
-            <PickList title="Strongest sell leans" picks={ideas.bottom} tone="bad" onOpen={onOpen} />
+            <PickList title="Biggest upside, best first" picks={ideas.top} tone="ok" onOpen={onOpen} />
+            <PickList title="Weakest, worst first" picks={ideas.bottom} tone="bad" onOpen={onOpen} />
           </div>
           <small>
             A sell lean means avoid or review it if you own it. Ranked for the next 20 days.

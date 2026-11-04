@@ -52,8 +52,9 @@ test("screener filters by lean and opens a stock", async () => {
   respond([row("AAA", "Buy"), row("BBB", "Sell")]);
   const open = vi.fn();
   render(<Screener onOpen={open} />);
-  fireEvent.click(await screen.findByText("BBB"));
-  expect(open).toHaveBeenCalledWith("BBB");
-  fireEvent.click(screen.getByRole("button", { name: "Buy" }));
+  fireEvent.click(await screen.findByText("AAA"));
+  expect(open).toHaveBeenCalledWith("AAA");
   expect(screen.queryByText("BBB")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "All" }));
+  expect(screen.getByText("BBB")).toBeTruthy();
 });
