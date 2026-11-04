@@ -370,6 +370,11 @@ type Reliability = {
 
 export function ReliabilityPage() {
   const { data, failed } = useData<Reliability>("/api/reliability");
+  const { data: check } = useData<{
+    checked: number;
+    flagged: number;
+    problems: { ticker: string; detail: string }[];
+  }>("/api/data-check");
   if (failed) return <Failed />;
   if (!data) return <p>Loading…</p>;
   const score = (value: number | null) => (value === null ? NOT_VERIFIED : value.toFixed(3));
@@ -440,6 +445,28 @@ export function ReliabilityPage() {
           </li>
         ))}
       </ul>
+      {check && (
+        <>
+          <h3>Company data check</h3>
+          <p>
+            {check.checked - check.flagged} of {check.checked} companies passed the automatic
+            checks. This catches impossible or out-of-date figures. It can't prove a figure is
+            right.
+          </p>
+          {check.problems.length > 0 && (
+            <details>
+              <summary>See the {check.flagged} flagged companies</summary>
+              <ul>
+                {check.problems.map((row) => (
+                  <li key={`${row.ticker}${row.detail}`}>
+                    {row.ticker}: {row.detail}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
+      )}
       <IdeasPanel part="record" />
     </section>
   );

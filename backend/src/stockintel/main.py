@@ -292,6 +292,11 @@ def market_mood() -> dict:
     return tools.market_mood(get_engine())
 
 
+@app.get("/api/data-check")
+def data_check() -> dict:
+    return queries.audit_summary(get_engine())
+
+
 @app.get("/api/factors")
 def factor_register() -> list[dict]:
     return register()

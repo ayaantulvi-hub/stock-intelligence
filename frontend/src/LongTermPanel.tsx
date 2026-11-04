@@ -24,6 +24,7 @@ type Report = {
   valuation_inputs?: Source[];
   insider_trades: Trade[];
   warnings: string[];
+  data_problems: string[];
   next_earnings: string | null;
 };
 
@@ -96,6 +97,15 @@ export default function LongTermPanel({ ticker }: { ticker: string }) {
   }
   return (
     <div>
+      {report.data_problems.length > 0 && (
+        <div className="action sell">
+          <strong>Check these figures</strong>
+          <p>
+            Our automatic check found a problem, so don't rely on the numbers below:{" "}
+            {report.data_problems.join(" ")}
+          </p>
+        </div>
+      )}
       <h3>Warning signs</h3>
       {report.warnings.length === 0 ? (
         <p>None of the warning rules fired on the latest yearly figures.</p>

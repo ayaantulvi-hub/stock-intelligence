@@ -391,6 +391,7 @@ def valuation(engine: Engine, ticker: str, changes: dict) -> dict | None:
         "ticker": security.ticker,
         "insider_trades": trades,
         "warnings": tools.warnings(report),
+        "data_problems": audit_problems(engine, security.ticker),
         "next_earnings": tools.next_earnings(engine, security.ticker, datetime.now(UTC).date()),
     }
 
@@ -596,3 +597,27 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
         data["stale"],
         get_position(engine, ticker),
     )
+
+
+def audit_problems(engine: Engine, ticker: str) -> list[str]:
+    query = """SELECT detail FROM validation_issues
+               WHERE feed = 'audit' AND ticker = :t ORDER BY id"""
+    with engine.connect() as conn:
+        return list(conn.execute(text(query), {"t": ticker}).scalars())
+
+
+def audit_summary(engine: Engine) -> dict:
+    query = """SELECT count(DISTINCT ticker) AS flagged, count(*) AS problems
+               FROM validation_issues WHERE feed = 'audit'"""
+    with engine.connect() as conn:
+        row = conn.execute(text(query)).first()
+        rows = _rows(
+            conn.execute(
+                text(
+                    """SELECT ticker, detail FROM validation_issues WHERE feed = 'audit'
+                       ORDER BY ticker LIMIT 200"""
+                )
+            )
+        )
+        total = conn.execute(text("SELECT count(*) FROM securities")).scalar()
+    return {"checked": total, "flagged": row.flagged, "problems": rows}
