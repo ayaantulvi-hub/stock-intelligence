@@ -264,10 +264,44 @@ def show_stock(ticker: str) -> None:
     )
 
 
-def main() -> None:
-    from stockintel import audit
+def probe_tags() -> None:
+    """List the labels flagged companies really use for revenue and profit."""
+    from sqlalchemy import text as sql
 
-    audit.run(create_engine(Settings().database_url))
+    agent = f"stock-intelligence {os.environ['SEC_CONTACT_EMAIL']}"
+    engine = create_engine(Settings().database_url)
+    words = ("revenue", "sales", "netincome", "profitloss")
+    for ticker in ("XOM", "GS", "CRWD", "AVGO", "MA", "WFC", "ASML", "URI", "SAP"):
+        with engine.connect() as conn:
+            cik = conn.execute(
+                sql("SELECT cik FROM securities WHERE ticker = :t"), {"t": ticker}
+            ).scalar()
+        status, body = fetch(
+            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json", {"User-Agent": agent}
+        )
+        print("tags", ticker, cik, status)
+        if status != 200:
+            continue
+        data = json.loads(body)
+        found = []
+        for taxonomy, tags in data["facts"].items():
+            for tag, concept in tags.items():
+                if any(word in tag.lower() for word in words):
+                    for unit, rows in concept["units"].items():
+                        last = max(row["end"] for row in rows)
+                        years = sum(
+                            1
+                            for row in rows
+                            if row.get("fp") == "FY"
+                            and row.get("form", "") in ("10-K", "20-F", "40-F")
+                        )
+                        found.append((last, taxonomy, tag, unit, years))
+        for item in sorted(found, reverse=True)[:9]:
+            print("tags  ", item)
+
+
+def main() -> None:
+    probe_tags()
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,
