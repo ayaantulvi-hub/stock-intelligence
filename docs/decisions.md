@@ -166,3 +166,21 @@ needs at least 30 tested cases that beat the baseline.
 - The build workspace cannot reach Tiingo, SEC or FRED directly. Live checks run on
   GitHub Actions and are read from their logs.
 - Render's free dashboard sleeps after 15 minutes idle and takes about a minute to wake.
+
+## Company events, judgment and foreign filers
+
+- A payout and a split can share a day (Motorola 2011, Hilton 2017, T-Mobile 2013). The
+  payout is in post-split dollars, so adjustment divides the previous close by the split
+  factor. Before this fix the factor went negative and created a -136% trade in the stop study.
+- Moderna's +177% on 2026-08-19 looked like a bad bar, but outside reports confirm it.
+- Banks have no revenue line. Revenue is net interest plus noninterest income. Foreign banks
+  report gross income under the gross profit label, so that is used and no gross margin shows.
+- Some Canadian filers put yearly accounts on a 6-K, so full-year figures on a 6-K count.
+- 20-F filers often trade through receipts, and the receipt ratio is not in the SEC figures.
+  Market value, yields, value per share and share-based factors stay Not verified for them.
+- SEC 8-K item numbers are stored from the submissions feed. Item 2.02 gives true past
+  results days, and the next date is still an estimate because no free official source
+  publishes upcoming dates.
+- Your judgment is append-only, stored beside the system's call, and never feeds the model.
+- Several insiders buying together is a tested factor. It affects ranking only if it earns
+  weight in the weekly model test.
