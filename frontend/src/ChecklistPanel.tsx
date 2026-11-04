@@ -249,9 +249,10 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
   const picked = plan.orders.find((row) => row.ticker === (chosen ?? plan.orders[0].ticker));
   return (
     <section className="orders">
-      <h3>Today's orders</h3>
+      <h3>Today's orders: hold for about a month</h3>
       <p>
-        Buy these for {plan.session} and sell them all on <b>{plan.sell_by ?? "Not verified"}</b>.
+        This is a 20-trading-day hold. It isn't day trading or a long-term investment. Buy these for{" "}
+        {plan.session} and sell them all on <b>{plan.sell_by ?? "Not verified"}</b>.
         {!plan.proven && " The model hasn't passed its test yet, so this is a guess."}
       </p>
       <label>
