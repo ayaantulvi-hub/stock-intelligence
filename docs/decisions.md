@@ -136,7 +136,7 @@ needs at least 30 tested cases that beat the baseline.
 
 - GitHub skipped most scheduled runs, so hourly price runs are started by cron-job.org through
   the GitHub API. It needs a fine-grained token limited to Actions on this repository.
-- The daily run for filings and forecasts stays on GitHub's schedule, with a manual check.
+- A second cron-job.org job runs filings, company data and forecasts at 14:50 Dubai time, Tuesday to Saturday.
 
 ## Stops
 

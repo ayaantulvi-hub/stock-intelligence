@@ -1,4 +1,5 @@
 name: Update data
+# Started by cron-job.org: hourly for prices, daily for forecasts. See docs/decisions.md.
 on:
   workflow_dispatch:
     inputs:
@@ -14,11 +15,6 @@ on:
         description: Also update filings and economic data
         type: boolean
         default: false
-  schedule:
-    # Prices are started hourly by cron-job.org, because GitHub often skips scheduled runs.
-    # See docs/decisions.md. 45 stocks a run stays under Tiingo's 50 an hour.
-    # Filings and economic data: once a day.
-    - cron: "50 10 * * 2-6"
 permissions:
   contents: read
   issues: write
