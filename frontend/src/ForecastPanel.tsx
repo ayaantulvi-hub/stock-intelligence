@@ -257,6 +257,9 @@ type Decision = {
   proven: boolean;
   kind: string;
   owned: boolean;
+  reasons_for: string[];
+  reasons_against: string[];
+  next_step: string;
 };
 
 type Line = {
@@ -364,23 +367,41 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
         {decision && (
           <>
             <p>
-              {decision.reason} {decision.owned ? "You own this stock." : ""}
+              {decision.reason}
+              {!decision.proven && decision.kind !== "neutral" && " Unproven, so treat it as a guess."}
             </p>
-            {forecast && !decision.proven && decision.kind !== "neutral" && (
-              <p className="lean">
-                Unproven: {MEANINGS["No reliable edge"]}
-                {leans?.overall.rank != null &&
-                  ` It ranks higher than ${Math.round(leans.overall.rank * 100)}% of covered stocks for the next 20 days.`}
-              </p>
-            )}
-            {!decision.owned && (
-              <p>
-                <small>Bought it? Open "Do you own this stock?" below and this will adapt.</small>
-              </p>
-            )}
+            <div className="why">
+              <div>
+                <h4 className="ok">In its favour</h4>
+                <ul>
+                  {decision.reasons_for.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                  {decision.reasons_for.length === 0 && <li>Nothing stands out.</li>}
+                </ul>
+              </div>
+              <div>
+                <h4 className="bad">Reasons for caution</h4>
+                <ul>
+                  {decision.reasons_against.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                  {decision.reasons_against.length === 0 && <li>Nothing stands out.</li>}
+                </ul>
+              </div>
+            </div>
+            <p className="step">
+              <b>Your next step:</b> {decision.next_step}
+            </p>
           </>
         )}
       </div>
+      <details className="fold">
+        <summary>{decision?.owned ? "Your position" : "I own this stock"}</summary>
+        <PositionPanel ticker={ticker} onChange={loadDecision} />
+      </details>
+      <details className="fold">
+        <summary>See the full detail</summary>
       {leans && <Tug leans={leans} />}
       {forecast && (
         <>
@@ -434,9 +455,6 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
         <summary>Before you trade: checklist, exit prices and how much to buy</summary>
         <ChecklistPanel ticker={ticker} />
       </details>
-      <details className="fold">
-        <summary>Do you own this stock?</summary>
-        <PositionPanel ticker={ticker} onChange={loadDecision} />
       </details>
     </div>
   );

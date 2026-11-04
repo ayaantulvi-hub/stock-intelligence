@@ -156,12 +156,6 @@ function StockView({ stock }: { stock: Stock }) {
       <h2>
         {stock.ticker} · {stock.name}
       </h2>
-      {stock.stale && (
-        <p className="bad">
-          Stale: expected prices for {stock.latest_expected_session}. Do not rely on this data.
-        </p>
-      )}
-      <WatchButton ticker={stock.ticker} />
       <div className="tabs pages" role="group" aria-label="Stock page">
         {TABS.map((name) => (
           <button key={name} aria-pressed={name === tab} onClick={() => setTab(name)}>
@@ -169,7 +163,6 @@ function StockView({ stock }: { stock: Stock }) {
           </button>
         ))}
       </div>
-      <Glossary />
       {tab === "Simple view" && <ForecastPanel ticker={stock.ticker} />}
       {tab === "Chart" && (
         <>
@@ -180,6 +173,8 @@ function StockView({ stock }: { stock: Stock }) {
       {tab === "Long-term" && <LongTermPanel ticker={stock.ticker} />}
       {tab === "All factors" && <FactorsPanel ticker={stock.ticker} />}
       {tab === "Filings and prices" && <RecordsView stock={stock} />}
+      <Glossary />
+      <WatchButton ticker={stock.ticker} />
     </section>
   );
 }
@@ -347,8 +342,8 @@ export default function App() {
       {stock && <StockView stock={stock} />}
 
       {!stock && !failed && <IdeasPanel onOpen={open} />}
-      {!stock && !failed && <MarketMood />}
       {!stock && !failed && <Screener onOpen={open} />}
+      {!stock && !failed && <MarketMood />}
       {backtest && <BacktestView backtest={backtest} />}
 
       {status && (

@@ -211,6 +211,59 @@ def decision(action: str | None, rank: float | None, stale: bool, position: dict
     return answer("Hold" if owned else "Wait", "The model has no clear lean on this stock.")
 
 
+SKIP_CHECKS = {"Data", "Tested edge", "Your exit plan", "Concentration"}
+
+
+def next_step(call: str, levels: dict | None, position: dict | None) -> str:
+    """One concrete thing to do, with prices where they exist."""
+    stop = (position or {}).get("stop_price") or (levels or {}).get("stop")
+    target = (position or {}).get("target_price") or (levels or {}).get("target")
+    exits = (
+        f"Sell if it falls to {stop:.2f}. Take profit around {target:.2f}."
+        if stop and target
+        else "Set a sell target and a stop first."
+    )
+    if call == "Wait":
+        return "Do nothing for now, and check again after the next update."
+    if call in {"Buy", "Leans buy"}:
+        return f"If you decide to buy, start small. {exits}"
+    if call in {"Don't buy", "Leans don't buy"}:
+        return "Skip this one for now, and look at the stronger stocks on the home page."
+    if call == "Sell":
+        return "Sell your position, or tell the journal why you're staying in."
+    if call == "Sell or take some profit":
+        return "Decide whether to sell all or part. You reached the price you planned."
+    if call == "Hold and review":
+        return f"You don't need to act today, but check the reasons below. {exits}"
+    return f"Keep holding. {exits}"
+
+
+def brief(
+    answer: dict, lines: list[dict], checks: list[dict], levels: dict | None, position: dict | None
+) -> dict:
+    """The decision, up to three reasons each way, and one next step."""
+    good = [line["text"] for line in lines if line["tone"] == "good"]
+    bad = [line["text"] for line in lines if line["tone"] == "bad"]
+    good += [
+        check["text"]
+        for check in checks
+        if check["state"] == "pass" and check["topic"] not in SKIP_CHECKS
+    ]
+    bad += [
+        check["text"]
+        for check in checks
+        if check["state"] == "caution"
+        and check["topic"] not in SKIP_CHECKS
+        and check["topic"] != "Long-term trend"
+    ]
+    return {
+        **answer,
+        "reasons_for": good[:3],
+        "reasons_against": bad[:3],
+        "next_step": next_step(answer["call"], levels, position),
+    }
+
+
 def position_view(position: dict, price: float, action: str, cases: list[dict]) -> dict:
     """Profit, break-even and the owner's plan against the latest close."""
     shares, paid = position["shares"], position["buy_price"]

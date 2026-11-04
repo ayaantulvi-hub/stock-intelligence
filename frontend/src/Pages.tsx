@@ -88,8 +88,8 @@ export function Screener({ onOpen }: { onOpen: (ticker: string) => void }) {
     setSort(key);
   };
   return (
-    <section>
-      <h2>All stocks</h2>
+    <details className="fold">
+      <summary>All stocks</summary>
       <p>
         The model's unproven lean for each stock. Tap a heading to sort, or a stock to open it.
       </p>
@@ -138,7 +138,7 @@ export function Screener({ onOpen }: { onOpen: (ticker: string) => void }) {
           </tbody>
         </table>
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -156,8 +156,8 @@ export function MarketMood() {
   const { data } = useData<Mood>("/api/market-mood");
   if (!data) return null;
   return (
-    <section>
-      <h2>Market mood: {data.mood}</h2>
+    <details className="fold">
+      <summary>Market mood: {data.mood}</summary>
       <p className="so-what">
         <b>What this means for you:</b> {data.meaning}
       </p>
@@ -180,7 +180,7 @@ export function MarketMood() {
         </div>
       </div>
       <small>VIX below 20 is usually called calm, and 30 or above stressed.</small>
-    </section>
+    </details>
   );
 }
 

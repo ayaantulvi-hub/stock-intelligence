@@ -273,3 +273,53 @@ def test_price_paid_does_not_change_the_decision():
     assert advice.decision(EDGELESS, 0.2, False, cheap) == advice.decision(
         EDGELESS, 0.2, False, dear
     )
+
+
+ANSWER = {"call": "Leans buy", "reason": "Fixture.", "proven": False, "kind": "buy", "owned": False}
+LINES = [
+    {"tone": "good", "text": "Up trend."},
+    {"tone": "bad", "text": "Weak recent trend."},
+    {"tone": "neutral", "text": "Ignored."},
+]
+CHECKS = [
+    {"topic": "Debt", "state": "pass", "text": "Low debt."},
+    {"topic": "Insiders", "state": "caution", "text": "Insider selling."},
+    {"topic": "Tested edge", "state": "caution", "text": "Left out."},
+]
+LEVELS = {"stop": 90.0, "target": 120.0}
+
+
+def test_brief_gives_reasons_each_way_and_a_next_step():
+    result = advice.brief(ANSWER, LINES, CHECKS, LEVELS, None)
+    assert result["reasons_for"] == ["Up trend.", "Low debt."]
+    assert result["reasons_against"] == ["Weak recent trend.", "Insider selling."]
+    assert "90.00" in result["next_step"] and "120.00" in result["next_step"]
+
+
+def test_reasons_are_limited_to_three():
+    many = [{"tone": "good", "text": str(i)} for i in range(9)]
+    assert len(advice.brief(ANSWER, many, [], None, None)["reasons_for"]) == 3
+
+
+def test_owners_own_prices_are_used():
+    position = {"stop_price": 80.0, "target_price": 150.0}
+    step = advice.next_step("Hold", LEVELS, position)
+    assert "80.00" in step and "150.00" in step
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "Wait",
+        "Buy",
+        "Leans buy",
+        "Don't buy",
+        "Leans don't buy",
+        "Sell",
+        "Hold",
+        "Hold and review",
+        "Sell or take some profit",
+    ],
+)
+def test_every_call_has_a_next_step(call):
+    assert advice.next_step(call, None, None)

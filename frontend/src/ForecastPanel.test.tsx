@@ -75,6 +75,9 @@ test("simple view gives the call and explains the data in plain English", async 
       proven: false,
       kind: "buy",
       owned: false,
+      reasons_for: ["Fixture reason for."],
+      reasons_against: ["Fixture reason against."],
+      next_step: "Fixture next step.",
     },
     "/api/stocks/AAA/leans": {
       factors: [
@@ -116,8 +119,10 @@ test("simple view gives the call and explains the data in plain English", async 
   expect(screen.getByText("Buy")).toBeTruthy();
   expect(screen.getByText("Fixture chart note.")).toBeTruthy();
   expect(await screen.findByText("Leans buy")).toBeTruthy();
-  expect(screen.getByText(/Unproven: No buy or sell call/)).toBeTruthy();
-  expect(screen.getByText(/ranks higher than 85%/)).toBeTruthy();
+  expect(screen.getByText(/Unproven, so treat it as a guess/)).toBeTruthy();
+  expect(screen.getByText("Fixture reason for.")).toBeTruthy();
+  expect(screen.getByText("Fixture reason against.")).toBeTruthy();
+  expect(screen.getByText(/Fixture next step/)).toBeTruthy();
 });
 
 test("names no stocks when the model has no edge", async () => {

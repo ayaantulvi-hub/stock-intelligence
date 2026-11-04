@@ -591,11 +591,20 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
     if data is None:
         return None
     forecast = stock_forecast(engine, ticker)
-    return advice.decision(
+    position = get_position(engine, ticker)
+    answer = advice.decision(
         forecast["action"] if forecast else None,
         forecast["rank_20d"] if forecast else None,
         data["stale"],
-        get_position(engine, ticker),
+        position,
+    )
+    levels = suggested_levels(engine, ticker) or {}
+    return advice.brief(
+        answer,
+        stock_story(engine, ticker) or [],
+        stock_checklist(engine, ticker) or [],
+        levels.get("levels"),
+        position,
     )
 
 

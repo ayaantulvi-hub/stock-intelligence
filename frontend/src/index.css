@@ -154,3 +154,7 @@ td.wrap { white-space: normal; min-width: 190px; }
 .picks h3 { margin-top: 12px; }
 .picks ol { padding-left: 22px; margin: 4px 0; }
 .picks li { margin: 8px 0; }
+.why { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 28px; margin: 14px 0; }
+.why h4 { font-size: 1rem; margin: 0 0 4px; }
+.why ul { margin: 0; padding-left: 18px; }
+.step { padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 1.05rem; }
