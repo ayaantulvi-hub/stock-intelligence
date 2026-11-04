@@ -218,8 +218,54 @@ def probe_history() -> None:
         )
 
 
+def show_stock(ticker: str) -> None:
+    """Print stored figures, to compare by hand with another source."""
+    import pandas as pd
+    from sqlalchemy import text as sql
+
+    from stockintel import longterm, queries
+
+    engine = create_engine(Settings().database_url)
+    with engine.connect() as conn:
+        security_id = conn.execute(
+            sql("SELECT id FROM securities WHERE ticker = :t"), {"t": ticker}
+        ).scalar()
+        bars = conn.execute(
+            sql(
+                """SELECT DISTINCT ON (market_date) market_date, open, high, low, close, volume
+                   FROM price_bars WHERE security_id = :id
+                   ORDER BY market_date DESC, id DESC LIMIT 2"""
+            ),
+            {"id": security_id},
+        ).all()
+        extremes = conn.execute(
+            sql(
+                """SELECT min(low), max(high) FROM price_bars
+                   WHERE security_id = :id AND market_date >= current_date - 365"""
+            ),
+            {"id": security_id},
+        ).first()
+    for bar in bars:
+        print("compare bar", bar)
+    print("compare 52w", extremes)
+    facts = queries.load_facts(engine, security_id)
+    report = longterm.report(facts, bars[0].close)
+    for row in report["history"]:
+        print("compare year", row["period_end"], row["revenue"], row["net_income"])
+    for item in report["metrics"]:
+        print("compare metric", item["name"], item["value"])
+    print("compare cases", report["cases"], report["assumptions"])
+    shares = facts[facts["tag"] == "EntityCommonStockSharesOutstanding"].sort_values("filed")
+    print("compare shares", shares[["period_end", "value", "filed"]].tail(2).to_dict("records"))
+    gross = longterm._annual_flow(facts, "GrossProfit")
+    print("compare gross", gross[["period_end", "value"]].tail(4).to_dict("records"))
+    print(
+        "compare earnings", queries.tools.next_earnings(engine, ticker, pd.Timestamp.now().date())
+    )
+
+
 def main() -> None:
-    check_adjustment()
+    show_stock("NVDA")
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,
