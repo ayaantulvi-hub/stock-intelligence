@@ -324,6 +324,77 @@ def ideas(engine: Engine, count: int = 10) -> dict:
     }
 
 
+def holdings_today(engine: Engine, now: datetime | None = None) -> list[dict]:
+    """Keep or Sell now for everything held, from today's stored results."""
+    now = now or datetime.now(UTC)
+    query = """SELECT s.id, s.ticker, s.name, p.shares, p.buy_price, p.stop_price, p.sell_by
+               FROM positions p JOIN securities s ON s.id = p.security_id ORDER BY s.ticker"""
+    bars = """SELECT market_date, close / split_factor AS close FROM
+              (SELECT DISTINCT ON (market_date) market_date, close, split_factor FROM price_bars
+               WHERE security_id = :id ORDER BY market_date DESC, id DESC LIMIT 50) AS recent
+              ORDER BY market_date"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query)).all()
+        closes = {row.id: conn.execute(text(bars), {"id": row.id}).all() for row in rows}
+    if not rows:
+        return []
+    ranks = {row["ticker"]: row["rank"] for row in screener(engine)}
+    blocks = experts.stored_blocks(engine)
+    candles_today = {
+        item["ticker"]: item["reason"]
+        for item in experts.stored_trades(engine)
+        if item["kind"] == "sell"
+    }
+    output = []
+    for row in rows:
+        recent = closes[row.id]
+        price = recent[-1].close if recent else None
+        average = sum(bar.close for bar in recent) / len(recent) if len(recent) == 50 else None
+        result = advice.keep_or_sell(
+            price=price,
+            stop=row.stop_price,
+            sell_by=row.sell_by,
+            today=now.date(),
+            stale=is_stale(recent[-1].market_date if recent else None, now),
+            rank=ranks.get(row.ticker),
+            blocked=blocks.get(row.ticker),
+            bearish_candle=candles_today.get(row.ticker),
+            below_50=None if average is None else price < average,
+        )
+        output.append(
+            {
+                "ticker": row.ticker,
+                "name": row.name,
+                "price": price,
+                "buy_price": row.buy_price,
+                "sell_by": row.sell_by,
+                **result,
+            }
+        )
+    return output
+
+
+def track_orders(engine: Engine, tickers: list[str], shares: float) -> int:
+    """Record chosen stocks from today's orders as holdings, keeping any already held."""
+    plan = orders(engine)
+    wanted = {ticker.upper() for ticker in tickers}
+    added = 0
+    for row in plan["orders"]:
+        if row["ticker"] in wanted and get_position(engine, row["ticker"]) is None:
+            added += save_position(
+                engine,
+                row["ticker"],
+                {
+                    "shares": shares,
+                    "buy_price": row["price"],
+                    "target_price": None,
+                    "stop_price": row["stop"],
+                    "sell_by": plan["sell_by"],
+                },
+            )
+    return added
+
+
 HOLD_SESSIONS = 20
 ORDER_COUNT = 10
 
@@ -492,14 +563,17 @@ def save_position(engine: Engine, ticker: str, values: dict) -> bool:
             conn.execute(
                 text(
                     """INSERT INTO positions (security_id, shares, buy_price, target_price,
-                         stop_price)
-                       SELECT id, :shares, :buy_price, :target_price, :stop_price
+                         stop_price, sell_by)
+                       SELECT id, :shares, :buy_price, :target_price, :stop_price,
+                         CAST(:sell_by AS date)
                        FROM securities WHERE ticker = :t
                        ON CONFLICT (security_id) DO UPDATE SET shares = EXCLUDED.shares,
                          buy_price = EXCLUDED.buy_price, target_price = EXCLUDED.target_price,
-                         stop_price = EXCLUDED.stop_price, updated_at = now()"""
+                         stop_price = EXCLUDED.stop_price,
+                         sell_by = COALESCE(EXCLUDED.sell_by, positions.sell_by),
+                         updated_at = now()"""
                 ),
-                {**values, "t": ticker.upper()},
+                {"sell_by": None, **values, "t": ticker.upper()},
             ).rowcount
         )
 

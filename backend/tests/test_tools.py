@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from stockintel import main, monitor, tools
+from stockintel import main, monitor, queries, tools
 
 NOW = datetime(2026, 7, 8, 12, tzinfo=UTC)
 
@@ -243,3 +243,26 @@ def test_only_recent_serious_events_count():
         {"date": date(2026, 1, 1), "events": tools.read_items("1.03")},
     ]
     assert tools.serious_events(events, today) == ["Wrote down the value of something it owns"]
+
+
+def test_a_holding_at_its_stop_says_sell_now_and_alerts_once(engine):
+    security = seed(engine)
+    bar(engine, security, "2026-07-07", 150)
+    own(engine, security, stop=160)
+    result = queries.holdings_today(engine, NOW)
+    assert result[0]["call"] == "Sell now"
+    monitor.scan(engine, NOW)
+    monitor.scan(engine, NOW)
+    messages = monitor.take_unsent(engine)
+    assert sum(message.startswith("Sell now: AAA") for message in messages) == 1
+
+
+def test_a_healthy_holding_says_keep(engine):
+    security = seed(engine)
+    bar(engine, security, "2026-07-07", 150)
+    own(engine, security, stop=100)
+    assert queries.holdings_today(engine, NOW)[0]["call"] == "Keep"
+
+
+def test_no_holdings_gives_an_empty_list(engine):
+    assert queries.holdings_today(engine, NOW) == []

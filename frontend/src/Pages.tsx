@@ -203,6 +203,49 @@ type Portfolio = {
   }[];
 };
 
+type Holding = {
+  ticker: string;
+  name: string;
+  price: number | null;
+  buy_price: number;
+  sell_by: string | null;
+  call: string;
+  reason: string;
+  kind: string;
+};
+
+export function HoldingsToday({ onOpen }: { onOpen?: (ticker: string) => void }) {
+  const { data } = useData<Holding[]>("/api/holdings-today");
+  if (!data || data.length === 0) return null;
+  const selling = data.filter((row) => row.call === "Sell now").length;
+  return (
+    <section className="orders">
+      <h2>Your stocks today</h2>
+      <p className="plain">
+        <b>{selling === 0 ? "Keep everything." : `Sell ${selling} now, keep the rest.`}</b> Checked
+        every update. These are rules, not a promise of what comes next.
+      </p>
+      <div className="scroll">
+        <table>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.ticker} className={leanRow(row.call === "Sell now" ? "Sell" : row.call === "Keep" ? "Buy" : "")}>
+                <td>
+                  <button className="link" onClick={() => onOpen?.(row.ticker)}>
+                    {row.ticker}
+                  </button>
+                </td>
+                <td><b>{row.call}</b></td>
+                <td>{row.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function PortfolioPage() {
   const { data, failed } = useData<Portfolio>("/api/portfolio");
   if (failed) return <Failed />;
@@ -213,6 +256,7 @@ export function PortfolioPage() {
   return (
     <section>
       <h2>My portfolio</h2>
+      <HoldingsToday />
       <div className="glance">
         <div>
           <small>Worth</small>

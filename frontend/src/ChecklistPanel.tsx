@@ -213,6 +213,24 @@ type Plan = { session: string | null; sell_by: string | null; proven: boolean; o
 export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [failed, setFailed] = useState(false);
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const [shares, setShares] = useState("10");
+  const [saved, setSaved] = useState<string | null>(null);
+  const track = async () => {
+    const tickers = (plan?.orders ?? [])
+      .map((row) => row.ticker)
+      .filter((ticker) => !skipped.includes(ticker));
+    const response = await fetch("/api/orders/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tickers, shares: Number(shares) }),
+    });
+    setSaved(
+      response.status === 200
+        ? "Saved. The tool now checks these every update and tells you Keep or Sell now at the top of this page."
+        : "Could not save. Check the number of shares and try again.",
+    );
+  };
   useEffect(() => {
     fetch("/api/orders")
       .then((response) => {
@@ -238,6 +256,7 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
               <th>Stock</th>
               <th>Last close</th>
               <th>Stop loss price</th>
+              <th>I bought it</th>
             </tr>
           </thead>
           <tbody>
@@ -251,12 +270,35 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
                 </td>
                 <td>{row.price.toFixed(2)}</td>
                 <td>{row.stop === null ? "Not verified" : row.stop.toFixed(2)}</td>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`I bought ${row.ticker}`}
+                    checked={!skipped.includes(row.ticker)}
+                    onChange={(event) =>
+                      setSkipped(
+                        event.target.checked
+                          ? skipped.filter((item) => item !== row.ticker)
+                          : [...skipped, row.ticker],
+                      )
+                    }
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <OrderSteps keep="The longest offered" />
+      <div className="inputs">
+        <label>
+          Shares of each
+          <input type="number" min="0" step="any" value={shares} onChange={(e) => setShares(e.target.value)} />
+        </label>
+        <button onClick={track}>Watch the ticked stocks for me</button>
+      </div>
+      {saved && <p>{saved}</p>}
+      <small>After you buy, tap this so the tool can tell you when to sell. It saves the last close as your buy price, which you can change on the stock's page.</small>
       <p>
         <b>When to sell:</b> don't sell before that date unless the stop sells it for you. There's
         no target price. On the sell date, sell everything left with a Market order, at whatever

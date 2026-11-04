@@ -153,6 +153,52 @@ def overall(action: str, rank: float | None) -> dict:
     return {"decision": action, "lean": lean, "proven": False, "rank": rank}
 
 
+SELL_RANK = 0.3
+
+
+def keep_or_sell(
+    *,
+    price: float | None,
+    stop: float | None,
+    sell_by,
+    today,
+    stale: bool,
+    rank: float | None,
+    blocked: str | None,
+    bearish_candle: str | None,
+    below_50: bool | None,
+) -> dict:
+    """One answer per holding, each day. These are rules, so they can't know what comes next."""
+
+    def answer(call, reason, kind="neutral"):
+        return {"call": call, "reason": reason, "kind": kind}
+
+    if price is None or stale:
+        return answer("Wait", "Today's prices aren't in yet. Check again after the next update.")
+    if stop and price <= stop:
+        return answer("Sell now", f"It reached your stop of {stop:.2f}.", "sell")
+    if sell_by and today >= sell_by:
+        return answer("Sell now", f"Your planned sell date of {sell_by} has arrived.", "sell")
+    if blocked:
+        return answer("Sell now", f"Serious concern: {blocked}.", "sell")
+    if rank is not None and rank <= SELL_RANK:
+        return answer(
+            "Sell now",
+            f"The model now ranks it in the bottom {SELL_RANK * 100:.0f}% of stocks.",
+            "sell",
+        )
+    if bearish_candle and below_50:
+        return answer(
+            "Sell now",
+            f"{bearish_candle}, and the price is below its 50-day average.",
+            "sell",
+        )
+    reason = "No warning signs today."
+    if sell_by:
+        reason += f" Planned sell date: {sell_by}."
+    return answer("Keep", reason, "buy")
+
+
 def decision(action: str | None, rank: float | None, stale: bool, position: dict | None) -> dict:
     """One plain answer for this stock, adapted to whether it is owned.
 

@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { PortfolioPage, ReliabilityPage, Screener } from "./Pages";
+import { PortfolioPage, ReliabilityPage, Screener , HoldingsToday } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -57,4 +57,21 @@ test("screener filters by lean and opens a stock", async () => {
   expect(screen.queryByText("BBB")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "All" }));
   expect(screen.getByText("BBB")).toBeTruthy();
+});
+
+test("your stocks today says plainly what to sell", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      status: 200,
+      json: async () => [
+        { ticker: "AAA", name: "A", price: 10, buy_price: 9, sell_by: null, call: "Sell now", reason: "Fixture reason.", kind: "sell" },
+        { ticker: "BBB", name: "B", price: 10, buy_price: 9, sell_by: null, call: "Keep", reason: "No warning signs today.", kind: "buy" },
+      ],
+    })),
+  );
+  render(<HoldingsToday />);
+  expect(await screen.findByText("Sell 1 now, keep the rest.")).toBeTruthy();
+  expect(screen.getByText("Sell now").closest("tr")?.className).toBe("row-sell");
+  expect(screen.getByText("Keep").closest("tr")?.className).toBe("row-buy");
 });

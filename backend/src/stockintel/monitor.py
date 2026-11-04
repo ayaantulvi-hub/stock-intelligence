@@ -171,6 +171,18 @@ def scan(engine: Engine, now: datetime) -> int:
                     f"The {row.feed} data feed failed on {row.day}.",
                     f"feed:{row.feed}:{row.day}",
                 )
+    from stockintel import queries
+
+    with engine.begin() as conn:
+        for item in queries.holdings_today(engine, now):
+            if item["call"] == "Sell now":
+                add(
+                    conn,
+                    item["ticker"],
+                    "sell",
+                    f"Sell now: {item['ticker']}. {item['reason']}",
+                    f"sell:{item['ticker']}:{now.date()}",
+                )
         return conn.execute(text("SELECT count(*) FROM alerts WHERE NOT sent")).scalar()
 
 

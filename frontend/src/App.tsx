@@ -3,7 +3,7 @@ import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
 import { TodaysOrders } from "./ChecklistPanel";
-import { AlertsPage, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
+import { AlertsPage, HoldingsToday, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
 type Status = {
@@ -150,14 +150,14 @@ const PAGES = ["Today", "My portfolio", "Journal", "Alerts", "How reliable?"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
-const PLANS = ["About a month", "1 to 5 days", "Years"] as const;
+const PLANS = ["Hold about a month", "Short trade, 1 to 5 days", "Long-term, years"] as const;
 
 function PlanPicker({ onOpen }: { onOpen: (ticker: string) => void }) {
   const [plan, setPlan] = useState<(typeof PLANS)[number]>(PLANS[0]);
   return (
     <section className="orders">
       <h2>What to do today</h2>
-      <p>How long do you want to hold?</p>
+      <p>How long do you want to hold? True day trading isn't here, because prices update once a day.</p>
       <div className="tabs pages" role="group" aria-label="How long to hold">
         {PLANS.map((name) => (
           <button key={name} aria-pressed={name === plan} onClick={() => setPlan(name)}>
@@ -387,6 +387,7 @@ export default function App() {
 
       {!stock && !failed && (
         <>
+          <HoldingsToday onOpen={open} />
           <PlanPicker onOpen={open} />
           <details className="fold">
             <summary>See all stocks and the market</summary>

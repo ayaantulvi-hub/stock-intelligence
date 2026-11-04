@@ -567,7 +567,6 @@ def probe_tickets() -> None:
 
 
 def main() -> None:
-    probe_tickets()
     main_full()
 
 

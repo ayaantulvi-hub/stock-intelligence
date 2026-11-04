@@ -246,6 +246,22 @@ def todays_orders() -> dict:
     return queries.orders(get_engine())
 
 
+class TrackOrders(BaseModel):
+    tickers: list[str] = Field(min_length=1, max_length=20)
+    shares: float = Field(gt=0)
+
+
+@app.post("/api/orders/track")
+def track_orders(order: TrackOrders) -> list[dict]:
+    queries.track_orders(get_engine(), order.tickers, order.shares)
+    return queries.holdings_today(get_engine())
+
+
+@app.get("/api/holdings-today")
+def holdings_today() -> list[dict]:
+    return queries.holdings_today(get_engine())
+
+
 @app.get("/api/investments")
 def investments() -> list[dict]:
     return experts.stored_investments(get_engine())
