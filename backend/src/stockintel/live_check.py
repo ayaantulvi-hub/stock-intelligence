@@ -530,7 +530,26 @@ def probe_experts() -> None:
         print("experts traps", ticker, [t["name"] for t in review["traps"]])
 
 
+def probe_today() -> None:
+    from stockintel import queries
+
+    engine = create_engine(Settings().database_url)
+    found = queries.ideas(engine)
+    print("today session", found["target_session"], "edge", found["edge"])
+    for row in found["top"][:10]:
+        print("today top", row["ticker"], round(row["rank"], 3), row["reasons"])
+    for row in found["bottom"][:5]:
+        print("today bottom", row["ticker"], round(row["rank"], 3), row["reasons"])
+    rows = queries.screener(engine)
+    print("today leans", {k: sum(r["lean"] == k for r in rows) for k in {r["lean"] for r in rows}})
+    print("today blocked", list(__import__("stockintel.experts").experts.stored_blocks(engine)))
+    for row in found["top"][:3]:
+        answer = queries.stock_decision(engine, row["ticker"])
+        print("today call", row["ticker"], answer["call"], answer["reason"], answer["proven"])
+
+
 def main() -> None:
+    probe_today()
     main_full()
 
 
