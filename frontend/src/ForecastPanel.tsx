@@ -491,13 +491,80 @@ function ListTable({ url, onOpen, empty }: {
 }
 
 export function TradesPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
+  const [rows, setRows] = useState<(TradeView & { ticker: string; date: string })[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    getJson<(TradeView & { ticker: string; date: string })[]>("/api/trades")
+      .then(setRows)
+      .catch(() => setFailed(true));
+  }, []);
+  if (failed) return <p className="bad">Could not load short trades. Refresh to try again.</p>;
+  if (!rows) return <p>Loading…</p>;
+  const buys = rows.filter((row) => row.kind === "buy");
+  const sells = rows.filter((row) => row.kind === "sell");
   return (
     <>
       <p className="plain">
-        <b>Sell within 5 trading days, or sooner at the stop or target.</b> Tap a stock for its
-        exact prices. Unproven until the weekly test, so treat these as guesses.
+        <b>Buy at Market, set the stop and take profit, and sell within 5 trading days.</b> If you
+        own a stock on the red list, the signal says to think about selling it.
       </p>
-      <ListTable url="/api/trades" onOpen={onOpen} empty="No candle signals today. Do nothing." />
+      <small>
+        From daily candles, updated once a day. Unproven until the weekly test, so treat these as
+        guesses. True day trading isn't here, because that needs prices during the day.
+      </small>
+      {rows.length === 0 && <p>No candle signals today, so do nothing.</p>}
+      {buys.length > 0 && (
+        <div className="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Buy</th>
+                <th>Take profit</th>
+                <th>Stop loss</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {buys.map((row) => (
+                <tr key={row.ticker} className="row-buy">
+                  <td>
+                    <button className="link" onClick={() => onOpen(row.ticker)}>
+                      {row.ticker}
+                    </button>
+                  </td>
+                  <td>{row.target?.toFixed(2)}</td>
+                  <td>{row.stop?.toFixed(2)}</td>
+                  <td>{row.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {sells.length > 0 && (
+        <div className="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Avoid or sell</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sells.map((row) => (
+                <tr key={row.ticker} className="row-sell">
+                  <td>
+                    <button className="link" onClick={() => onOpen(row.ticker)}>
+                      {row.ticker}
+                    </button>
+                  </td>
+                  <td>{row.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }

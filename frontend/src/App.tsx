@@ -146,31 +146,9 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
-const PAGES = ["Today", "My portfolio", "Journal", "Alerts", "How reliable?"];
+const PAGES = ["Today", "Short trades", "Long-term", "My portfolio", "Journal", "Alerts", "How reliable?"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
-
-const PLANS = ["Hold about a month", "Short trade, 1 to 5 days", "Long-term, years"] as const;
-
-function PlanPicker({ onOpen }: { onOpen: (ticker: string) => void }) {
-  const [plan, setPlan] = useState<(typeof PLANS)[number]>(PLANS[0]);
-  return (
-    <section className="orders">
-      <h2>What to do today</h2>
-      <p>How long do you want to hold? True day trading isn't here, because prices update once a day.</p>
-      <div className="tabs pages" role="group" aria-label="How long to hold">
-        {PLANS.map((name) => (
-          <button key={name} aria-pressed={name === plan} onClick={() => setPlan(name)}>
-            {name}
-          </button>
-        ))}
-      </div>
-      {plan === PLANS[0] && <TodaysOrders onOpen={onOpen} />}
-      {plan === PLANS[1] && <TradesPanel onOpen={onOpen} />}
-      {plan === PLANS[2] && <InvestPanel onOpen={onOpen} />}
-    </section>
-  );
-}
 
 function StockView({ stock }: { stock: Stock }) {
   const [tab, setTab] = useState(TABS[0]);
@@ -344,6 +322,28 @@ export default function App() {
           </button>
         ))}
       </div>
+      {page === "Short trades" && (
+        <section className="orders">
+          <h2>Short trades, 1 to 5 days</h2>
+          <TradesPanel
+            onOpen={(ticker) => {
+              setPage("Today");
+              open(ticker);
+            }}
+          />
+        </section>
+      )}
+      {page === "Long-term" && (
+        <section className="orders">
+          <h2>Long-term, years</h2>
+          <InvestPanel
+            onOpen={(ticker) => {
+              setPage("Today");
+              open(ticker);
+            }}
+          />
+        </section>
+      )}
       {page === "My portfolio" && <PortfolioPage />}
       {page === "Journal" && <JournalPage />}
       {page === "Alerts" && <AlertsPage />}
@@ -388,7 +388,10 @@ export default function App() {
       {!stock && !failed && (
         <>
           <HoldingsToday onOpen={open} />
-          <PlanPicker onOpen={open} />
+          <section className="orders">
+            <h2>Hold about a month</h2>
+            <TodaysOrders onOpen={open} />
+          </section>
           <details className="fold">
             <summary>See all stocks and the market</summary>
             <IdeasPanel onOpen={open} />
