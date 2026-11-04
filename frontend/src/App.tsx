@@ -56,6 +56,9 @@ type Backtest = {
     horizon: number;
     sample_size: number;
     win_rate: number | null;
+    baseline_win_rate: number | null;
+    avg_return: number | null;
+    baseline_avg_return: number | null;
     oos_sample_size: number;
     oos_win_rate: number | null;
     oos_baseline_win_rate: number | null;
@@ -95,8 +98,8 @@ const pct = (value: number | null) =>
 
 function BacktestView({ backtest }: { backtest: Backtest }) {
   return (
-    <section>
-      <h2>Do the signals work?</h2>
+    <details className="fold">
+      <summary>Do the chart signals work?</summary>
       <p>
         Tested on {backtest.stocks} stocks, {backtest.first_date} to {backtest.last_date}, after{" "}
         {backtest.cost_bps / 100}% trading costs. Each year is judged only on earlier years.
@@ -125,16 +128,16 @@ function BacktestView({ backtest }: { backtest: Backtest }) {
                 <td>{row.horizon}</td>
                 <td className={row.edge ? "ok" : ""}>{row.edge ? "Edge" : "No reliable edge"}</td>
                 <td>{pct(row.oos_win_rate ?? row.win_rate)}</td>
-                <td>{pct(row.oos_baseline_win_rate)}</td>
-                <td>{pct(row.oos_avg_return)}</td>
-                <td>{pct(row.oos_baseline_avg_return)}</td>
-                <td>{row.oos_sample_size}</td>
+                <td>{pct(row.oos_baseline_win_rate ?? row.baseline_win_rate)}</td>
+                <td>{pct(row.oos_avg_return ?? row.avg_return)}</td>
+                <td>{pct(row.oos_baseline_avg_return ?? row.baseline_avg_return)}</td>
+                <td>{(row.oos_sample_size || row.sample_size).toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </section>
+    </details>
   );
 }
 
