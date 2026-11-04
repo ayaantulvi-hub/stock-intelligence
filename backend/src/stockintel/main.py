@@ -187,6 +187,11 @@ def track_record() -> dict:
     return queries.track_record(get_engine())
 
 
+@app.get("/api/model-comparison")
+def model_comparison() -> dict | None:
+    return queries.model_comparison(get_engine())
+
+
 @app.get("/api/factors")
 def factor_register() -> list[dict]:
     return register()

@@ -47,7 +47,8 @@ def engine(migrated, database_url):
                    fetches, price_bars, filings, economic_observations, backtest_runs,
                    backtest_results, model_evaluations, forecasts,
                    forecast_scores, company_facts, insider_transactions,
-                   insider_documents, factor_tests, positions RESTART IDENTITY CASCADE"""
+                   insider_documents, factor_tests, positions,
+                   model_comparisons, historic_float, fomc_dates RESTART IDENTITY CASCADE"""
             )
         )
     yield engine

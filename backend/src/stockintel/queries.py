@@ -7,6 +7,7 @@ from sqlalchemy import Engine, text
 
 from stockintel import advice, backtest, charts, explain, longterm, signals
 from stockintel.market import is_stale, latest_expected_session
+from stockintel.profiles import PROFILES
 
 FEEDS = {
     "universe": "SEC EDGAR",
@@ -492,3 +493,17 @@ def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
         position=position,
         portfolio_share=mine / total if mine and total else None,
     )
+
+
+def model_comparison(engine: Engine) -> dict | None:
+    query = """SELECT * FROM model_comparisons
+               WHERE run_at = (SELECT max(run_at) FROM model_comparisons)
+               ORDER BY selected DESC, t_stat DESC"""
+    with engine.connect() as conn:
+        rows = _rows(conn.execute(text(query)))
+    if not rows:
+        return None
+    return {
+        "run_at": rows[0]["run_at"],
+        "models": [{**row, **PROFILES[row["model"]]} for row in rows],
+    }

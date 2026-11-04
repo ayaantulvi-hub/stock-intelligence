@@ -541,6 +541,17 @@ def next_session(day: date) -> date:
     return sessions_between(day + timedelta(days=1), day + timedelta(days=10))[0]
 
 
+def current_champion(engine: Engine) -> dict:
+    """The latest winner of the model comparison. Boosting is used until one has run."""
+    query = """SELECT model, edge FROM model_comparisons WHERE selected
+               ORDER BY id DESC LIMIT 1"""
+    with engine.connect() as conn:
+        row = conn.execute(text(query)).first()
+    if row is None:
+        return {"model": "Gradient boosting", "edge": False}
+    return {"model": row.model, "edge": row.edge}
+
+
 def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
     evaluations = latest_evaluations(engine)
     expected = latest_expected_session(now)
@@ -560,12 +571,14 @@ def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
     )
     rank_train = pool.dropna(subset=["excess_20d"])
     rank_columns = usable(rank_train)
-    ranker = model().fit(rank_train[rank_columns], rank_train["excess_20d"] > 0)
-    ranks = pd.Series(ranker.predict_proba(latest[rank_columns])[:, 1], index=latest.index).rank(
-        pct=True
-    )
+    # Imported here because compare.py builds on this module.
+    from stockintel.compare import fit_ranker
+
+    champion = current_champion(engine)
+    predict = fit_ranker(champion["model"], rank_train[rank_columns], rank_train["excess_20d"] > 0)
+    ranks = pd.Series(predict(latest[rank_columns]), index=latest.index).rank(pct=True)
     day_edge = bool(evaluations.get("next_day", {}).get("edge", False))
-    rank_edge = bool(evaluations.get("rank_20d", {}).get("edge", False))
+    rank_edge = bool(current_champion(engine)["edge"])
     written = 0
     with engine.begin() as conn:
         for index, row in latest.iterrows():

@@ -119,10 +119,31 @@ test("names no stocks when the model has no edge", async () => {
       range_hit_rate: null,
       evaluations: [],
     },
+    "/api/model-comparison": {
+      models: [
+        {
+          model: "Fixture model",
+          t_stat: 1.2,
+          spread: 0.01,
+          holdout_spread: -0.02,
+          worst_year: 2022,
+          worst_year_spread: -0.03,
+          calm_spread: 0.01,
+          stressed_spread: null,
+          selected: true,
+          edge: false,
+          good: "Fixture good.",
+          bad: "Fixture bad.",
+          caution: "Fixture caution.",
+        },
+      ],
+    },
   });
   render(<IdeasPanel />);
   expect(await screen.findByText("No reliable edge")).toBeTruthy();
   expect(screen.queryByText("Buy candidates")).toBeNull();
+  expect(screen.getByText("Fixture model (chosen)")).toBeTruthy();
+  expect(screen.getByText("-2.0%")).toBeTruthy();
 });
 
 test("explains support and resistance in everyday words", async () => {

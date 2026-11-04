@@ -345,16 +345,98 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
   );
 }
 
+type Comparison = {
+  models: {
+    model: string;
+    t_stat: number;
+    spread: number;
+    holdout_spread: number | null;
+    worst_year: number | null;
+    worst_year_spread: number | null;
+    calm_spread: number | null;
+    stressed_spread: number | null;
+    selected: boolean;
+    edge: boolean;
+    good: string;
+    bad: string;
+    caution: string;
+  }[];
+};
+
+const signed = (value: number | null) =>
+  value === null ? NOT_VERIFIED : `${value >= 0 ? "+" : ""}${(value * 100).toFixed(1)}%`;
+
+function ComparisonView({ comparison }: { comparison: Comparison }) {
+  return (
+    <>
+      <h3>Which model type works best?</h3>
+      <small>
+        Every model faced the same dates. Spread is how much its top-ranked stocks beat its
+        bottom-ranked ones over 20 days after costs. Recent years are kept back as a final check.
+      </small>
+      <div className="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Test score (needs 3.0)</th>
+              <th>Spread</th>
+              <th>Final check</th>
+              <th>Worst year</th>
+              <th>Calm markets</th>
+              <th>Stressed markets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {comparison.models.map((row) => (
+              <tr key={row.model}>
+                <td>
+                  {row.model}
+                  {row.selected && " (chosen)"}
+                </td>
+                <td>{row.t_stat.toFixed(1)}</td>
+                <td>{signed(row.spread)}</td>
+                <td>{signed(row.holdout_spread)}</td>
+                <td>
+                  {row.worst_year ?? NOT_VERIFIED} {signed(row.worst_year_spread)}
+                </td>
+                <td>{signed(row.calm_spread)}</td>
+                <td>{signed(row.stressed_spread)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="story">
+        {comparison.models.map((row) => (
+          <div key={row.model} className={row.edge ? "tone-good" : "tone-neutral"}>
+            <strong>{row.model}</strong>
+            <span>
+              Good: {row.good} Weak: {row.bad} Caution: {row.caution}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export function IdeasPanel() {
   const [ideas, setIdeas] = useState<Ideas | null>(null);
   const [track, setTrack] = useState<Track | null>(null);
+  const [comparison, setComparison] = useState<Comparison | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    Promise.all([getJson<Ideas>("/api/ideas"), getJson<Track>("/api/track-record")])
-      .then(([nextIdeas, nextTrack]) => {
+    Promise.all([
+      getJson<Ideas>("/api/ideas"),
+      getJson<Track>("/api/track-record"),
+      getJson<Comparison | null>("/api/model-comparison"),
+    ])
+      .then(([nextIdeas, nextTrack, nextComparison]) => {
         setIdeas(nextIdeas);
         setTrack(nextTrack);
+        setComparison(nextComparison);
       })
       .catch(() => setFailed(true));
   }, []);
@@ -419,6 +501,7 @@ export function IdeasPanel() {
           </div>
         ))}
       </div>
+      {comparison && <ComparisonView comparison={comparison} />}
     </section>
   );
 }

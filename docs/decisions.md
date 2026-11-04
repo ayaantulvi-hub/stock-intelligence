@@ -111,6 +111,15 @@ needs at least 30 tested cases that beat the baseline.
 - The float data is noisy, as some filers misreport it.
 - VIX and the Moody's spread are copyrighted on FRED, so they are for personal use only.
 
+## Model comparison and self-correction
+
+- Linear, random forest, gradient boosting, neural network and an average of all four are
+  tested weekly on the same dates, each trained only on earlier data.
+- The winner is chosen on earlier years. The last two calendar years are kept out of the
+  choice and used as a final check, because testing many models makes luck likely.
+- An edge needs a test score of 3.0, a positive spread after costs, and a positive final check.
+- General chat AI is not tested: it already knows past outcomes, so a test would be cheating.
+
 ## Known risks
 
 - The 500-symbol limit counts unique symbols per month. Stocks that leave the list also count.

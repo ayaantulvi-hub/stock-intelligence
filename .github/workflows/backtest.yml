@@ -11,7 +11,7 @@ concurrency:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     defaults:
@@ -24,3 +24,4 @@ jobs:
       - run: uv run --no-dev alembic upgrade head
       - run: uv run --no-dev python -m stockintel.backtest
       - run: uv run --no-dev python -m stockintel.forecast evaluate
+      - run: uv run --no-dev python -m stockintel.compare
