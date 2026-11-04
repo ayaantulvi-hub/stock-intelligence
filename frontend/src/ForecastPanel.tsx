@@ -81,14 +81,6 @@ type Track = {
 };
 
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
-const MEANINGS: Record<string, string> = {
-  "Buy candidate": "Ranked in the top 10% for the next 20 days by a model that passed testing.",
-  "Sell candidate": "Ranked in the bottom 10% for the next 20 days by a model that passed testing.",
-  "No action": "The tested model does not rank this stock near the top or bottom.",
-  "No reliable edge":
-    "No buy or sell call. Testing has not shown this model beats simply holding, so any call would be a guess.",
-};
-
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (response.status !== 200) throw new Error(String(response.status));

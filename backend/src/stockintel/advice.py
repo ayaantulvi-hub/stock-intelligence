@@ -211,7 +211,8 @@ def decision(action: str | None, rank: float | None, stale: bool, position: dict
     return answer("Hold" if owned else "Wait", "The model has no clear lean on this stock.")
 
 
-SKIP_CHECKS = {"Data", "Tested edge", "Your exit plan", "Concentration"}
+# Left out of the short reasons: general reminders, and trend, which the cards already cover.
+SKIP_CHECKS = {"Data", "Tested edge", "Your exit plan", "Concentration", "Long-term trend"}
 
 
 def next_step(call: str, levels: dict | None, position: dict | None) -> str:
@@ -252,9 +253,7 @@ def brief(
     bad += [
         check["text"]
         for check in checks
-        if check["state"] == "caution"
-        and check["topic"] not in SKIP_CHECKS
-        and check["topic"] != "Long-term trend"
+        if check["state"] == "caution" and check["topic"] not in SKIP_CHECKS
     ]
     return {
         **answer,
