@@ -225,6 +225,7 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [money, setMoney] = useState(remembered);
   const [failed, setFailed] = useState(false);
+  const [chosen, setChosen] = useState<string | null>(null);
   useEffect(() => {
     fetch("/api/orders")
       .then((response) => {
@@ -245,6 +246,7 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
   if (failed) return <p className="bad">Could not load today's orders. Refresh to try again.</p>;
   if (!plan || plan.orders.length === 0) return null;
   const each = Number(money) / plan.orders.length;
+  const picked = plan.orders.find((row) => row.ticker === (chosen ?? plan.orders[0].ticker));
   return (
     <section className="orders">
       <h3>Today's orders</h3>
@@ -269,9 +271,9 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
           </thead>
           <tbody>
             {plan.orders.map((row) => (
-              <tr key={row.ticker}>
+              <tr key={row.ticker} className={row.ticker === picked?.ticker ? "row-buy" : ""}>
                 <td>
-                  <button className="link" onClick={() => onOpen(row.ticker)}>
+                  <button className="link" onClick={() => setChosen(row.ticker)}>
                     {row.ticker}
                   </button>
                 </td>
@@ -284,8 +286,23 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
           </tbody>
         </table>
       </div>
+      {picked && picked.stop !== null && each >= picked.price && (
+        <>
+          <h4>
+            Your order for {picked.ticker}{" "}
+            <button className="link" onClick={() => onOpen(picked.ticker)}>
+              See why
+            </button>
+          </h4>
+          <OrderTicket
+            shares={Math.floor(each / picked.price)}
+            stop={picked.stop}
+            keep="The longest offered"
+          />
+        </>
+      )}
       <small>
-        Shares split your money equally, using the last close. If the live price is more than 5%
+        Tap a stock to see its order filled in. Shares split your money equally, using the last close. If the live price is more than 5%
         away, skip that stock. Time in force: the longest offered. Outside RTH: unticked.
       </small>
     </section>
