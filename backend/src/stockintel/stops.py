@@ -20,7 +20,7 @@ ATR_DAYS = 14
 # Tested weekly. Tighter stops were hit far more often and cut returns, so 3 is the default.
 DEFAULT_MULTIPLE = 3.0
 REWARD_TO_RISK = 2.0
-HOLD_DAYS = 60
+HOLD_DAYS = 20
 ENTRY_EVERY = 20
 MULTIPLES = (None, 1.5, 2.0, 3.0, 4.0)
 COST = 0.001

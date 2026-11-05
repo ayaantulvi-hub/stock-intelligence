@@ -682,7 +682,15 @@ def probe_stops() -> None:
         print("stop bar", row.market_date, row.open, row.high, row.low, row.close)
 
 
+def rerun_stops() -> None:
+    from stockintel import stops
+
+    for row in stops.run(create_engine(Settings().database_url)):
+        print("stops", row)
+
+
 def main() -> None:
+    rerun_stops()
     main_full()
 
 

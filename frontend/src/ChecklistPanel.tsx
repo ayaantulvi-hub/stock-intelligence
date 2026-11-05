@@ -75,7 +75,7 @@ function Levels({ data, tested }: { data: Suggested | null; tested: Tested[] }) 
         <>
           <h3>How different stops would have done</h3>
           <small>
-            Buying regularly and holding up to 60 trading days, after costs. Results on past data,
+            Buying regularly and holding up to 20 trading days, after costs. Results on past data,
             and not on any one stock.
           </small>
           <div className="scroll">

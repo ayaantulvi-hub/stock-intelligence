@@ -239,3 +239,9 @@ needs at least 30 tested cases that beat the baseline.
 
 - A falling rank only gives Sell now after two forecasts in a row in the bottom 30%. The first
   run on all 480 stocks moved ranks just because the group grew, and one reading can be noise.
+
+## Twenty-day checks
+
+- A grade first appears after 20 trading days, labelled an early sign until day 60, and updates
+  daily. Correcting stated chances still waits for 60 days, because 20 is little evidence.
+- The stop study now holds for 20 trading days, to match the plan on Today's orders.

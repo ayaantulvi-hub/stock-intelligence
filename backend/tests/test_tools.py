@@ -155,6 +155,8 @@ def test_stocks_you_do_not_follow_stay_quiet(engine):
         (60, 0.67, 0.67, "About the same as guessing"),
         (60, 0.8, 0.67, "Worse than guessing"),
         (60, None, None, "Too early to say"),
+        (19, 0.5, 0.67, "Too early to say"),
+        (20, 0.5, 0.67, "Early sign: better than guessing"),
     ],
 )
 def test_grades(days, brier, baseline, expected):

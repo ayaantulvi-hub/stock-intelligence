@@ -29,7 +29,7 @@ from stockintel.market import (
     session_open,
     sessions_between,
 )
-from stockintel.tools import MIN_LIVE_DAYS, shrink_factor
+from stockintel.tools import MIN_CORRECTION_DAYS, shrink_factor
 
 FLAT_BAND = 0.001
 RANK_HORIZON = 20
@@ -620,7 +620,7 @@ def correction(engine: Engine, usual_up: float) -> float:
                FROM forecast_scores s JOIN forecasts f ON f.id = s.forecast_id"""
     with engine.connect() as conn:
         rows = conn.execute(text(query)).all()
-    if len({row.target_session for row in rows}) < MIN_LIVE_DAYS:
+    if len({row.target_session for row in rows}) < MIN_CORRECTION_DAYS:
         return 1.0
     return shrink_factor([(row.p_up, row.hit) for row in rows], usual_up)
 

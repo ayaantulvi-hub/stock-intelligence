@@ -5,7 +5,9 @@ from datetime import date, timedelta
 from sqlalchemy import Engine, text
 
 STARTING_CASH = 10000.0
-MIN_LIVE_DAYS = 60
+MIN_LIVE_DAYS = 20
+# Correcting stated chances needs more evidence than showing an early grade.
+MIN_CORRECTION_DAYS = 60
 LATEST = """SELECT close, market_date FROM price_bars WHERE security_id = :id
             ORDER BY market_date DESC, id DESC LIMIT 1"""
 
@@ -317,8 +319,12 @@ def grade(days: int, brier: float | None, baseline: float | None) -> str:
     if days < MIN_LIVE_DAYS or brier is None or baseline is None:
         return "Too early to say"
     if brier < baseline * 0.98:
-        return "Better than guessing"
-    return "Worse than guessing" if brier > baseline * 1.02 else "About the same as guessing"
+        result = "Better than guessing"
+    elif brier > baseline * 1.02:
+        result = "Worse than guessing"
+    else:
+        result = "About the same as guessing"
+    return f"Early sign: {result.lower()}" if days < MIN_CORRECTION_DAYS else result
 
 
 def shrink_factor(pairs: list[tuple[float, bool]], base: float) -> float:

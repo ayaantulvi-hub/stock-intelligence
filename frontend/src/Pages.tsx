@@ -708,7 +708,7 @@ export function ReliabilityPage() {
       <div className="action">
         <small>Live grade, from {data.days} trading days</small>
         <strong>{data.grade}</strong>
-        <p>A grade needs at least 60 trading days of locked forecasts.</p>
+        <p>The first grade appears after 20 trading days and updates daily. Before day 60 it is only an early sign.</p>
       </div>
       <WhyWrong />
       <div className="glance">

@@ -224,7 +224,7 @@ def mental_traps(
         trap(
             "Forgetting the usual outcome",
             "Kahneman & Lovallo (1993)",
-            f"Across {outside['trades']:,} past test trades held 60 days, "
+            f"Across {outside['trades']:,} past test trades held 20 days, "
             f"{outside['win_rate'] * 100:.0f}% made money and the worst lost "
             f"{-outside['worst_return'] * 100:.0f}%. Expect something like that, not the best case.",
         )
