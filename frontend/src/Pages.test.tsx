@@ -95,7 +95,7 @@ test("the big picture shows the reading, meaning and source", async () => {
   expect(screen.getByText("None stored in the last 60 days.")).toBeTruthy();
 });
 
-test("what changed puts your stocks first and says what moved", async () => {
+test("what changed leads with decisions and folds the rest", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({
@@ -103,26 +103,29 @@ test("what changed puts your stocks first and says what moved", async () => {
       json: async () => ({
         latest: "2026-11-05",
         previous: "2026-11-04",
-        yours: [{ ticker: "AAA", topic: "Your holding", was: "Keep", now: "Sell now", why: "Fixture reason.", tone: "sell", action: "Sell now. Fixture." }],
-        others: [{ ticker: "BBB", topic: "Model lean", was: "Mixed", now: "Buy", why: "Moved.", tone: "buy", action: "No action." }],
+        decisions: [
+          { ticker: "AAA", topic: "Decision", was: "Leans buy", now: "Wait", why: "Moved.", tone: "sell", action: "Keep. Fixture.", yours: true },
+        ],
+        details: [
+          { ticker: "BBB", topic: "Short trade", was: "No trade", now: "Leans buy", why: "x", tone: "buy", action: "No action.", yours: false },
+        ],
       }),
     })),
   );
   render(<WhatChanged />);
-  expect(await screen.findByText("1 change to your stocks")).toBeTruthy();
-  expect(screen.getByText("Sell now. Fixture.").closest("tr")?.className).toBe("row-sell");
-  expect(screen.getByText("Keep")).toBeTruthy();
-  expect(screen.getByText(/1 change to other stocks since 2026-11-04/)).toBeTruthy();
+  expect(await screen.findByText("1 decision changed, 1 on stocks you own")).toBeTruthy();
+  expect(screen.getByText("Keep. Fixture.").closest("tr")?.className).toBe("row-sell");
+  expect(screen.getByText("Smaller changes (1)")).toBeTruthy();
 });
 
-test("what changed says so when nothing did", async () => {
+test("what changed says so when no decision did", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({
       status: 200,
-      json: async () => ({ latest: "2026-11-05", previous: "2026-11-04", yours: [], others: [] }),
+      json: async () => ({ latest: "2026-11-05", previous: "2026-11-04", decisions: [], details: [] }),
     })),
   );
   render(<WhatChanged />);
-  expect(await screen.findByText("Nothing changed since 2026-11-04.")).toBeTruthy();
+  expect(await screen.findByText("No decisions changed")).toBeTruthy();
 });

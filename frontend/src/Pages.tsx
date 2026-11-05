@@ -211,8 +211,14 @@ type Change = {
   why: string;
   tone: string;
   action: string;
+  yours: boolean;
 };
-type Changes = { latest: string | null; previous: string | null; yours: Change[]; others: Change[] };
+type Changes = {
+  latest: string | null;
+  previous: string | null;
+  decisions: Change[];
+  details: Change[];
+};
 
 function ChangeRows({ rows, onOpen }: { rows: Change[]; onOpen?: (ticker: string) => void }) {
   return (
@@ -258,23 +264,23 @@ function ChangeRows({ rows, onOpen }: { rows: Change[]; onOpen?: (ticker: string
 export function WhatChanged({ onOpen }: { onOpen?: (ticker: string) => void }) {
   const { data } = useData<Changes>("/api/changes");
   if (!data) return null;
-  const total = data.yours.length + data.others.length;
+  const mine = data.decisions.filter((row) => row.yours).length;
   return (
-    <section className={`changes ${data.yours.length > 0 ? "urgent" : ""}`}>
+    <section className={`changes ${mine > 0 ? "urgent" : ""}`}>
       <h2>
-        {data.yours.length > 0
-          ? `${data.yours.length} change${data.yours.length === 1 ? "" : "s"} to your stocks`
-          : "What changed"}
+        {data.decisions.length === 0
+          ? "No decisions changed"
+          : `${data.decisions.length} decision${data.decisions.length === 1 ? "" : "s"} changed${
+              mine > 0 ? `, ${mine} on stocks you own` : ""
+            }`}
       </h2>
-      {!data.previous && total === 0 && <p>Changes appear once there are two days of results to compare.</p>}
-      {data.previous && total === 0 && <p>Nothing changed since {data.previous}.</p>}
-      {data.yours.length > 0 && <ChangeRows rows={data.yours} onOpen={onOpen} />}
-      {data.others.length > 0 && (
-        <details className="fold" open={data.yours.length === 0}>
-          <summary>
-            {data.others.length} change{data.others.length === 1 ? "" : "s"} to other stocks{data.previous ? ` since ${data.previous}` : ""}
-          </summary>
-          <ChangeRows rows={data.others} onOpen={onOpen} />
+      {!data.previous && <p>Decision changes appear once there are two forecast days to compare.</p>}
+      {data.decisions.length > 0 && <ChangeRows rows={data.decisions} onOpen={onOpen} />}
+      {data.details.length > 0 && (
+        <details className="fold">
+          <summary>Smaller changes ({data.details.length})</summary>
+          <small>These don't change a buy, wait or sell decision.</small>
+          <ChangeRows rows={data.details} onOpen={onOpen} />
         </details>
       )}
     </section>

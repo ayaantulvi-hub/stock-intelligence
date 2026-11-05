@@ -10,9 +10,17 @@ LOW, MID, HIGH = (0.1, "No reliable edge"), (0.5, "No reliable edge"), (0.9, "No
 
 def test_a_lean_flip_is_reported_with_its_direction():
     found = changes.lean_changes({"AAA": MID, "BBB": HIGH}, {"AAA": HIGH, "BBB": LOW})
-    leans = {row["ticker"]: row for row in found if row["topic"] == "Model lean"}
-    assert leans["AAA"]["now"] == "Buy" and leans["AAA"]["tone"] == changes.BETTER
-    assert leans["BBB"]["now"] == "Sell" and leans["BBB"]["tone"] == changes.WORSE
+    leans = {row["ticker"]: row for row in found if row["topic"] == "Decision"}
+    assert (leans["AAA"]["was"], leans["AAA"]["now"]) == ("Wait", "Leans buy")
+    assert leans["AAA"]["tone"] == changes.BETTER
+    assert (leans["BBB"]["was"], leans["BBB"]["now"]) == ("Leans buy", "Leans don't buy")
+    assert leans["BBB"]["tone"] == changes.WORSE
+
+
+def test_an_expert_warning_shows_as_a_decision_change():
+    found = changes.lean_changes({"AAA": HIGH}, {"AAA": HIGH}, {}, {"AAA": "a filing"})
+    decision = next(row for row in found if row["topic"] == "Decision")
+    assert (decision["was"], decision["now"]) == ("Leans buy", "Hold off")
 
 
 def test_a_new_stock_is_not_called_a_change():
@@ -51,7 +59,7 @@ def test_short_trade_change():
 
 def test_no_history_means_no_changes(engine):
     result = changes.build(engine, NOW)
-    assert result["yours"] == [] and result["others"] == []
+    assert result["decisions"] == [] and result["details"] == []
 
 
 def test_each_change_says_what_to_do():

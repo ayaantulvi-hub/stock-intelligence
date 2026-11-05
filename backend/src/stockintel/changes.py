@@ -13,24 +13,40 @@ from stockintel import advice, horizons, tools
 TOP = 10
 EVENT_DAYS = 3
 BETTER, WORSE, NEUTRAL = "buy", "sell", "neutral"
-LEAN_ORDER = {"Sell": 0, "Hold off": 1, "Mixed": 2, "No lean": 2, "Buy": 3}
+CALL_ORDER = {
+    "Don't buy": 0,
+    "Leans don't buy": 1,
+    "Hold off": 2,
+    "Wait": 3,
+    "Leans buy": 4,
+    "Buy": 5,
+}
+MAIN_TOPICS = ("Decision", "Your holding")
+
+
+def call_for(rank: float | None, action: str, blocked: str | None) -> str:
+    """The same answer a stock's page gives someone who doesn't own it."""
+    answer = advice.decision(action, rank, False, None)
+    return advice.apply_experts(answer, {"blocked": blocked})["call"]
 
 
 def item(ticker, topic, was, now, why, tone):
     return {"ticker": ticker, "topic": topic, "was": was, "now": now, "why": why, "tone": tone}
 
 
-def lean_changes(old: dict, new: dict) -> list[dict]:
-    """Moves in the model's lean, and into or out of the top of the list."""
+def lean_changes(
+    old: dict, new: dict, old_blocks: dict | None = None, new_blocks: dict | None = None
+) -> list[dict]:
+    """Changes in the buy, wait or sell decision, and in the top of the list."""
     found = []
     for ticker, (rank, action) in new.items():
         if ticker not in old:
             continue
-        was = advice.overall(old[ticker][1], old[ticker][0])["lean"]
-        now = advice.overall(action, rank)["lean"]
+        was = call_for(old[ticker][0], old[ticker][1], (old_blocks or {}).get(ticker))
+        now = call_for(rank, action, (new_blocks or {}).get(ticker))
         if was != now:
-            tone = BETTER if LEAN_ORDER.get(now, 2) > LEAN_ORDER.get(was, 2) else WORSE
-            found.append(item(ticker, "Model lean", was, now, "Its ranking moved.", tone))
+            tone = BETTER if CALL_ORDER.get(now, 3) > CALL_ORDER.get(was, 3) else WORSE
+            found.append(item(ticker, "Decision", was, now, "Its ranking or checks moved.", tone))
 
     def top(group):
         ranked = [t for t, value in group.items() if value[0] is not None]
@@ -198,7 +214,16 @@ def build(engine: Engine, today: date) -> dict:
         )
         held = _holding_changes(conn)
         news = _company_news(conn, followed, today)
-    found = held + news + lean_changes(old_ranks, new_ranks)
+    found = (
+        held
+        + news
+        + lean_changes(
+            old_ranks,
+            new_ranks,
+            {ticker: row["blocked"] for ticker, row in old_reviews.items()},
+            {ticker: row["blocked"] for ticker, row in new_reviews.items()},
+        )
+    )
     found += review_changes(old_reviews, new_reviews)
     from stockintel.queries import holdings_today
 
@@ -206,6 +231,13 @@ def build(engine: Engine, today: date) -> dict:
     for row in found:
         row["yours"] = row["ticker"] in followed
         row["action"] = what_to_do(calls.get(row["ticker"]), row["yours"])
-    yours = [row for row in found if row["yours"]]
-    others = [row for row in found if not row["yours"]]
-    return {"latest": latest, "previous": previous, "yours": yours, "others": others}
+    decisions = [row for row in found if row["topic"] in MAIN_TOPICS]
+    decisions.sort(key=lambda row: not row["yours"])
+    details = [row for row in found if row["topic"] not in MAIN_TOPICS]
+    return {
+        "latest": latest,
+        "previous": previous,
+        "decisions": decisions,
+        "details": details,
+        "yours": [row for row in found if row["yours"] and row["topic"] != "Short trade"],
+    }
