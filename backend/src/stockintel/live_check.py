@@ -658,6 +658,9 @@ def probe_markets() -> None:
 
     engine = create_engine(Settings().database_url)
     provider = TiingoProvider(os.environ["TIINGO_API_TOKEN"])
+    for url in ("https://api.tiingo.com/iex?tickers=spy,qqq,dia", "https://api.tiingo.com/iex/spy"):
+        status, body = fetch(url, provider.headers)
+        print("markets try", url, status, body[:260])
     print("markets run", ingest.run_markets(engine, provider))
     print("markets strip", context.market_strip(engine))
 
