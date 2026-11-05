@@ -44,6 +44,9 @@ ECONOMIC_SERIES = (
     "T10Y3M",
     "DFF",
     "USEPUINDXD",
+    "SP500",
+    "NASDAQCOM",
+    "DJIA",
     "FEDFUNDS",
     "CPIAUCSL",
     "UNRATE",
@@ -63,6 +66,9 @@ CURRENT_VALUES_ONLY = {
     "T10Y3M",
     "DFF",
     "USEPUINDXD",
+    "SP500",
+    "NASDAQCOM",
+    "DJIA",
     "VIXCLS",
     "BAA10Y",
     "DCOILWTICO",
@@ -70,6 +76,7 @@ CURRENT_VALUES_ONLY = {
     "ICSA",
 }
 FIRST_POLICY_YEAR = 2010
+MARKET_FUNDS = ("SPY", "QQQ", "DIA")
 ECONOMIC_START = date(2005, 1, 1)
 # Re-read recent days, because Tiingo publishes corrections through the evening.
 CORRECTION_WINDOW = timedelta(days=5)
@@ -666,6 +673,30 @@ def _store_tone(engine: Engine, subjects: set[str], today: date) -> None:
                 )
 
 
+def run_markets(engine: Engine, provider) -> str:
+    """Store the latest price of each fund that tracks a main US index."""
+    run = Run(engine, "markets")
+    run.attempted = 1
+    try:
+        quotes, provenance = provider.quotes(MARKET_FUNDS)
+    except FeedError as exc:
+        return run.finish(str(exc))
+    with engine.begin() as conn:
+        fetch_id = add_fetch(conn, provenance)
+        for quote in quotes:
+            run.added += conn.execute(
+                text(
+                    """INSERT INTO market_quotes (fetch_id, ticker, quoted_at, price,
+                         previous_close)
+                       VALUES (:fetch_id, :ticker, :quoted_at, :price, :previous_close)
+                       ON CONFLICT (ticker, quoted_at) DO NOTHING"""
+                ),
+                {**quote.__dict__, "fetch_id": fetch_id},
+            ).rowcount
+    run.ok = 1
+    return run.finish()
+
+
 def run_economic(engine: Engine, provider: EconomicProvider) -> str:
     run = Run(engine, "economic")
     for series_id in ECONOMIC_SERIES:
@@ -733,6 +764,7 @@ def main() -> None:
             "history",
             "policy",
             "news",
+            "markets",
             "fed",
         ],
     )
@@ -762,6 +794,8 @@ def main() -> None:
             status = run_fed(engine, FedProvider())
         elif args.feed == "news":
             status = run_news(engine, NewsProvider(), now)
+        elif args.feed == "markets":
+            status = run_markets(engine, TiingoProvider(settings.tiingo_api_token))
         elif args.feed == "policy":
             status = run_policy(engine, FederalRegisterProvider(), now)
         elif args.feed == "facts":

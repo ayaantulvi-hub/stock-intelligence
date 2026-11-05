@@ -4,10 +4,11 @@ from datetime import UTC, date, datetime
 
 import httpx
 
-from stockintel.providers.base import FeedError, PriceBar, Provenance
+from stockintel.providers.base import FeedError, PriceBar, Provenance, Quote
 from stockintel.providers.http import get_json
 
 BASE = "https://api.tiingo.com/tiingo/daily"
+IEX = "https://api.tiingo.com/iex"
 FIELDS = ("open", "high", "low", "close", "volume", "divCash", "splitFactor")
 
 
@@ -18,6 +19,27 @@ class TiingoProvider:
         # The token travels in a header, so stored source URLs contain no secret.
         self.client = client or httpx.Client(timeout=30)
         self.headers = {"Authorization": f"Token {token}"}
+
+    def quotes(self, tickers: tuple[str, ...]) -> tuple[list[Quote], Provenance]:
+        """Latest prices in one request. Docs: https://www.tiingo.com/documentation/iex"""
+        url = f"{IEX}?tickers={','.join(item.lower() for item in tickers)}"
+        rows = get_json(self.client, url, "Tiingo quotes", headers=self.headers)
+        if not isinstance(rows, list):
+            raise FeedError("Tiingo quotes: expected a list")
+        retrieved = datetime.now(UTC)
+        try:
+            quotes = [
+                Quote(
+                    row["ticker"].upper(),
+                    datetime.fromisoformat(row["timestamp"]),
+                    float(row["tngoLast"]),
+                    float(row["prevClose"]),
+                )
+                for row in rows
+            ]
+        except (KeyError, TypeError, ValueError):
+            raise FeedError("Tiingo quotes: a price is missing") from None
+        return quotes, Provenance("Tiingo", url, retrieved, "delayed")
 
     def daily_bars(self, ticker: str, start: date, end: date) -> tuple[list[PriceBar], Provenance]:
         url = f"{BASE}/{ticker.lower()}/prices?startDate={start}&endDate={end}&format=json"

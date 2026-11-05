@@ -259,3 +259,9 @@ needs at least 30 tested cases that beat the baseline.
   one within two days, turn a buy into Hold off and flag holdings as Check the news.
 - It never creates a buy or forces a sale, because it reads words, not meaning. It's unproven,
   so each warning is stored in news_warnings to be tested once months have built up.
+
+## Market indices
+
+- SPY, QQQ and DIA stand in for the S&P 500, Nasdaq 100 and Dow Jones, read hourly from Tiingo's
+  derived feed in one request. FRED's SP500, NASDAQCOM and DJIA series give official daily closes.
+- Holdings are compared with the S&P 500 from the earliest date a position was saved.

@@ -3,7 +3,7 @@ import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
 import { TodaysOrders } from "./ChecklistPanel";
-import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, NextDecision, PortfolioPage, ReliabilityPage, Screener, WatchButton, WhatChanged } from "./Pages";
+import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, MarketStrip, NextDecision, PortfolioPage, ReliabilityPage, Screener, WatchButton, WhatChanged } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
 type Status = {
@@ -388,6 +388,7 @@ export default function App() {
 
       {!stock && !failed && (
         <>
+          <MarketStrip />
           <NextDecision />
           <WhatChanged onOpen={open} />
           <HoldingsToday onOpen={open} />

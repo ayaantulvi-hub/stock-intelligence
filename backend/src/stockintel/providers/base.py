@@ -49,6 +49,14 @@ class Filing:
 
 
 @dataclass(frozen=True)
+class Quote:
+    ticker: str
+    quoted_at: datetime
+    price: float
+    previous_close: float
+
+
+@dataclass(frozen=True)
 class Observation:
     observation_date: date
     realtime_start: date

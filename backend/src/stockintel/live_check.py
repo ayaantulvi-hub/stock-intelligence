@@ -652,7 +652,18 @@ def probe_watch() -> None:
     print("watch stocks", len(news_watch.stock_warnings(engine, today)))
 
 
+def probe_markets() -> None:
+    from stockintel import context, ingest
+    from stockintel.providers.tiingo import TiingoProvider
+
+    engine = create_engine(Settings().database_url)
+    provider = TiingoProvider(os.environ["TIINGO_API_TOKEN"])
+    print("markets run", ingest.run_markets(engine, provider))
+    print("markets strip", context.market_strip(engine))
+
+
 def main() -> None:
+    probe_markets()
     main_full()
 
 

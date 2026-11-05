@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { BigPicture, HoldingsToday, PortfolioPage, ReliabilityPage, Screener, WhatChanged, countdown } from "./Pages";
+import { BigPicture, HoldingsToday, MarketStrip, PortfolioPage, ReliabilityPage, Screener, WhatChanged, countdown } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -150,4 +150,24 @@ test("the countdown reads plainly and stops at zero", () => {
   expect(countdown(3 * 3600000 + 60000)).toBe("3h 1m");
   expect(countdown(125000)).toBe("2m 5s");
   expect(countdown(0)).toBeNull();
+});
+
+test("the market strip shows today's move and compares your stocks", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      status: 200,
+      json: async () => ({
+        markets: [
+          { name: "S&P 500", ticker: "SPY", price: 495, change: -0.01, at: "2026-11-05T15:00:00Z" },
+          { name: "Dow Jones", ticker: "DIA", price: null, change: null, at: null },
+        ],
+        versus: { since: "2026-11-04", yours: -0.066, market: -0.02 },
+      }),
+    })),
+  );
+  render(<MarketStrip />);
+  expect(await screen.findByText("-1.00%")).toBeTruthy();
+  expect(screen.getByText("Not verified")).toBeTruthy();
+  expect(screen.getByText("-6.60%")).toBeTruthy();
 });

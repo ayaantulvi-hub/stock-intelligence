@@ -261,6 +261,47 @@ function ChangeRows({ rows, onOpen }: { rows: Change[]; onOpen?: (ticker: string
   );
 }
 
+type Markets = {
+  markets: { name: string; ticker: string; price: number | null; change: number | null; at: string | null }[];
+  versus: { since: string; yours: number; market: number } | null;
+};
+const signed = (value: number) => `${value >= 0 ? "+" : ""}${(value * 100).toFixed(2)}%`;
+
+export function MarketStrip() {
+  const { data, failed } = useData<Markets>("/api/markets");
+  if (failed || !data) return null;
+  const at = data.markets.find((item) => item.at)?.at;
+  return (
+    <section className="strip">
+      <div className="glance">
+        {data.markets.map((item) => (
+          <div key={item.ticker}>
+            <small>
+              {item.name} ({item.ticker})
+            </small>
+            <strong className={item.change === null ? "" : item.change >= 0 ? "ok" : "bad"}>
+              {item.change === null ? NOT_VERIFIED : signed(item.change)}
+            </strong>
+            <small>{item.price === null ? "" : item.price.toFixed(2)}</small>
+          </div>
+        ))}
+      </div>
+      {data.versus && (
+        <p className="plain">
+          Since {data.versus.since}: your stocks{" "}
+          <b className={data.versus.yours >= 0 ? "ok" : "bad"}>{signed(data.versus.yours)}</b>, the
+          S&P 500 <b className={data.versus.market >= 0 ? "ok" : "bad"}>{signed(data.versus.market)}</b>.
+        </p>
+      )}
+      <small>
+        Today's change for funds that track each market. Updated hourly
+        {at && `, last at ${new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`}
+        , so it trails your live chart. It shows where markets are, not where they're going.
+      </small>
+    </section>
+  );
+}
+
 export function countdown(milliseconds: number) {
   if (milliseconds <= 0) return null;
   const minutes = Math.floor(milliseconds / 60000);

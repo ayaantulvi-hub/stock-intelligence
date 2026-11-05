@@ -276,6 +276,11 @@ def stock_news(ticker: str) -> dict:
     return context.stock_news(get_engine(), ticker.upper(), datetime.now(UTC).date())
 
 
+@app.get("/api/markets")
+def markets() -> dict:
+    return context.market_strip(get_engine())
+
+
 @app.get("/api/changes")
 def what_changed() -> dict:
     return changes.build(get_engine(), datetime.now(UTC).date())

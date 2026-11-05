@@ -13,6 +13,7 @@ from stockintel.providers.news import INDUSTRIES, TOPICS, industry_of
 FRED = "https://fred.stlouisfed.org/series/"
 GOOD, BAD, NEUTRAL, UNKNOWN = "good", "bad", "neutral", "unknown"
 MAX_AGE = timedelta(days=14)
+MARKETS = {"SPY": "S&P 500", "QQQ": "Nasdaq 100", "DIA": "Dow Jones"}
 NEWS_DAYS = 7
 TONE_GAP = 0.3
 SERIES = ("DGS2", "DGS10", "T10Y3M", "DFF", "USEPUINDXD")
@@ -182,6 +183,47 @@ def stock_news(engine: Engine, ticker: str, today: date) -> dict:
             item for item in news(engine, today)["market"] if item["tone"] != "Not verified"
         ][:2],
     }
+
+
+def market_strip(engine: Engine) -> dict:
+    """Where the main US markets stand, and how holdings compare with the S&P 500."""
+    latest = """SELECT DISTINCT ON (ticker) ticker, quoted_at, price, previous_close
+                FROM market_quotes ORDER BY ticker, quoted_at DESC"""
+    index = """SELECT DISTINCT ON (observation_date) observation_date, value
+               FROM economic_observations
+               WHERE series_id = 'SP500' AND value IS NOT NULL AND observation_date >= :since
+               ORDER BY observation_date, realtime_start DESC"""
+    holdings = """SELECT p.shares, p.buy_price, p.updated_at::date AS since,
+                    (SELECT b.close FROM price_bars b WHERE b.security_id = p.security_id
+                     ORDER BY b.market_date DESC, b.id DESC LIMIT 1) AS price
+                  FROM positions p"""
+    with engine.connect() as conn:
+        quotes = {row.ticker: row for row in conn.execute(text(latest))}
+        owned = [row for row in conn.execute(text(holdings)) if row.price]
+        since = min((row.since for row in owned), default=None)
+        points = conn.execute(text(index), {"since": since}).all() if since else []
+    markets = []
+    for ticker, name in MARKETS.items():
+        row = quotes.get(ticker)
+        markets.append(
+            {
+                "name": name,
+                "ticker": ticker,
+                "price": None if row is None else row.price,
+                "change": None if row is None else row.price / row.previous_close - 1,
+                "at": None if row is None else row.quoted_at,
+            }
+        )
+    versus = None
+    if owned and len(points) >= 2:
+        cost = sum(row.shares * row.buy_price for row in owned)
+        worth = sum(row.shares * row.price for row in owned)
+        versus = {
+            "since": points[0].observation_date,
+            "yours": worth / cost - 1,
+            "market": points[-1].value / points[0].value - 1,
+        }
+    return {"markets": markets, "versus": versus}
 
 
 def build(engine: Engine, today: date) -> dict:
