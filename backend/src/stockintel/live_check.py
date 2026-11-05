@@ -640,7 +640,29 @@ def probe_news() -> None:
     print("news subjects", [tuple(row) for row in rows])
 
 
+def probe_scores() -> None:
+    from datetime import UTC, datetime
+
+    from stockintel import changes, misses, queries, tools
+
+    engine = create_engine(Settings().database_url)
+    result = tools.reliability(engine)
+    print("score", result["days"], result["grade"], result["overall"])
+    print("score misses", misses.summary(engine)["reasons"])
+    update = changes.build(engine, datetime.now(UTC).date())
+    print("score changes", update["latest"], update["previous"], len(update["decisions"]))
+    print(
+        "score mine", [(r["ticker"], r["was"], r["now"]) for r in update["decisions"] if r["yours"]]
+    )
+    print(
+        "score holdings",
+        [(r["ticker"], r["call"], r["reason"][:60]) for r in queries.holdings_today(engine)],
+    )
+    print("score top", [(r["ticker"], round(r["rank"], 2)) for r in queries.ideas(engine)["top"]])
+
+
 def main() -> None:
+    probe_scores()
     main_full()
 
 
