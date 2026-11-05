@@ -18,7 +18,7 @@ class TiingoProvider:
         if not token:
             raise FeedError("Tiingo: TIINGO_API_TOKEN is not set")
         # The token travels in a header, so stored source URLs contain no secret.
-        self.client = client or httpx.Client(timeout=30)
+        self.client = client or httpx.Client(timeout=30, follow_redirects=True)
         self.headers = {"Authorization": f"Token {token}"}
 
     def quotes(self, tickers: tuple[str, ...]) -> tuple[list[Quote], Provenance]:
