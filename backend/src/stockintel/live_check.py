@@ -673,7 +673,6 @@ def probe_markets() -> None:
 
 
 def main() -> None:
-    probe_markets()
     main_full()
 
 
