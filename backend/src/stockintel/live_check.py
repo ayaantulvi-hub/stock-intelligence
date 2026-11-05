@@ -661,7 +661,29 @@ def probe_scores() -> None:
     print("score top", [(r["ticker"], round(r["rank"], 2)) for r in queries.ideas(engine)["top"]])
 
 
+def probe_stops() -> None:
+    from stockintel import queries
+
+    engine = create_engine(Settings().database_url)
+    plan = queries.orders(engine)["orders"]
+    for row in plan:
+        levels = (queries.suggested_levels(engine, row["ticker"]) or {}).get("levels") or {}
+        print(
+            "stop",
+            row["ticker"],
+            round(levels.get("price", 0), 2),
+            round(levels.get("atr", 0), 2),
+            round(levels.get("stop", 0), 2),
+            round(levels.get("risk_percent", 0), 1),
+            levels.get("stop_reason", "")[:70],
+        )
+    bars = queries._adjusted_bars(engine, "EME").tail(12)
+    for row in bars.itertuples():
+        print("stop bar", row.market_date, row.open, row.high, row.low, row.close)
+
+
 def main() -> None:
+    probe_stops()
     main_full()
 
 
