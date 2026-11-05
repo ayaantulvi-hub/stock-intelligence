@@ -203,13 +203,30 @@ type Portfolio = {
   }[];
 };
 
-type Change = { ticker: string; topic: string; was: string; now: string; why: string; tone: string };
+type Change = {
+  ticker: string;
+  topic: string;
+  was: string;
+  now: string;
+  why: string;
+  tone: string;
+  action: string;
+};
 type Changes = { latest: string | null; previous: string | null; yours: Change[]; others: Change[] };
 
 function ChangeRows({ rows, onOpen }: { rows: Change[]; onOpen?: (ticker: string) => void }) {
   return (
     <div className="scroll">
       <table>
+        <thead>
+          <tr>
+            <th>Stock</th>
+            <th>What changed</th>
+            <th>Was</th>
+            <th>Now</th>
+            <th>What to do</th>
+          </tr>
+        </thead>
         <tbody>
           {rows.map((row) => (
             <tr
@@ -221,11 +238,15 @@ function ChangeRows({ rows, onOpen }: { rows: Change[]; onOpen?: (ticker: string
                   {row.ticker}
                 </button>
               </td>
+              <td>{row.topic}</td>
+              <td>{row.was || "None"}</td>
               <td>
-                <b>{row.topic}</b>
-                <small>{row.was ? `${row.was} to ${row.now}` : row.now}</small>
+                <b>{row.now}</b>
               </td>
-              <td>{row.why}</td>
+              <td>
+                <b>{row.action}</b>
+                <small>{row.why}</small>
+              </td>
             </tr>
           ))}
         </tbody>

@@ -103,14 +103,15 @@ test("what changed puts your stocks first and says what moved", async () => {
       json: async () => ({
         latest: "2026-11-05",
         previous: "2026-11-04",
-        yours: [{ ticker: "AAA", topic: "Your holding", was: "Keep", now: "Sell now", why: "Fixture reason.", tone: "sell" }],
-        others: [{ ticker: "BBB", topic: "Model lean", was: "Mixed", now: "Buy", why: "Moved.", tone: "buy" }],
+        yours: [{ ticker: "AAA", topic: "Your holding", was: "Keep", now: "Sell now", why: "Fixture reason.", tone: "sell", action: "Sell now. Fixture." }],
+        others: [{ ticker: "BBB", topic: "Model lean", was: "Mixed", now: "Buy", why: "Moved.", tone: "buy", action: "No action." }],
       }),
     })),
   );
   render(<WhatChanged />);
   expect(await screen.findByText("1 change to your stocks")).toBeTruthy();
-  expect(screen.getByText("Keep to Sell now").closest("tr")?.className).toBe("row-sell");
+  expect(screen.getByText("Sell now. Fixture.").closest("tr")?.className).toBe("row-sell");
+  expect(screen.getByText("Keep")).toBeTruthy();
   expect(screen.getByText(/1 change to other stocks since 2026-11-04/)).toBeTruthy();
 });
 

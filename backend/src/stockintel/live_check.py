@@ -610,7 +610,16 @@ def probe_changes() -> None:
         print("changes item", row["ticker"], row["topic"], row["was"], row["now"])
 
 
+def probe_holdings() -> None:
+    from stockintel import queries
+
+    engine = create_engine(Settings().database_url)
+    for row in queries.holdings_today(engine):
+        print("holding", row["ticker"], row["call"], row["reason"])
+
+
 def main() -> None:
+    probe_holdings()
     main_full()
 
 

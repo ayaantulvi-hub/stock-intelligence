@@ -171,6 +171,17 @@ def _company_news(conn, tickers: set[str], today: date) -> list[dict]:
     return found
 
 
+def what_to_do(holding: dict | None, followed: bool) -> str:
+    """The plain instruction beside each change, whatever the change was."""
+    if holding is None:
+        return "You don't own it, so nothing to do." if followed else "No action."
+    if holding["call"] == "Sell now":
+        return f"Sell now. {holding['reason']}"
+    if holding["call"] == "Keep":
+        return "Keep. Don't sell, your plan hasn't changed."
+    return "Wait for today's prices."
+
+
 def build(engine: Engine, today: date) -> dict:
     with engine.connect() as conn:
         latest, previous, old_ranks, new_ranks = _forecasts(conn)
@@ -189,8 +200,12 @@ def build(engine: Engine, today: date) -> dict:
         news = _company_news(conn, followed, today)
     found = held + news + lean_changes(old_ranks, new_ranks)
     found += review_changes(old_reviews, new_reviews)
+    from stockintel.queries import holdings_today
+
+    calls = {row["ticker"]: row for row in holdings_today(engine)}
     for row in found:
         row["yours"] = row["ticker"] in followed
+        row["action"] = what_to_do(calls.get(row["ticker"]), row["yours"])
     yours = [row for row in found if row["yours"]]
     others = [row for row in found if not row["yours"]]
     return {"latest": latest, "previous": previous, "yours": yours, "others": others}

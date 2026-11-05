@@ -206,3 +206,4 @@ td.wrap { white-space: normal; min-width: 190px; }
 .changes.urgent { border: 2px solid var(--unproven); }
 .changes h2 { margin-top: 0; }
 .changes td small { display: block; }
+.changes td small { display: block; }

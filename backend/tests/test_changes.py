@@ -52,3 +52,10 @@ def test_short_trade_change():
 def test_no_history_means_no_changes(engine):
     result = changes.build(engine, NOW)
     assert result["yours"] == [] and result["others"] == []
+
+
+def test_each_change_says_what_to_do():
+    assert changes.what_to_do({"call": "Keep"}, True).startswith("Keep. Don't sell")
+    assert changes.what_to_do({"call": "Sell now", "reason": "Stop."}, True) == "Sell now. Stop."
+    assert changes.what_to_do(None, True) == "You don't own it, so nothing to do."
+    assert changes.what_to_do(None, False) == "No action."
