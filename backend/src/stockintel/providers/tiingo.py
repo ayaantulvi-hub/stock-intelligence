@@ -23,7 +23,7 @@ class TiingoProvider:
 
     def quotes(self, tickers: tuple[str, ...]) -> tuple[list[Quote], Provenance]:
         """Latest prices in one request. Docs: https://www.tiingo.com/documentation/iex"""
-        url = f"{IEX}?tickers={','.join(item.lower() for item in tickers)}"
+        url = f"{IEX}/?tickers={','.join(item.lower() for item in tickers)}"
         rows = get_json(self.client, url, "Tiingo quotes", headers=self.headers)
         if not isinstance(rows, list):
             raise FeedError("Tiingo quotes: expected a list")
