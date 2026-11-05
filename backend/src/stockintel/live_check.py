@@ -672,18 +672,30 @@ def probe_markets() -> None:
     print("markets fib", queries.chart(engine, "PANW", "daily")["fibonacci"])
 
 
-def probe_groq() -> None:
-    status, body = fetch(
-        "https://api.groq.com/openai/v1/models",
-        {"Authorization": f"Bearer {os.environ.get('GROQ_API_KEY', '')}"},
-    )
-    print("groq", status)
-    if status == 200:
-        print("groq models", sorted(item["id"] for item in json.loads(body)["data"]))
+def probe_judge() -> None:
+    from datetime import UTC, datetime
+
+    from stockintel import ingest, news_judge, news_watch
+
+    engine = create_engine(Settings().database_url)
+    now = datetime.now(UTC)
+    print("judge run", ingest.run_judge(engine, now))
+    for item in news_judge.recent(engine, now.date(), ("big", "medium"), 12):
+        print(
+            "judge",
+            item["size"],
+            item["effect"],
+            item["scope"],
+            item["industries"],
+            item["title"][:60],
+            "|",
+            item["why"][:100],
+        )
+    print("judge warned", len(news_watch.stock_warnings(engine, now.date())))
 
 
 def main() -> None:
-    probe_groq()
+    probe_judge()
     main_full()
 
 
