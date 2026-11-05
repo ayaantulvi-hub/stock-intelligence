@@ -641,7 +641,6 @@ def probe_news() -> None:
 
 
 def main() -> None:
-    probe_news()
     main_full()
 
 
