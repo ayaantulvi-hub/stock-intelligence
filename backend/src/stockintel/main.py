@@ -271,6 +271,11 @@ def decision_timer() -> dict:
     return {"next": next_decision(datetime.now(UTC)), "last": last}
 
 
+@app.get("/api/stocks/{ticker}/news")
+def stock_news(ticker: str) -> dict:
+    return context.headlines(get_engine(), ticker.upper(), datetime.now(UTC).date(), 8)
+
+
 @app.get("/api/changes")
 def what_changed() -> dict:
     return changes.build(get_engine(), datetime.now(UTC).date())

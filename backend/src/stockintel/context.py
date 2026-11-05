@@ -8,10 +8,12 @@ from datetime import date, timedelta
 from sqlalchemy import Engine, text
 
 from stockintel import calendar_events
+from stockintel.providers.gdelt import TOPICS
 
 FRED = "https://fred.stlouisfed.org/series/"
 GOOD, BAD, NEUTRAL, UNKNOWN = "good", "bad", "neutral", "unknown"
 MAX_AGE = timedelta(days=14)
+NEWS_DAYS = 7
 SERIES = ("DGS2", "DGS10", "T10Y3M", "DFF", "USEPUINDXD")
 
 
@@ -102,6 +104,48 @@ def elections(today: date) -> dict:
     return card(title, reading, NEUTRAL, meaning, "US federal election law", url, last)
 
 
+def tone_word(recent: float | None, usual: float | None) -> str:
+    if recent is None or usual is None:
+        return "Not verified"
+    if recent <= usual - 1:
+        return "More negative than usual"
+    if recent >= usual + 1:
+        return "More positive than usual"
+    return "About usual"
+
+
+def headlines(engine: Engine, subject: str, today: date, count: int = 5) -> dict:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """SELECT title, url, domain, seen_at FROM news_articles
+                   WHERE subject = :s AND seen_at >= :since
+                   ORDER BY seen_at DESC LIMIT :count"""
+            ),
+            {"s": subject, "since": today - timedelta(days=NEWS_DAYS), "count": count},
+        ).all()
+        tones = (
+            conn.execute(
+                text("SELECT tone FROM news_tone WHERE subject = :s ORDER BY day DESC LIMIT 30"),
+                {"s": subject},
+            )
+            .scalars()
+            .all()
+        )
+    recent = sum(tones[:3]) / len(tones[:3]) if tones else None
+    usual = sum(tones) / len(tones) if len(tones) >= 7 else None
+    return {
+        "subject": subject,
+        "tone": tone_word(recent, usual),
+        "articles": [dict(row._mapping) for row in rows],
+    }
+
+
+def news(engine: Engine, today: date) -> list[dict]:
+    groups = [headlines(engine, subject, today, 3) for subject in TOPICS]
+    return [group for group in groups if group["articles"]]
+
+
 def build(engine: Engine, today: date) -> dict:
     query = """SELECT DISTINCT ON (series_id, observation_date) series_id, observation_date, value
                FROM economic_observations
@@ -148,6 +192,7 @@ def build(engine: Engine, today: date) -> dict:
         usual = values[len(values) // 2]
         policy_day = policy[-1][0]
     return {
+        "news": news(engine, today),
         "cards": [
             curve(ten, two, short, day),
             rates(funds, before, funds_day),

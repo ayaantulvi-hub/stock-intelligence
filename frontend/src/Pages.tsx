@@ -330,7 +330,45 @@ type Big = {
     date: string | null;
   }[];
   actions: { published: string; kind: string; title: string; topic: string | null; url: string }[];
+  news: NewsGroup[];
 };
+export type NewsGroup = {
+  subject: string;
+  tone: string;
+  articles: { title: string; url: string; domain: string; seen_at: string }[];
+};
+
+function NewsList({ group }: { group: NewsGroup }) {
+  return (
+    <ul>
+      {group.articles.map((item) => (
+        <li key={item.url}>
+          <a href={item.url} target="_blank" rel="noreferrer">
+            {item.title}
+          </a>{" "}
+          <small>
+            {item.domain}, {item.seen_at.slice(0, 10)}
+          </small>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function StockNews({ ticker }: { ticker: string }) {
+  const { data, failed } = useData<NewsGroup>(`/api/stocks/${encodeURIComponent(ticker)}/news`);
+  if (failed) return <p className="bad">Could not load the news. Refresh to try again.</p>;
+  return (
+    <details className="fold">
+      <summary>News{data ? `: ${data.tone}` : ""}</summary>
+      {data?.articles.length === 0 && (
+        <p>Not verified: no news stored for this stock. Only owned, watched and top stocks are read.</p>
+      )}
+      {data && <NewsList group={data} />}
+      <small>Headlines and links only, found by GDELT. News tone isn't in the model yet.</small>
+    </details>
+  );
+}
 
 export function BigPicture() {
   const { data, failed } = useData<Big>("/api/big-picture");
@@ -359,6 +397,20 @@ export function BigPicture() {
             </a>
             {card.date && `, ${card.date}`}
           </small>
+        </div>
+      ))}
+      <h3>In the news</h3>
+      <small>
+        Latest headlines from established outlets, found by GDELT. Tone compares this week with
+        the past month. News is shown for you to read, and it doesn't change the decisions yet.
+      </small>
+      {data.news.length === 0 && <p>No news stored yet.</p>}
+      {data.news.map((group) => (
+        <div key={group.subject}>
+          <h4>
+            {group.subject}: <span className={group.tone.includes("negative") ? "bad" : group.tone.includes("positive") ? "ok" : ""}>{group.tone}</span>
+          </h4>
+          <NewsList group={group} />
         </div>
       ))}
       <h3>Recent presidential actions</h3>

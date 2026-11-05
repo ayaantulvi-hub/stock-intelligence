@@ -224,3 +224,13 @@ needs at least 30 tested cases that beat the baseline.
 - A stock with no earlier result isn't reported as a change.
 - The first full tests on 480 stocks found no candlestick pattern that beat all stocks after
   costs, so most patterns give no trade.
+
+## News
+
+- GDELT (free, no key, one request every 5 seconds, 3 months of history) finds headlines and
+  tone from a list of established outlets. Only headlines and links are stored.
+- The Financial Times sells its content and requires a licence, so nothing is read from ft.com.
+  Its headlines appear only when GDELT indexes them, as a link to the original.
+- News covers set world topics and 30 stocks: held, watched, then the strongest and weakest.
+- News tone isn't in the model. There's no long history to test it on, so it stays display-only
+  until months of stored tone can be tested.

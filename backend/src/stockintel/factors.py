@@ -343,7 +343,13 @@ REGISTER = [
         "Bollerslev, Tauchen & Zhou (2009), Review of Financial Studies",
         NEEDS_OPTIONS,
     ),
-    Factor("news_sentiment", "News tone", "News", "Tetlock (2007), Journal of Finance", NEEDS_NEWS),
+    Factor(
+        "news_sentiment",
+        "News tone",
+        "News",
+        "Tetlock (2007), Journal of Finance",
+        "Collecting: needs months of stored tone before it can be tested",
+    ),
 ]
 LIVE_IDS = [factor.id for factor in REGISTER if factor.status == LIVE]
 MARKET_WIDE = {

@@ -618,8 +618,24 @@ def probe_holdings() -> None:
         print("holding", row["ticker"], row["call"], row["reason"])
 
 
+def probe_news() -> None:
+    from datetime import UTC, datetime
+
+    from stockintel import context, ingest
+    from stockintel.providers.gdelt import GdeltProvider
+
+    engine = create_engine(Settings().database_url)
+    subjects = dict(list(ingest.GDELT_TOPICS.items())[:2])
+    print("news run", ingest.run_news(engine, GdeltProvider(), subjects))
+    for subject in subjects:
+        group = context.headlines(engine, subject, datetime.now(UTC).date())
+        print("news", subject, group["tone"], len(group["articles"]))
+        for item in group["articles"][:3]:
+            print("news item", item["domain"], item["title"][:90])
+
+
 def main() -> None:
-    probe_holdings()
+    probe_news()
     main_full()
 
 

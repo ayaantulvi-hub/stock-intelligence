@@ -26,6 +26,8 @@ from stockintel.providers.base import (
 from stockintel.providers.fed import FedProvider
 from stockintel.providers.federal_register import FederalRegisterProvider
 from stockintel.providers.fred import FredProvider
+from stockintel.providers.gdelt import TOPICS as GDELT_TOPICS
+from stockintel.providers.gdelt import GdeltProvider, company_query
 from stockintel.providers.sec import SecProvider
 from stockintel.providers.tiingo import TiingoProvider
 from stockintel.validation import bar_problem, find_issues
@@ -68,6 +70,7 @@ CURRENT_VALUES_ONLY = {
     "ICSA",
 }
 FIRST_POLICY_YEAR = 2010
+NEWS_STOCKS = 30
 ECONOMIC_START = date(2005, 1, 1)
 # Re-read recent days, because Tiingo publishes corrections through the evening.
 CORRECTION_WINDOW = timedelta(days=5)
@@ -590,6 +593,63 @@ def run_policy(engine: Engine, provider, now: datetime) -> str:
     return run.finish()
 
 
+def news_subjects(engine: Engine) -> dict[str, str]:
+    """World topics, then stocks held or watched, then today's strongest and weakest."""
+    subjects = dict(GDELT_TOPICS)
+    query = """SELECT s.ticker, s.name FROM securities s
+               LEFT JOIN positions p ON p.security_id = s.id
+               LEFT JOIN watchlist w ON w.security_id = s.id
+               LEFT JOIN forecasts f ON f.security_id = s.id
+                 AND f.target_session = (SELECT max(target_session) FROM forecasts)
+               ORDER BY (p.security_id IS NOT NULL OR w.security_id IS NOT NULL) DESC,
+                 abs(COALESCE(f.rank_20d, 0.5) - 0.5) DESC, s.universe_rank
+               LIMIT :limit"""
+    with engine.connect() as conn:
+        for ticker, name in conn.execute(text(query), {"limit": NEWS_STOCKS}):
+            subjects[ticker] = company_query(name)
+    return subjects
+
+
+def run_news(engine: Engine, provider, subjects: dict[str, str]) -> str:
+    """Store headlines and tone. Each subject takes two requests, 5 seconds apart."""
+    run = Run(engine, "news")
+    for subject, query in subjects.items():
+        run.attempted += 1
+        try:
+            articles, provenance = provider.articles(query)
+            tones, _ = provider.tone(query)
+        except RateLimited as exc:
+            run.errors.append(str(exc))
+            break
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        with engine.begin() as conn:
+            fetch_id = add_fetch(conn, provenance)
+            for item in articles:
+                run.added += conn.execute(
+                    text(
+                        """INSERT INTO news_articles (fetch_id, subject, url, title, domain,
+                             seen_at)
+                           VALUES (:fetch_id, :subject, :url, :title, :domain, :seen_at)
+                           ON CONFLICT (subject, url) DO NOTHING"""
+                    ),
+                    {**item.__dict__, "fetch_id": fetch_id, "subject": subject},
+                ).rowcount
+            for day, tone in tones.items():
+                conn.execute(
+                    text(
+                        """INSERT INTO news_tone (subject, day, tone, fetch_id)
+                           VALUES (:subject, :day, :tone, :fetch_id)
+                           ON CONFLICT (subject, day) DO UPDATE SET tone = EXCLUDED.tone,
+                             fetch_id = EXCLUDED.fetch_id"""
+                    ),
+                    {"subject": subject, "day": day, "tone": tone, "fetch_id": fetch_id},
+                )
+        run.ok += 1
+    return run.finish()
+
+
 def run_economic(engine: Engine, provider: EconomicProvider) -> str:
     run = Run(engine, "economic")
     for series_id in ECONOMIC_SERIES:
@@ -656,6 +716,7 @@ def main() -> None:
             "insiders",
             "history",
             "policy",
+            "news",
             "fed",
         ],
     )
@@ -683,6 +744,8 @@ def main() -> None:
             status = run_history(engine, SecProvider(settings.sec_contact_email), now)
         elif args.feed == "fed":
             status = run_fed(engine, FedProvider())
+        elif args.feed == "news":
+            status = run_news(engine, GdeltProvider(), news_subjects(engine))
         elif args.feed == "policy":
             status = run_policy(engine, FederalRegisterProvider(), now)
         elif args.feed == "facts":
