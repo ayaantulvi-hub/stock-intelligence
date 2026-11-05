@@ -566,7 +566,24 @@ def probe_tickets() -> None:
         )
 
 
+def probe_context() -> None:
+    from datetime import UTC, datetime
+
+    from stockintel import context
+
+    engine = create_engine(Settings().database_url)
+    result = context.build(engine, datetime.now(UTC).date())
+    for card in result["cards"]:
+        print("context", card["title"], card["reading"], card["state"], card["date"])
+    for item in result["actions"]:
+        print("context action", item["published"], item["kind"], item["topic"], item["title"][:80])
+    with engine.connect() as conn:
+        count = conn.execute(text("SELECT count(*) FROM policy_documents")).scalar()
+        print("context stored", count)
+
+
 def main() -> None:
+    probe_context()
     main_full()
 
 
