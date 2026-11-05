@@ -625,6 +625,24 @@ def probe_news() -> None:
     from stockintel.providers.gdelt import GdeltProvider
 
     engine = create_engine(Settings().database_url)
+    import time
+
+    import httpx
+
+    from stockintel.providers import gdelt
+
+    for label, query in (
+        ("full", gdelt.full_query('(inflation OR "consumer prices")')),
+        ("short", '(inflation OR "consumer prices") domainis:reuters.com sourcelang:english'),
+        ("plain", "inflation sourcelang:english"),
+    ):
+        time.sleep(7)
+        answer = httpx.get(
+            gdelt.URL,
+            params={"query": query, "mode": "ArtList", "timespan": "2d", "format": "json"},
+            timeout=45,
+        )
+        print("news try", label, answer.status_code, answer.text[:200].replace(chr(10), " "))
     subjects = dict(list(ingest.GDELT_TOPICS.items())[:2])
     print("news run", ingest.run_news(engine, GdeltProvider(), subjects))
     for subject in subjects:
