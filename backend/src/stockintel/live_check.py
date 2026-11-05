@@ -640,7 +640,20 @@ def probe_news() -> None:
         print("news groups", [tuple(row) for row in conn.execute(text(query))])
 
 
+def probe_watch() -> None:
+    from datetime import UTC, datetime
+
+    from stockintel import news_watch
+
+    engine = create_engine(Settings().database_url)
+    today = datetime.now(UTC).date()
+    for item in news_watch.summary(engine, today):
+        print("watch", item["subject"], item["bad"], item["outlets"], item["title"][:80])
+    print("watch stocks", len(news_watch.stock_warnings(engine, today)))
+
+
 def main() -> None:
+    probe_watch()
     main_full()
 
 

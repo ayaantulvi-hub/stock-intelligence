@@ -168,6 +168,7 @@ def keep_or_sell(
     blocked: str | None,
     bearish_candle: str | None,
     below_50: bool | None,
+    news_warning: str | None = None,
 ) -> dict:
     """One answer per holding, each day. These are rules, so they can't know what comes next."""
 
@@ -195,6 +196,10 @@ def keep_or_sell(
             "Sell now",
             f"{bearish_candle}, and the price is below its 50-day average.",
             "sell",
+        )
+    if news_warning:
+        return answer(
+            "Check the news", f"Keep for now, but look at this because {news_warning}.", "sell"
         )
     reason = "No warning signs today."
     if sell_by:
@@ -312,6 +317,29 @@ def apply_experts(answer: dict, review: dict | None) -> dict:
             **answer,
             "call": "Hold and review",
             "reason": f"Review this holding because {blocked}.",
+            "proven": False,
+            "kind": "sell",
+        }
+    return answer
+
+
+def apply_news(answer: dict, warning: str | None) -> dict:
+    """Bad news stops a buy. It's a caution rule, so it never turns anything into a buy."""
+    if not warning:
+        return answer
+    if answer["call"] in {"Buy", "Leans buy"}:
+        return {
+            **answer,
+            "call": "Hold off",
+            "reason": f"The model likes it, but hold off because {warning}.",
+            "proven": False,
+            "kind": "neutral",
+        }
+    if answer["owned"] and answer["call"] == "Hold":
+        return {
+            **answer,
+            "call": "Hold and review",
+            "reason": f"Review this holding because {warning}.",
             "proven": False,
             "kind": "sell",
         }

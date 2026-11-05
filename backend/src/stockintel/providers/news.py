@@ -83,6 +83,10 @@ TOPICS = {
     "AI and technology": r"\b(ai|artificial intelligence|chips?|semiconductors?|nvidia)\b",
     "Banks and markets": r"\b(wall street|banks?|stocks?|markets?|s&p 500|nasdaq|dow)\b",
 }
+TOPIC_INDUSTRIES = {
+    "AI and technology": ("Industry: Chips", "Industry: Software and internet"),
+    "Oil and energy": ("Industry: Oil and gas",),
+}
 ENDINGS = re.compile(
     r"[,.]?\s+(inc|corp|corporation|co|company|plc|ltd|limited|ag|sa|nv|se|holdings?|group|"
     r"technologies|/de|/md|/new)\.?$",

@@ -251,3 +251,11 @@ needs at least 30 tested cases that beat the baseline.
 - Company announcements come from the PR Newswire feed (GlobeNewswire refused access), and official notices from
   the Federal Reserve and SEC feeds. Company social media isn't read: X has no free reading access,
   and social posts would only count as measured sentiment.
+
+## News in decisions
+
+- News reaches decisions as a safety override, not as a model input. Three or more negative
+  headlines from at least two outlets on a company or industry, outnumbering good ones two to
+  one within two days, turn a buy into Hold off and flag holdings as Check the news.
+- It never creates a buy or forces a sale, because it reads words, not meaning. It's unproven,
+  so each warning is stored in news_warnings to be tested once months have built up.

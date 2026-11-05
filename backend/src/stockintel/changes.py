@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import Engine, text
 
-from stockintel import advice, horizons, tools
+from stockintel import advice, horizons, news_watch, tools
 from stockintel.providers import news as feeds
 
 TOP = 10
@@ -155,7 +155,11 @@ def _holding_changes(conn) -> list[dict]:
             row.before,
             row.call,
             row.reason,
-            WORSE if row.call == "Sell now" else NEUTRAL if row.call == "Wait" else BETTER,
+            WORSE
+            if row.call in ("Sell now", "Check the news")
+            else NEUTRAL
+            if row.call == "Wait"
+            else BETTER,
         )
         for row in conn.execute(text(query))
     ]
@@ -194,6 +198,8 @@ def what_to_do(holding: dict | None, followed: bool) -> str:
         return "You don't own it, so nothing to do." if followed else "No action."
     if holding["call"] == "Sell now":
         return f"Sell now. {holding['reason']}"
+    if holding["call"] == "Check the news":
+        return f"Check the news. {holding['reason']}"
     if holding["call"] == "Keep":
         return "Keep. Don't sell, your plan hasn't changed."
     return "Wait for today's prices."
@@ -256,7 +262,10 @@ def build(engine: Engine, today: date) -> dict:
             old_ranks,
             new_ranks,
             {ticker: row["blocked"] for ticker, row in old_reviews.items()},
-            {ticker: row["blocked"] for ticker, row in new_reviews.items()},
+            {
+                **{ticker: row["blocked"] for ticker, row in new_reviews.items()},
+                **news_watch.stock_warnings(engine, today),
+            },
         )
     )
     found += review_changes(old_reviews, new_reviews)

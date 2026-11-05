@@ -9,7 +9,7 @@ import pandas as pd
 from sqlalchemy import Engine, text
 from sqlalchemy.engine import Connection
 
-from stockintel import localcache
+from stockintel import localcache, news_watch
 from stockintel.config import get_settings
 from stockintel.db import get_engine
 from stockintel.market import PUBLISH_DELAY, latest_expected_session, session_close
@@ -632,6 +632,7 @@ def run_news(engine: Engine, provider, now: datetime) -> str:
                     touched.add(subject)
         run.ok += 1
     _store_tone(engine, touched, now.date())
+    news_watch.record(engine, now.date())
     return run.finish()
 
 

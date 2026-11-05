@@ -330,6 +330,7 @@ type Big = {
     date: string | null;
   }[];
   actions: { published: string; kind: string; title: string; topic: string | null; url: string }[];
+  warnings: { subject: string; bad: number; outlets: number; title: string; url: string }[];
   news: {
     market: NewsGroup[];
     industries: NewsGroup[];
@@ -396,7 +397,7 @@ export function StockNews({ ticker }: { ticker: string }) {
           <NewsList group={data.industry} />
         </>
       )}
-      <small>Headlines and links only. News isn't in the model yet.</small>
+      <small>Headlines and links only. Bad news from several outlets can stop a buy.</small>
     </details>
   );
 }
@@ -430,10 +431,28 @@ export function BigPicture() {
           </small>
         </div>
       ))}
+      <h3>News warnings now</h3>
+      <small>
+        Several outlets carrying bad news on the same subject. These stop buys in that group and
+        flag anything you own. The rule reads words, so check the headline yourself.
+      </small>
+      {data.warnings.length === 0 ? (
+        <p>No warnings right now.</p>
+      ) : (
+        <ul>
+          {data.warnings.map((item) => (
+            <li key={item.subject} className="bad">
+              <b>{item.subject}:</b> {item.bad} bad headlines from {item.outlets} outlets.{" "}
+              <a href={item.url} target="_blank" rel="noreferrer">
+                {item.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
       <h3>News by how far it reaches</h3>
       <small>
-        Headlines from major outlets and company announcements. Mood is a rough word count. News
-        is for you to read, and it doesn't change the decisions yet.
+        Headlines from major outlets and company announcements. Mood is a rough word count.
       </small>
       <NewsLevel title="Affects the whole market" groups={data.news.market} />
       <NewsLevel title="Affects one industry" groups={data.news.industries} />
@@ -486,18 +505,25 @@ export function HoldingsToday({ onOpen }: { onOpen?: (ticker: string) => void })
   const { data } = useData<Holding[]>("/api/holdings-today");
   if (!data || data.length === 0) return null;
   const selling = data.filter((row) => row.call === "Sell now").length;
+  const checking = data.filter((row) => row.call === "Check the news").length;
   return (
     <section className="orders">
       <h2>Your stocks today</h2>
       <p className="plain">
-        <b>{selling === 0 ? "Keep everything." : `Sell ${selling} now, keep the rest.`}</b> Checked
+        <b>
+          {selling === 0
+            ? checking === 0
+              ? "Keep everything."
+              : `Keep everything, and check the news on ${checking}.`
+            : `Sell ${selling} now, keep the rest.`}
+        </b> Checked
         every update. These are rules, not a promise of what comes next.
       </p>
       <div className="scroll">
         <table>
           <tbody>
             {data.map((row) => (
-              <tr key={row.ticker} className={leanRow(row.call === "Sell now" ? "Sell" : row.call === "Keep" ? "Buy" : "")}>
+              <tr key={row.ticker} className={leanRow(row.call === "Sell now" ? "Sell" : row.call === "Keep" ? "Buy" : row.call === "Check the news" ? "Hold off" : "")}>
                 <td>
                   <button className="link" onClick={() => onOpen?.(row.ticker)}>
                     {row.ticker}

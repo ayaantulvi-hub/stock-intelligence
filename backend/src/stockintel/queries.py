@@ -15,6 +15,7 @@ from stockintel import (
     factors,
     horizons,
     longterm,
+    news_watch,
     signals,
     stops,
     tools,
@@ -294,7 +295,10 @@ def ideas(engine: Engine, count: int = 10) -> dict:
         )
     edge = bool(rows and rows[0]["rank_edge"])
     tests = latest_factor_tests(engine)
-    blocks = experts.stored_blocks(engine)
+    blocks = {
+        **news_watch.stock_warnings(engine, datetime.now(UTC).date()),
+        **experts.stored_blocks(engine),
+    }
     buyable = [row for row in rows if row["ticker"] not in blocks]
 
     def card(row: dict, lean: str) -> dict:
@@ -346,6 +350,7 @@ def holdings_today(engine: Engine, now: datetime | None = None) -> list[dict]:
     with engine.connect() as conn:
         previous_ranks = dict(conn.execute(text(earlier)).all())
     blocks = experts.stored_blocks(engine)
+    news_blocks = news_watch.stock_warnings(engine, now.date())
     candles_today = {
         item["ticker"]: item["reason"]
         for item in experts.stored_trades(engine)
@@ -367,6 +372,7 @@ def holdings_today(engine: Engine, now: datetime | None = None) -> list[dict]:
             blocked=blocks.get(row.ticker),
             bearish_candle=candles_today.get(row.ticker),
             below_50=None if average is None else price < average,
+            news_warning=news_blocks.get(row.ticker),
         )
         output.append(
             {
@@ -722,7 +728,10 @@ def screener(engine: Engine) -> list[dict]:
                WHERE f.target_session = (SELECT max(target_session) FROM forecasts)"""
     with engine.connect() as conn:
         rows = _rows(conn.execute(text(query)))
-    blocks = experts.stored_blocks(engine)
+    blocks = {
+        **news_watch.stock_warnings(engine, datetime.now(UTC).date()),
+        **experts.stored_blocks(engine),
+    }
     output = []
     for row in rows:
         name = action(row.pop("rank_edge"), row["rank"])
@@ -740,6 +749,7 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
     forecast = stock_forecast(engine, ticker)
     position = get_position(engine, ticker)
     review = expert_review(engine, ticker, datetime.now(UTC).date())
+    warning = news_watch.stock_warnings(engine, datetime.now(UTC).date()).get(ticker.upper())
     answer = advice.apply_experts(
         advice.decision(
             forecast["action"] if forecast else None,
@@ -749,6 +759,7 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
         ),
         review,
     )
+    answer = advice.apply_news(answer, warning)
     levels = suggested_levels(engine, ticker) or {}
     return advice.brief(
         answer,

@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import Engine, text
 
-from stockintel import calendar_events
+from stockintel import calendar_events, news_watch
 from stockintel.providers.news import INDUSTRIES, TOPICS, industry_of
 
 FRED = "https://fred.stlouisfed.org/series/"
@@ -231,6 +231,7 @@ def build(engine: Engine, today: date) -> dict:
         policy_day = policy[-1][0]
     return {
         "news": news(engine, today),
+        "warnings": news_watch.summary(engine, today),
         "cards": [
             curve(ten, two, short, day),
             rates(funds, before, funds_day),
