@@ -27,6 +27,7 @@ PAPER_DIRECTION = {
     "sector_profit": 1,
     "sector_momentum": 1,
     "chart_pattern": 1,
+    "fib_pullback": 1,
     "value": 1,
     "size": -1,
     "profitability": 1,

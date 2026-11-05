@@ -54,6 +54,7 @@ export type Chart = {
   latest_expected_session: string;
   candles: Candle[];
   levels: Level[];
+  fibonacci?: { levels: { ratio: number; price: number }[] } | null;
   signals: Signal[];
 };
 
@@ -142,6 +143,16 @@ function Plot({ data, months }: { data: Chart; months: number }) {
           crosshairMarkerVisible: false,
         })
         .setData(line(data.candles, key));
+    }
+    for (const item of data.fibonacci?.levels ?? []) {
+      candles.createPriceLine({
+        price: item.price,
+        color: "#94640f",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: `Fib ${(item.ratio * 100).toFixed(1)}%`,
+      });
     }
     for (const level of data.levels) {
       candles.createPriceLine({

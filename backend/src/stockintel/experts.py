@@ -15,8 +15,8 @@ from datetime import UTC, date, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import candles, horizons, localcache, longterm, tools
-from stockintel.charts import sma
+from stockintel import candles, context, horizons, localcache, longterm, tools
+from stockintel.charts import fibonacci, sma
 from stockintel.db import get_engine
 
 GOOD, BAD, MIXED, UNKNOWN = "good", "bad", "mixed", "unknown"
@@ -166,6 +166,46 @@ def trend(frame: pd.DataFrame) -> dict:
     return lens(name, source, verdict, f"Meets {passed} of 6 trend rules.", teaches)
 
 
+def fibonacci_lens(frame: pd.DataFrame) -> dict:
+    name, source = "Where is it on the Fibonacci levels?", "Fibonacci retracements, a trader rule"
+    teaches = "After a big move, traders watch 38.2%, 50% and 61.8% pullbacks for a turn."
+    found = fibonacci(frame) if len(frame) >= 30 and "high" in frame else None
+    if not found:
+        return lens(name, source, UNKNOWN, "Not verified: too little history.", teaches)
+    if not found["rising"]:
+        near = found["near"]
+        spot = (
+            f" It's near the {near['ratio'] * 100:.1f}% level at {near['price']:.2f}."
+            if near
+            else ""
+        )
+        return lens(name, source, MIXED, f"Its last big move was down.{spot}", teaches)
+    pullback = found["pullback"]
+    words = f"It has given back {pullback * 100:.0f}% of its last big rise"
+    if pullback > 0.786:
+        return lens(name, source, BAD, f"{words}, past the 78.6% level.", teaches)
+    if 0.3 <= pullback <= 0.7:
+        return lens(name, source, GOOD, f"{words}, inside the usual pullback zone.", teaches)
+    return lens(name, source, MIXED, f"{words}.", teaches)
+
+
+def market_lens(market: dict | None) -> dict:
+    name, source = "Is the whole market healthy?", "S&P 500 from FRED"
+    teaches = "Most stocks fall when the market does, so traders check it first."
+    if not market:
+        return lens(name, source, UNKNOWN, "Not verified: no market reading.", teaches)
+    above = market["above_200"]
+    words = f"S&P 500 is {'above' if above else 'below'} its 200-day average"
+    words += f" and {market['month'] * 100:+.1f}% over 20 trading days."
+    return lens(
+        name,
+        source,
+        GOOD if above and market["month"] >= 0 else BAD if not above else MIXED,
+        words,
+        teaches,
+    )
+
+
 def filings_lens(serious: list[str]) -> dict:
     name, source = "Any trouble in its filings?", "SEC Form 8-K"
     teaches = "Experienced investors read what a company must report before trusting the numbers."
@@ -257,6 +297,7 @@ def review(
     position: dict | None = None,
     earnings_in: int | None = None,
     outside: dict | None = None,
+    market: dict | None = None,
 ) -> dict:
     price, shares = report.get("price"), None
     if not facts.empty and not report.get("receipts") and report.get("currency") == "USD":
@@ -270,6 +311,8 @@ def review(
         graham(report, market_value),
         safety(report),
         trend(frame),
+        fibonacci_lens(frame),
+        market_lens(market),
         filings_lens(serious),
     ]
     return {
@@ -349,6 +392,7 @@ def run(engine: Engine) -> int:
     bars = localcache.daily_bars(engine)
     all_facts = localcache.facts_by_security(engine)
     outside = load_outside(engine)
+    market = context.market_trend(engine)
     candle_tests = candles.latest_tests(engine)
     done = 0
     for security in securities:
@@ -366,6 +410,7 @@ def run(engine: Engine) -> int:
             serious=tools.serious_events(tools.company_events(engine, ticker, today), today),
             earnings_in=(earnings - today).days if earnings else None,
             outside=outside,
+            market=market,
         )
         short = horizons.trade(
             adjust(raw),

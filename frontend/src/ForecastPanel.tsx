@@ -265,6 +265,7 @@ type Decision = {
   reasons_for: string[];
   reasons_against: string[];
   next_step: string;
+  market?: string;
 };
 
 type Line = {
@@ -689,6 +690,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
         <h3 className={tone}>{decision?.call ?? "Checking…"}</h3>
         {decision && (
           <>
+            {decision.market && <p className="market-line">{decision.market}</p>}
             <p>
               {decision.reason}
               {!decision.proven && decision.kind !== "neutral" && " Unproven, so treat it as a guess."}

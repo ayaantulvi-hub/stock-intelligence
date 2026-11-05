@@ -265,3 +265,9 @@ needs at least 30 tested cases that beat the baseline.
 - SPY, QQQ and DIA stand in for the S&P 500, Nasdaq 100 and Dow Jones, read hourly from Tiingo's
   derived feed in one request. FRED's SP500, NASDAQCOM and DJIA series give official daily closes.
 - Holdings are compared with the S&P 500 from the earliest date a position was saved.
+
+## Fibonacci and the whole market
+
+- Fibonacci retracements use the biggest move in the last 120 candles. They're drawn on the chart,
+  are an expert lens, and are a tested factor. It's a trader rule, with no strong research behind it.
+- Every decision shows a line on the whole market, and the expert review has a market lens.

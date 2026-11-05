@@ -382,6 +382,62 @@ def pattern_score(frame: pd.DataFrame, days: int = 10) -> pd.Series:
     return score
 
 
+FIB_RATIOS = (0.236, 0.382, 0.5, 0.618, 0.786)
+FIB_DAYS = 120
+FIB_NEAR = 0.02
+
+
+def fibonacci(frame: pd.DataFrame, days: int = FIB_DAYS) -> dict | None:
+    """Retracement levels of the biggest move in the last `days` candles."""
+    recent = frame.tail(days)
+    if len(recent) < 30:
+        return None
+    high_at, low_at = recent["high"].to_numpy().argmax(), recent["low"].to_numpy().argmin()
+    high, low = float(recent["high"].iloc[high_at]), float(recent["low"].iloc[low_at])
+    if high <= low:
+        return None
+    rising = bool(low_at < high_at)
+    price = float(recent["close"].iloc[-1])
+    levels = [
+        {
+            "ratio": ratio,
+            "price": high - ratio * (high - low) if rising else low + ratio * (high - low),
+        }
+        for ratio in FIB_RATIOS
+    ]
+    nearest = min(levels, key=lambda item: abs(item["price"] / price - 1))
+    return {
+        "rising": rising,
+        "high": high,
+        "low": low,
+        "levels": levels,
+        "pullback": (high - price) / (high - low) if rising else (price - low) / (high - low),
+        "near": nearest if abs(nearest["price"] / price - 1) <= FIB_NEAR else None,
+    }
+
+
+def fib_score(frame: pd.DataFrame, days: int = FIB_DAYS) -> pd.Series:
+    """Closeness to a key level after a rise, using only candles up to each day.
+
+    Higher means a pullback sitting close to the 38.2%, 50% or 61.8% level. Empty otherwise.
+    """
+    size = len(frame)
+    output = np.full(size, np.nan)
+    if size < days:
+        return pd.Series(output, index=frame.index)
+    high = np.lib.stride_tricks.sliding_window_view(frame["high"].to_numpy(float), days)
+    low = np.lib.stride_tricks.sliding_window_view(frame["low"].to_numpy(float), days)
+    close = frame["close"].to_numpy(float)[days - 1 :]
+    top, bottom = high.max(axis=1), low.min(axis=1)
+    rising = low.argmin(axis=1) < high.argmax(axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pullback = (top - close) / (top - bottom)
+    gaps = np.min(np.abs(pullback[:, None] - np.array((0.382, 0.5, 0.618))), axis=1)
+    score = np.where(rising & (pullback >= 0.3) & (pullback <= 0.7), -gaps, np.nan)
+    output[days - 1 :] = score
+    return pd.Series(output, index=frame.index)
+
+
 def detect_patterns(frame: pd.DataFrame) -> list[Pattern]:
     """Apply fixed rules to the newest candle. Needs oldest-first adjusted candles."""
     if len(frame) < 2:

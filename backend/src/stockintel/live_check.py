@@ -653,16 +653,23 @@ def probe_watch() -> None:
 
 
 def probe_markets() -> None:
-    from stockintel import context, ingest
+    from stockintel import context, ingest, queries
     from stockintel.providers.tiingo import TiingoProvider
 
     engine = create_engine(Settings().database_url)
     provider = TiingoProvider(os.environ["TIINGO_API_TOKEN"])
-    for url in ("https://api.tiingo.com/iex?tickers=spy,qqq,dia", "https://api.tiingo.com/iex/spy"):
-        status, body = fetch(url, provider.headers)
-        print("markets try", url, status, body[:260])
+    try:
+        print("markets count", len(provider.quotes(ingest.MARKET_FUNDS)[0]))
+    except Exception as exc:  # noqa: BLE001
+        print("markets failed", str(exc)[:120])
     print("markets run", ingest.run_markets(engine, provider))
-    print("markets strip", context.market_strip(engine))
+    print(
+        "markets strip",
+        [(m["ticker"], m["price"], m["change"]) for m in context.market_strip(engine)["markets"]],
+    )
+    print("markets versus", context.market_strip(engine)["versus"])
+    print("markets note", context.market_note(engine))
+    print("markets fib", queries.chart(engine, "PANW", "daily")["fibonacci"])
 
 
 def main() -> None:

@@ -185,6 +185,38 @@ def stock_news(engine: Engine, ticker: str, today: date) -> dict:
     }
 
 
+def market_trend(engine: Engine) -> dict | None:
+    query = """SELECT value FROM (SELECT DISTINCT ON (observation_date) observation_date, value
+                 FROM economic_observations WHERE series_id = 'SP500' AND value IS NOT NULL
+                 ORDER BY observation_date DESC, realtime_start DESC LIMIT 200) AS recent
+               ORDER BY observation_date"""
+    with engine.connect() as conn:
+        values = list(conn.execute(text(query)).scalars())
+    if len(values) < 200:
+        return None
+    return {
+        "above_200": values[-1] > sum(values) / len(values),
+        "month": values[-1] / values[-21] - 1,
+    }
+
+
+def market_note(engine: Engine) -> str:
+    """One line on the whole market, shown beside every stock's decision."""
+    strip = market_strip(engine)["markets"][0]
+    trend = market_trend(engine)
+    if strip["change"] is None and trend is None:
+        return "Whole market: Not verified."
+    parts = []
+    if strip["change"] is not None:
+        parts.append(f"The S&P 500 is {strip['change'] * 100:+.2f}% on the day")
+    if trend:
+        side = "above" if trend["above_200"] else "below"
+        parts.append(
+            f"{trend['month'] * 100:+.1f}% over 20 trading days and {side} its 200-day average"
+        )
+    return "Whole market: " + ", ".join(parts) + ". Most stocks move with the market."
+
+
 def market_strip(engine: Engine) -> dict:
     """Where the main US markets stand, and how holdings compare with the S&P 500."""
     latest = """SELECT DISTINCT ON (ticker) ticker, quoted_at, price, previous_close

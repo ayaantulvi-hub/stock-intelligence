@@ -10,6 +10,7 @@ from stockintel import (
     backtest,
     candles,
     charts,
+    context,
     experts,
     explain,
     factors,
@@ -210,6 +211,7 @@ def chart(engine: Engine, ticker: str, timeframe: str) -> dict | None:
     result["candles"] = records
     found = charts.levels(frame)
     result["levels"] = [level.__dict__ for level in found]
+    result["fibonacci"] = charts.fibonacci(frame)
     result["summary"] = charts.summary(frame, found)
     if not stale:
         result["signals"] = signals.build_signals(
@@ -761,14 +763,17 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
     )
     answer = advice.apply_news(answer, warning)
     levels = suggested_levels(engine, ticker) or {}
-    return advice.brief(
-        answer,
-        stock_story(engine, ticker) or [],
-        stock_checklist(engine, ticker) or [],
-        levels.get("levels"),
-        position,
-        review,
-    )
+    return {
+        **advice.brief(
+            answer,
+            stock_story(engine, ticker) or [],
+            stock_checklist(engine, ticker) or [],
+            levels.get("levels"),
+            position,
+            review,
+        ),
+        "market": context.market_note(engine),
+    }
 
 
 def stock_horizons(engine: Engine, ticker: str) -> dict | None:
@@ -833,6 +838,7 @@ def expert_review(engine: Engine, ticker: str, today) -> dict | None:
         position=get_position(engine, ticker),
         earnings_in=(earnings - today).days if earnings else None,
         outside=experts.load_outside(engine),
+        market=context.market_trend(engine),
     )
 
 

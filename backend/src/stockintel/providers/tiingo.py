@@ -1,5 +1,6 @@
 """Tiingo end-of-day prices. Docs: https://www.tiingo.com/documentation/end-of-day"""
 
+import re
 from datetime import UTC, date, datetime
 
 import httpx
@@ -31,7 +32,8 @@ class TiingoProvider:
             quotes = [
                 Quote(
                     row["ticker"].upper(),
-                    datetime.fromisoformat(row["timestamp"]),
+                    # Tiingo sends nanoseconds, and Python keeps six digits at most.
+                    datetime.fromisoformat(re.sub(r"(\.\d{6})\d+", r"\1", row["timestamp"])),
                     float(row["tngoLast"]),
                     float(row["prevClose"]),
                 )

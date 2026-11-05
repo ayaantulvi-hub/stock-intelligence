@@ -272,6 +272,13 @@ REGISTER = [
         "https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr512.pdf",
     ),
     Factor(
+        "fib_pullback",
+        "Fibonacci pullback",
+        "Chart",
+        "Trader rule of thumb, tested here",
+        LIVE,
+    ),
+    Factor(
         "curve_3m",
         "Yield curve, 10-year minus 3-month",
         "Economy",
@@ -391,6 +398,7 @@ HIGH_MEANS = {
     "sector_profit": "More profitable than most stocks in its industry",
     "sector_momentum": "Rose more than most stocks in its industry",
     "chart_pattern": "Recently completed a bullish chart pattern",
+    "fib_pullback": "Pulled back close to a key Fibonacci level after a rise",
     "value": "Priced cheaply against its accounting value, compared with most stocks",
     "size": "A larger company than most covered stocks",
     "profitability": "Earns more gross profit per dollar of assets than most stocks",
@@ -412,7 +420,7 @@ def register() -> list[dict]:
 
 def stock_factors(frame: pd.DataFrame, market_returns: pd.Series | None = None) -> pd.DataFrame:
     """One row per candle, using only that candle and earlier ones."""
-    from stockintel.charts import macd, pattern_score, rsi, sma
+    from stockintel.charts import fib_score, macd, pattern_score, rsi, sma
 
     close, volume = frame["close"], frame["volume"]
     daily = close.pct_change(fill_method=None)
@@ -432,6 +440,7 @@ def stock_factors(frame: pd.DataFrame, market_returns: pd.Series | None = None) 
     result["macd_hist"] = macd(close)["histogram"] / close
     result["above_200"] = close / sma(close, 200) - 1
     result["chart_pattern"] = pattern_score(frame)
+    result["fib_pullback"] = fib_score(frame)
     if market_returns is not None:
         market = pd.Series(market_returns.to_numpy(), index=frame.index)
         result["beta"] = daily.rolling(252).cov(market) / market.rolling(252).var()
