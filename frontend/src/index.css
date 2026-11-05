@@ -200,3 +200,4 @@ td.wrap { white-space: normal; min-width: 190px; }
 .orders { border: 2px solid var(--ok); border-radius: 8px; padding: 12px 14px; margin: 14px 0; background: var(--panel); }
 .orders h3 { margin-top: 0; }
 .plain, .plain b { font-size: 1.05rem; color: var(--text); margin-top: 12px; }
+.horizon + .horizon { margin-top: 10px; }

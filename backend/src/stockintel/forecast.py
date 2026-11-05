@@ -19,6 +19,7 @@ from sqlalchemy import Engine, text
 
 from stockintel import localcache, longterm, misses
 from stockintel.backtest import MIN_Z, eligibility, eligible_days
+from stockintel.calendar_events import election_window, is_midterm_year
 from stockintel.charts import adjust
 from stockintel.db import get_engine
 from stockintel.factors import LIVE_IDS, MARKET_WIDE, NAMES, stock_factors
@@ -32,6 +33,7 @@ from stockintel.tools import MIN_LIVE_DAYS, shrink_factor
 
 FLAT_BAND = 0.001
 RANK_HORIZON = 20
+SENSITIVITY_DAYS = 250
 FIRST_TEST_YEAR = 2015
 MIN_TEST_DAYS = 60
 CLASSES = np.array(["down", "flat", "up"])
@@ -123,6 +125,17 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         factors["insider_cluster"] = insider_buyers(trades, dates["date"])
 
 
+def sensitivity(changes: pd.Series, dates: pd.Series, driver: pd.Series | None) -> np.ndarray:
+    """How much a stock has moved with something over a year, up to the day before."""
+    if driver is None:
+        return np.full(len(changes), np.nan)
+    moves = pd.Series(changes.to_numpy(), index=pd.DatetimeIndex(dates))
+    other = driver.reindex(moves.index)
+    together = moves.rolling(SENSITIVITY_DAYS, min_periods=120).cov(other)
+    spread = other.rolling(SENSITIVITY_DAYS, min_periods=120).var()
+    return (together / spread.where(spread > 0)).shift(1).to_numpy()
+
+
 def build_panel(
     frames: dict[str, pd.DataFrame],
     slope: pd.Series | None,
@@ -144,6 +157,10 @@ def build_panel(
         dates = pd.to_datetime(frame["market_date"])
         factors = stock_factors(frame, market.reindex(dates))
         add_company_data(factors, frame, (company or {}).get(ticker))
+        changes = frame["close"].pct_change(fill_method=None)
+        for name, column in (("rate_beta", "rate_change"), ("policy_beta", "policy_change")):
+            source = None if macro is None or column not in macro else macro[column]
+            factors[name] = sensitivity(changes, dates, source)
         factors["ticker"] = ticker
         factors["eligible"] = (
             True
@@ -192,11 +209,18 @@ def build_panel(
         "inflation_expected",
         "jobless_claims",
         "fomc",
+        "curve_3m",
+        "fed_direction",
+        "policy_uncertainty",
+        "policy_actions",
     ):
         known_values = None
         if macro is not None and item in macro:
             known_values = macro[item].reindex(all_days, method="ffill")
         panel[item] = np.nan if known_values is None else panel["date"].map(known_values)
+    calendar_days = pd.Series(all_days, index=all_days).dt.date
+    panel["election_window"] = panel["date"].map(calendar_days.map(election_window))
+    panel["midterm_year"] = panel["date"].map(calendar_days.map(is_midterm_year).astype(float))
     panel["target_day"] = panel["next_change"].map(lambda v: None if pd.isna(v) else outcome(v))
     median = panel.groupby("date")["future_20d"].transform("median")
     panel["excess_20d"] = panel["future_20d"] - median
@@ -420,7 +444,8 @@ def load_macro(engine: Engine) -> pd.DataFrame:
     """Market-wide readings, each dated from when it was public."""
     query = """SELECT DISTINCT ON (series_id, observation_date) series_id, observation_date, value
                FROM economic_observations
-               WHERE series_id IN ('VIXCLS', 'BAA10Y', 'DCOILWTICO', 'T10YIE', 'ICSA')
+               WHERE series_id IN ('VIXCLS', 'BAA10Y', 'DCOILWTICO', 'T10YIE', 'ICSA',
+                 'T10Y3M', 'DFF', 'USEPUINDXD', 'DGS10')
                ORDER BY series_id, observation_date, realtime_start DESC"""
     with engine.connect() as conn:
         rows = pd.DataFrame([row._mapping for row in conn.execute(text(query))])
@@ -441,7 +466,33 @@ def load_macro(engine: Engine) -> pd.DataFrame:
         macro["inflation_expected"] = wide["T10YIE"].shift(1, freq="D")
     if "ICSA" in wide:
         macro["jobless_claims"] = wide["ICSA"].dropna().pct_change(4).shift(5, freq="D")
-    macro = macro.sort_index().ffill()
+    if "T10Y3M" in wide:
+        macro["curve_3m"] = wide["T10Y3M"].shift(1, freq="D")
+    if "DFF" in wide:
+        macro["fed_direction"] = wide["DFF"].dropna().diff(60).shift(1, freq="D")
+    if "USEPUINDXD" in wide:
+        # The index is published a day or two late.
+        macro["policy_uncertainty"] = (
+            wide["USEPUINDXD"].dropna().rolling(30).mean().shift(2, freq="D")
+        )
+    macro = macro.sort_index()
+    with engine.connect() as conn:
+        actions = [
+            row[0]
+            for row in conn.execute(
+                text(
+                    """SELECT published FROM policy_documents
+                       WHERE topic IS NOT NULL OR kind = 'Executive Order'"""
+                )
+            )
+        ]
+    macro = macro.ffill()
+    if actions and not macro.empty:
+        days = pd.date_range(macro.index.min(), macro.index.max(), freq="D")
+        counts = pd.Series(1.0, index=pd.to_datetime(actions)).groupby(level=0).sum()
+        window = counts.reindex(days, fill_value=0.0).rolling(30).sum().shift(1)
+        macro = macro.reindex(macro.index.union(days)).ffill()
+        macro["policy_actions"] = window.reindex(macro.index)
     if not macro.empty:
         with engine.connect() as conn:
             fed = [row[0] for row in conn.execute(text("SELECT decision_date FROM fed_meetings"))]
@@ -451,6 +502,12 @@ def load_macro(engine: Engine) -> pd.DataFrame:
             days = macro.index.union(eve)
             macro = macro.reindex(days).ffill()
             macro["fomc"] = pd.Series(1.0, index=eve).reindex(days, fill_value=0.0)
+    # Daily changes stay unfilled, because they're only used to measure each stock's sensitivity.
+    if "DGS10" in wide:
+        macro["rate_change"] = wide["DGS10"].dropna().diff().reindex(macro.index)
+    if "USEPUINDXD" in wide:
+        weekly = wide["USEPUINDXD"].dropna().rolling(5).mean().pct_change(5)
+        macro["policy_change"] = weekly.reindex(macro.index)
     return macro
 
 

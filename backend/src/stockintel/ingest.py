@@ -24,6 +24,7 @@ from stockintel.providers.base import (
     RateLimited,
 )
 from stockintel.providers.fed import FedProvider
+from stockintel.providers.federal_register import FederalRegisterProvider
 from stockintel.providers.fred import FredProvider
 from stockintel.providers.sec import SecProvider
 from stockintel.providers.tiingo import TiingoProvider
@@ -38,6 +39,9 @@ INSIDER_LOOKBACK = timedelta(days=730)
 ECONOMIC_SERIES = (
     "DGS2",
     "DGS10",
+    "T10Y3M",
+    "DFF",
+    "USEPUINDXD",
     "FEDFUNDS",
     "CPIAUCSL",
     "UNRATE",
@@ -51,7 +55,19 @@ ECONOMIC_SERIES = (
 FIRST_FED_YEAR = 2009
 FIRST_FLOAT_YEAR = 2009
 # FRED rejects full version history for these daily series.
-CURRENT_VALUES_ONLY = {"DGS2", "DGS10", "VIXCLS", "BAA10Y", "DCOILWTICO", "T10YIE", "ICSA"}
+CURRENT_VALUES_ONLY = {
+    "DGS2",
+    "DGS10",
+    "T10Y3M",
+    "DFF",
+    "USEPUINDXD",
+    "VIXCLS",
+    "BAA10Y",
+    "DCOILWTICO",
+    "T10YIE",
+    "ICSA",
+}
+FIRST_POLICY_YEAR = 2010
 ECONOMIC_START = date(2005, 1, 1)
 # Re-read recent days, because Tiingo publishes corrections through the evening.
 CORRECTION_WINDOW = timedelta(days=5)
@@ -539,6 +555,41 @@ def run_fed(engine: Engine, provider) -> str:
     return run.finish()
 
 
+def run_policy(engine: Engine, provider, now: datetime) -> str:
+    """Store executive orders and proclamations, a year at a time on the first load."""
+    run = Run(engine, "policy")
+    with engine.connect() as conn:
+        known = set(conn.execute(text("SELECT document_number FROM policy_documents")).scalars())
+        newest = conn.execute(text("SELECT max(published) FROM policy_documents")).scalar()
+    first = (newest - timedelta(days=30)).year if newest else FIRST_POLICY_YEAR
+    for year in range(first, now.year + 1):
+        run.attempted += 1
+        try:
+            documents, provenance = provider.documents(
+                date(year, 1, 1), min(date(year, 12, 31), now.date())
+            )
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        new = [item for item in documents if item.document_number not in known]
+        known.update(item.document_number for item in new)
+        if new:
+            with engine.begin() as conn:
+                fetch_id = add_fetch(conn, provenance)
+                conn.execute(
+                    text(
+                        """INSERT INTO policy_documents (document_number, fetch_id, kind, title,
+                             published, topic, url)
+                           VALUES (:document_number, :fetch_id, :kind, :title, :published, :topic,
+                             :url)"""
+                    ),
+                    [{**item.__dict__, "fetch_id": fetch_id} for item in new],
+                )
+            run.added += len(new)
+        run.ok += 1
+    return run.finish()
+
+
 def run_economic(engine: Engine, provider: EconomicProvider) -> str:
     run = Run(engine, "economic")
     for series_id in ECONOMIC_SERIES:
@@ -604,6 +655,7 @@ def main() -> None:
             "facts",
             "insiders",
             "history",
+            "policy",
             "fed",
         ],
     )
@@ -631,6 +683,8 @@ def main() -> None:
             status = run_history(engine, SecProvider(settings.sec_contact_email), now)
         elif args.feed == "fed":
             status = run_fed(engine, FedProvider())
+        elif args.feed == "policy":
+            status = run_policy(engine, FederalRegisterProvider(), now)
         elif args.feed == "facts":
             status = run_facts(engine, SecProvider(settings.sec_contact_email))
         elif args.feed == "insiders":

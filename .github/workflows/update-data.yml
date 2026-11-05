@@ -66,6 +66,9 @@ jobs:
       - name: Past company sizes
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest history
+      - name: Government policy actions
+        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.ingest policy
       - name: Fed dates
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest fed

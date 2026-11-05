@@ -3,7 +3,7 @@ import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
 import { TodaysOrders } from "./ChecklistPanel";
-import { AlertsPage, HoldingsToday, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
+import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
 type Status = {
@@ -146,7 +146,7 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
-const PAGES = ["Today", "Short trades", "Long-term", "My portfolio", "Journal", "Alerts", "How reliable?"];
+const PAGES = ["Today", "Short trades", "Long-term", "Big picture", "My portfolio", "Journal", "Alerts", "How reliable?"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
@@ -344,6 +344,7 @@ export default function App() {
           />
         </section>
       )}
+      {page === "Big picture" && <BigPicture />}
       {page === "My portfolio" && <PortfolioPage />}
       {page === "Journal" && <JournalPage />}
       {page === "Alerts" && <AlertsPage />}

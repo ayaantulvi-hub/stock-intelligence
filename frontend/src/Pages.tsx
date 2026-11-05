@@ -203,6 +203,68 @@ type Portfolio = {
   }[];
 };
 
+type Big = {
+  cards: {
+    title: string;
+    reading: string;
+    state: string;
+    meaning: string;
+    source: string;
+    url: string;
+    date: string | null;
+  }[];
+  actions: { published: string; kind: string; title: string; topic: string | null; url: string }[];
+};
+
+export function BigPicture() {
+  const { data, failed } = useData<Big>("/api/big-picture");
+  if (failed) return <Failed />;
+  if (!data) return <p>Loading…</p>;
+  return (
+    <section>
+      <h2>The big picture</h2>
+      <p>
+        What's happening in the economy and government, and what it means for you. The model tests
+        these readings each week. They only count in its ranking if they earn their place.
+      </p>
+      {data.cards.map((card) => (
+        <div
+          key={card.title}
+          className={`horizon ${card.state === "good" ? "buy" : card.state === "bad" ? "sell" : ""}`}
+        >
+          <h4>{card.title}</h4>
+          <p>
+            <b>{card.reading}</b>
+          </p>
+          <p>{card.meaning}</p>
+          <small>
+            <a href={card.url} target="_blank" rel="noreferrer">
+              {card.source}
+            </a>
+            {card.date && `, ${card.date}`}
+          </small>
+        </div>
+      ))}
+      <h3>Recent presidential actions</h3>
+      <small>From the Federal Register, the government's official journal. Ceremonial items are left out.</small>
+      {data.actions.length === 0 ? (
+        <p>None stored in the last 60 days.</p>
+      ) : (
+        <ul>
+          {data.actions.map((item) => (
+            <li key={item.url}>
+              {item.published} {item.topic && <b>{item.topic}: </b>}
+              <a href={item.url} target="_blank" rel="noreferrer">
+                {item.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 type Holding = {
   ticker: string;
   name: string;

@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { PortfolioPage, ReliabilityPage, Screener , HoldingsToday } from "./Pages";
+import { BigPicture, HoldingsToday, PortfolioPage, ReliabilityPage, Screener } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -74,4 +74,23 @@ test("your stocks today says plainly what to sell", async () => {
   expect(await screen.findByText("Sell 1 now, keep the rest.")).toBeTruthy();
   expect(screen.getByText("Sell now").closest("tr")?.className).toBe("row-sell");
   expect(screen.getByText("Keep").closest("tr")?.className).toBe("row-buy");
+});
+
+test("the big picture shows the reading, meaning and source", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      status: 200,
+      json: async () => ({
+        cards: [
+          { title: "Yield curve", reading: "Fixture reading", state: "bad", meaning: "Fixture meaning.", source: "Fixture source", url: "https://fred.stlouisfed.org", date: "2026-11-03" },
+        ],
+        actions: [],
+      }),
+    })),
+  );
+  render(<BigPicture />);
+  expect(await screen.findByText("Fixture reading")).toBeTruthy();
+  expect(screen.getByText("Fixture meaning.")).toBeTruthy();
+  expect(screen.getByText("None stored in the last 60 days.")).toBeTruthy();
 });

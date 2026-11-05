@@ -206,3 +206,13 @@ needs at least 30 tested cases that beat the baseline.
   pattern with a worse result gives no trade.
 - Each wrong forecast gets the likeliest reason from stored records, or says no cause is stored.
 - The stock page shows what to enter in an order, using TradingView's field names.
+
+## Real-world context
+
+- Added 10-year minus 3-month yields, the Fed funds rate and the Economic Policy Uncertainty
+  index from FRED, plus presidential actions from the Federal Register (official, no key).
+- Election windows and midterm years come from the date set by law, so nothing leaks from the
+  future. Who won an election isn't used, because few elections are in the price history.
+- Stock-level rate and policy sensitivity are measured over the past year, up to the day before.
+- All of these go through the same weekly tests. A reading earns weight only if it helps.
+- A topic label on a presidential action is a keyword match, for display and counting only.

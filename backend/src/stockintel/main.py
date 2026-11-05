@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from stockintel import experts, misses, queries, tools
+from stockintel import context, experts, misses, queries, tools
 from stockintel.charts import TIMEFRAMES
 from stockintel.config import get_settings
 from stockintel.db import get_engine
@@ -260,6 +260,11 @@ def track_orders(order: TrackOrders) -> list[dict]:
 @app.get("/api/holdings-today")
 def holdings_today() -> list[dict]:
     return queries.holdings_today(get_engine())
+
+
+@app.get("/api/big-picture")
+def big_picture() -> dict:
+    return context.build(get_engine(), datetime.now(UTC).date())
 
 
 @app.get("/api/investments")
