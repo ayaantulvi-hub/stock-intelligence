@@ -16,6 +16,7 @@ from stockintel.providers.base import (
     InsiderDocument,
     InsiderTrade,
     Listing,
+    NotAvailable,
     Provenance,
 )
 from stockintel.providers.http import get_json
@@ -80,6 +81,32 @@ FACT_TAGS = {
 # A new holding company took over, so its filing history sits under the old number.
 PREDECESSORS = {2115436: 34088}
 MIN_SECONDS_BETWEEN_REQUESTS = 0.15
+
+
+def parse_info_table(content: bytes) -> list[dict]:
+    """Shares held per issuer from a 13F table, whatever XML namespace it declares."""
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        raise FeedError("SEC fund table: could not read the document") from None
+    totals: dict[str, float] = {}
+
+    def child(node, name):
+        return next((item for item in node.iter() if item.tag.endswith(name)), None)
+
+    for row in root:
+        name, amount = child(row, "nameOfIssuer"), child(row, "sshPrnamt")
+        if name is None or amount is None or child(row, "putCall") is not None:
+            continue
+        kind = child(row, "sshPrnamtType")
+        if kind is not None and (kind.text or "").strip() != "SH":
+            continue
+        try:
+            issuer = (name.text or "").strip().upper()
+            totals[issuer] = totals.get(issuer, 0.0) + float(amount.text)
+        except (TypeError, ValueError):
+            raise FeedError("SEC fund table: a share count is unreadable") from None
+    return [{"issuer": issuer, "shares": shares} for issuer, shares in totals.items()]
 
 
 def _text(node: ET.Element, path: str) -> str | None:
@@ -207,6 +234,60 @@ class SecProvider:
         except (KeyError, TypeError, ValueError):
             raise FeedError(f"SEC facts CIK {cik}: unexpected response shape") from None
         return facts, Provenance("SEC EDGAR", url, retrieved, "end_of_day")
+
+    def fund_filings(self, cik: int, since: date) -> tuple[str, list[dict]]:
+        """A fund's name and its quarterly holdings reports."""
+        data = self._get(SUBMISSIONS_URL.format(cik=cik), f"SEC fund {cik}")
+        try:
+            recent = data["filings"]["recent"]
+            rows = zip(
+                recent["accessionNumber"],
+                recent["form"],
+                recent["filingDate"],
+                recent["reportDate"],
+                strict=True,
+            )
+            found = [
+                {
+                    "accession_number": accession,
+                    "filed": date.fromisoformat(filed),
+                    "period": date.fromisoformat(period),
+                }
+                for accession, form, filed, period in rows
+                if form == "13F-HR" and date.fromisoformat(filed) >= since
+            ]
+            return data["name"], found
+        except (KeyError, TypeError, ValueError):
+            raise FeedError(f"SEC fund {cik}: unexpected response shape") from None
+
+    def fund_holdings(self, cik: int, accession: str) -> tuple[list[dict], str, Provenance]:
+        """Shares held per issuer. Options are left out, because they aren't shares owned."""
+        folder = ACCESSION_URL.format(cik=cik, accession=accession.replace("-", ""))
+        listing = self._get(f"{folder}index.json", f"SEC fund {cik}")
+        try:
+            names = [item["name"] for item in listing["directory"]["item"]]
+        except (KeyError, TypeError):
+            raise FeedError(f"SEC fund {cik}: unexpected folder shape") from None
+        tables = [n for n in names if n.endswith(".xml") and n != "primary_doc.xml"]
+        if not tables:
+            raise NotAvailable(f"SEC fund {cik}: no holdings table in this filing")
+        url = f"{folder}{tables[0]}"
+        wait = self.last_request + MIN_SECONDS_BETWEEN_REQUESTS - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        self.last_request = time.monotonic()
+        try:
+            response = self.client.get(url, headers=self.headers)
+        except httpx.HTTPError as exc:
+            raise FeedError(f"SEC fund table: request failed ({type(exc).__name__})") from None
+        if response.status_code != 200:
+            raise FeedError(f"SEC fund table: HTTP {response.status_code}")
+        retrieved = datetime.now(UTC)
+        return (
+            parse_info_table(response.content),
+            url,
+            Provenance("SEC EDGAR", url, retrieved, "end_of_day"),
+        )
 
     def insider_documents(self, cik: int, since: date) -> list[InsiderDocument]:
         data = self._get(SUBMISSIONS_URL.format(cik=cik), f"SEC CIK {cik}")

@@ -72,6 +72,7 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         "insider_cluster",
         "revenue_growth",
         "fscore",
+        "fund_buying",
     ):
         factors[item] = np.nan
     if not company or "raw_close" not in frame:
@@ -114,6 +115,9 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         fresher = pd.to_numeric(merged["income_q"], errors="coerce").where(recent).to_numpy(float)
         factors["earnings_drift"] = np.where(np.isnan(fresher), factors["earnings_drift"], fresher)
         factors["revenue_growth"] = pd.to_numeric(merged["revenue_q"], errors="coerce").to_numpy()
+    funds = company.get("funds")
+    if funds is not None and not funds.empty:
+        factors["fund_buying"] = fund_signal(funds, dates["date"])
     trades = company.get("trades")
     if trades is not None and not trades.empty:
         dollars = (frame["raw_close"] * frame["volume"]).rolling(90, min_periods=20).sum()
@@ -399,6 +403,7 @@ def load_company(engine: Engine) -> dict[str, dict]:
         )
     ]
     grouped = dict(tuple(wanted.groupby("security_id")))
+    fund_rows = dict(tuple(localcache.load(engine, "fund_holdings").groupby("security_id")))
     for security in securities:
         facts = all_facts.get(security.id, pd.DataFrame())
         trades = grouped.get(security.id, pd.DataFrame())
@@ -409,8 +414,42 @@ def load_company(engine: Engine) -> dict[str, dict]:
             "shares": longterm.shares_history(facts),
             "quarters": longterm.quarterly_changes(facts),
             "trades": insider_values(trades),
+            "funds": fund_changes(fund_rows[security.id]) if security.id in fund_rows else None,
         }
     return output
+
+
+def fund_changes(rows: pd.DataFrame) -> pd.DataFrame:
+    """Each fund's move in one stock, per report: 1 raised, -1 cut, usable from the next day.
+
+    A jump past the limits is likely a share split, so it isn't counted as a decision.
+    """
+    output = []
+    for _, group in rows.sort_values("period").groupby("fund_cik"):
+        ratio = group["shares"] / group["shares"].shift(1)
+        move = np.where(
+            ratio.between(1.05, 1.8), 1.0, np.where(ratio.between(0.55, 0.95), -1.0, 0.0)
+        )
+        output.append(
+            pd.DataFrame(
+                {
+                    "fund": group["fund_cik"].to_numpy(),
+                    "available": pd.to_datetime(group["filed"]).to_numpy() + np.timedelta64(1, "D"),
+                    "move": move,
+                }
+            )
+        )
+    return pd.concat(output) if output else pd.DataFrame()
+
+
+def fund_signal(changes: pd.DataFrame, days: pd.Series) -> np.ndarray:
+    """Funds raising minus funds cutting, each move counting until a quarter has passed."""
+    totals = np.zeros(len(days))
+    values = days.to_numpy()
+    for _, row in changes[changes["move"] != 0].iterrows():
+        start = np.datetime64(row["available"])
+        totals += row["move"] * ((values >= start) & (values < start + np.timedelta64(100, "D")))
+    return totals
 
 
 def insider_buyers(trades: pd.DataFrame, days: pd.Series) -> np.ndarray:

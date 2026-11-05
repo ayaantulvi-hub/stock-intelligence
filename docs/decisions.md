@@ -271,3 +271,10 @@ needs at least 30 tested cases that beat the baseline.
 - Fibonacci retracements use the biggest move in the last 120 candles. They're drawn on the chart,
   are an expert lens, and are a tested factor. It's a trader rule, with no strong research behind it.
 - Every decision shows a line on the whole market, and the expert review has a market lens.
+
+## Big investors
+
+- Eight well-known funds' quarterly 13F reports are read from the SEC, filed up to 45 days after
+  quarter end. Names are matched to the 480 companies. Options are left out.
+- A change is counted from the day after filing, for a quarter. It's a tested factor and a
+  checklist line. Congressional trades aren't added: the House publishes them as PDFs.

@@ -38,6 +38,7 @@ PAPER_DIRECTION = {
     "insider": 1,
     "insider_cluster": 1,
     "fscore": 1,
+    "fund_buying": 1,
 }
 
 

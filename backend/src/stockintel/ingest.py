@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import re
 import sys
 from datetime import UTC, date, datetime, timedelta
 
@@ -77,6 +78,9 @@ CURRENT_VALUES_ONLY = {
 }
 FIRST_POLICY_YEAR = 2010
 MARKET_FUNDS = ("SPY", "QQQ", "DIA")
+FUND_YEARS = 12
+# Well-known investors' SEC numbers. Each name comes back from the SEC and is stored.
+FUNDS = (1067983, 1037389, 1350694, 1336528, 1649339, 1656456, 1061768, 1040273)
 ECONOMIC_START = date(2005, 1, 1)
 # Re-read recent days, because Tiingo publishes corrections through the evening.
 CORRECTION_WINDOW = timedelta(days=5)
@@ -673,6 +677,81 @@ def _store_tone(engine: Engine, subjects: set[str], today: date) -> None:
                 )
 
 
+def issuer_key(name: str) -> str:
+    """A company's name in the plain form both SEC lists can be compared on."""
+    plain = news.plain_name(name).upper().replace(".", "").replace(",", "")
+    return re.sub(r"\s+(INC|CORP|CO|CL A|CL B|COM|NEW|DEL|HLDGS)$", "", plain).strip()
+
+
+def run_funds(engine: Engine, provider, now: datetime) -> str:
+    """Store what well-known funds report owning, one fund's new reports at a time."""
+    run = Run(engine, "funds")
+    since = date(now.year - FUND_YEARS, 1, 1)
+    with engine.connect() as conn:
+        companies = {
+            issuer_key(name): security_id
+            for security_id, name in conn.execute(text("SELECT id, name FROM securities"))
+        }
+        known = set(conn.execute(text("SELECT accession_number FROM fund_filings")).scalars())
+    for cik in FUNDS:
+        run.attempted += 1
+        try:
+            name, filings = provider.fund_filings(cik, since)
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        failed = False
+        for filing in filings:
+            if filing["accession_number"] in known:
+                continue
+            try:
+                rows, url, provenance = provider.fund_holdings(cik, filing["accession_number"])
+            except NotAvailable:
+                continue
+            except FeedError as exc:
+                run.errors.append(str(exc))
+                failed = True
+                continue
+            matched: dict[int, float] = {}
+            for row in rows:
+                security_id = companies.get(issuer_key(row["issuer"]))
+                if security_id is not None:
+                    matched[security_id] = matched.get(security_id, 0.0) + row["shares"]
+            with engine.begin() as conn:
+                fetch_id = add_fetch(conn, provenance)
+                conn.execute(
+                    text(
+                        """INSERT INTO fund_filings (accession_number, fund_cik, fund_name, period,
+                             filed)
+                           VALUES (:accession_number, :cik, :name, :period, :filed)"""
+                    ),
+                    {**filing, "cik": cik, "name": name},
+                )
+                for security_id, shares in matched.items():
+                    conn.execute(
+                        text(
+                            """INSERT INTO fund_holdings (accession_number, fetch_id, security_id,
+                                 fund_cik, period, filed, shares, document_url)
+                               VALUES (:accession, :fetch_id, :security_id, :cik, :period, :filed,
+                                 :shares, :url)"""
+                        ),
+                        {
+                            "accession": filing["accession_number"],
+                            "fetch_id": fetch_id,
+                            "security_id": security_id,
+                            "cik": cik,
+                            "period": filing["period"],
+                            "filed": filing["filed"],
+                            "shares": shares,
+                            "url": url,
+                        },
+                    )
+                run.added += len(matched)
+        if not failed:
+            run.ok += 1
+    return run.finish()
+
+
 def run_markets(engine: Engine, provider) -> str:
     """Store the latest price of each fund that tracks a main US index."""
     run = Run(engine, "markets")
@@ -765,6 +844,7 @@ def main() -> None:
             "policy",
             "news",
             "markets",
+            "funds",
             "fed",
         ],
     )
@@ -794,6 +874,8 @@ def main() -> None:
             status = run_fed(engine, FedProvider())
         elif args.feed == "news":
             status = run_news(engine, NewsProvider(), now)
+        elif args.feed == "funds":
+            status = run_funds(engine, SecProvider(settings.sec_contact_email), now)
         elif args.feed == "markets":
             status = run_markets(engine, TiingoProvider(settings.tiingo_api_token))
         elif args.feed == "policy":

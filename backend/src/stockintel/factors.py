@@ -254,6 +254,13 @@ REGISTER = [
         "https://www.jstor.org/stable/2672906",
     ),
     Factor(
+        "fund_buying",
+        "Big investors adding",
+        "Events",
+        "Chen, Jegadeesh & Wermers (2000), Journal of Financial and Quantitative Analysis",
+        LIVE,
+    ),
+    Factor(
         "insider_cluster",
         "Several insiders buying together",
         "Events",
@@ -410,6 +417,7 @@ HIGH_MEANS = {
     "fscore": "Passed more business health tests than most stocks",
     "rate_beta": "Has tended to rise more than most stocks when long-term rates rise",
     "policy_beta": "Has tended to rise more than most stocks when policy uncertainty rises",
+    "fund_buying": "More tracked big investors added to it than cut it",
     "insider_cluster": "More different insiders bought recently than at most stocks",
 }
 

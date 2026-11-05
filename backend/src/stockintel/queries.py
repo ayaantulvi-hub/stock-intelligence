@@ -652,7 +652,7 @@ def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
     summary = data["summary"] or {}
     today = datetime.now(UTC).date()
     events = tools.company_events(engine, ticker, today)
-    return advice.checklist(
+    checks = advice.checklist(
         stale=data["stale"],
         latest_bar=data["latest_bar"],
         expected=data["latest_expected_session"],
@@ -666,6 +666,35 @@ def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
         position=position,
         portfolio_share=mine / total if mine and total and len(holdings) > 1 else None,
     )
+    return [*checks, fund_check(engine, security_id)]
+
+
+def fund_check(engine: Engine, security_id: int) -> dict:
+    """What tracked big investors did in their last two reports."""
+    query = """SELECT DISTINCT ON (h.fund_cik, h.period) h.fund_cik, h.period, h.shares, f.fund_name
+               FROM fund_holdings h JOIN fund_filings f USING (accession_number)
+               WHERE h.security_id = :id AND h.filed >= current_date - 200
+               ORDER BY h.fund_cik, h.period DESC"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query), {"id": security_id}).all()
+    if not rows:
+        return advice._check("Big investors", "unknown", "No tracked fund reported holding it.")
+    latest: dict = {}
+    for row in sorted(rows, key=lambda item: item.period):
+        latest.setdefault(row.fund_cik, []).append(row)
+    raised = [
+        v[-1].fund_name
+        for v in latest.values()
+        if len(v) > 1 and v[-1].shares > v[-2].shares * 1.05
+    ]
+    cut = [
+        v[-1].fund_name
+        for v in latest.values()
+        if len(v) > 1 and v[-1].shares < v[-2].shares * 0.95
+    ]
+    words = f"{len(latest)} tracked funds hold it. {len(raised)} added and {len(cut)} cut"
+    state = "pass" if len(raised) > len(cut) else "caution" if len(cut) > len(raised) else "unknown"
+    return advice._check("Big investors", state, f"{words}, as of filings up to 45 days old.")
 
 
 def model_comparison(engine: Engine) -> dict | None:

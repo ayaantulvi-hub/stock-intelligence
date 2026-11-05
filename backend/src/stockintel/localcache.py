@@ -18,6 +18,7 @@ COLUMNS = {
                         accession_number, fiscal_period, form, filed, document_url""",
     "insider_transactions": """id, security_id, filed, code, shares, price, owner,
                                planned_sale""",
+    "fund_holdings": "id, security_id, fund_cik, period, filed, shares",
 }
 
 
