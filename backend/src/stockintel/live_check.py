@@ -695,7 +695,6 @@ def probe_judge() -> None:
 
 
 def main() -> None:
-    probe_judge()
     main_full()
 
 
