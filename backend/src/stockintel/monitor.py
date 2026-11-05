@@ -171,10 +171,30 @@ def scan(engine: Engine, now: datetime) -> int:
                     f"The {row.feed} data feed failed on {row.day}.",
                     f"feed:{row.feed}:{row.day}",
                 )
-    from stockintel import queries
+    from stockintel import changes, queries
 
+    holdings = queries.holdings_today(engine, now)
     with engine.begin() as conn:
-        for item in queries.holdings_today(engine, now):
+        for item in holdings:
+            if item["call"] == "Wait":
+                continue
+            conn.execute(
+                text(
+                    """INSERT INTO holding_calls (ticker, day, call, reason)
+                       VALUES (:ticker, :day, :call, :reason)
+                       ON CONFLICT (ticker, day) DO UPDATE SET call = EXCLUDED.call,
+                         reason = EXCLUDED.reason"""
+                ),
+                {
+                    "ticker": item["ticker"],
+                    "day": now.date(),
+                    "call": item["call"],
+                    "reason": item["reason"],
+                },
+            )
+    update = changes.build(engine, now.date())
+    with engine.begin() as conn:
+        for item in holdings:
             if item["call"] == "Sell now":
                 add(
                     conn,
@@ -183,6 +203,15 @@ def scan(engine: Engine, now: datetime) -> int:
                     f"Sell now: {item['ticker']}. {item['reason']}",
                     f"sell:{item['ticker']}:{now.date()}",
                 )
+        for row in update["yours"]:
+            add(
+                conn,
+                row["ticker"],
+                "change",
+                f"{row['ticker']} changed. {row['topic']}: {row['was'] or 'new'} to {row['now']}. "
+                f"{row['why']}",
+                f"change:{row['ticker']}:{row['topic']}:{row['now']}:{now.date()}",
+            )
         return conn.execute(text("SELECT count(*) FROM alerts WHERE NOT sent")).scalar()
 
 

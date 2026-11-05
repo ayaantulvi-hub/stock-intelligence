@@ -203,6 +203,64 @@ type Portfolio = {
   }[];
 };
 
+type Change = { ticker: string; topic: string; was: string; now: string; why: string; tone: string };
+type Changes = { latest: string | null; previous: string | null; yours: Change[]; others: Change[] };
+
+function ChangeRows({ rows, onOpen }: { rows: Change[]; onOpen?: (ticker: string) => void }) {
+  return (
+    <div className="scroll">
+      <table>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={`${row.ticker}${row.topic}${row.now}`}
+              className={row.tone === "buy" ? "row-buy" : row.tone === "sell" ? "row-sell" : ""}
+            >
+              <td>
+                <button className="link" onClick={() => onOpen?.(row.ticker)}>
+                  {row.ticker}
+                </button>
+              </td>
+              <td>
+                <b>{row.topic}</b>
+                <small>{row.was ? `${row.was} to ${row.now}` : row.now}</small>
+              </td>
+              <td>{row.why}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function WhatChanged({ onOpen }: { onOpen?: (ticker: string) => void }) {
+  const { data } = useData<Changes>("/api/changes");
+  if (!data) return null;
+  const total = data.yours.length + data.others.length;
+  return (
+    <section className={`changes ${data.yours.length > 0 ? "urgent" : ""}`}>
+      <h2>
+        {data.yours.length > 0
+          ? `${data.yours.length} change${data.yours.length === 1 ? "" : "s"} to your stocks`
+          : "What changed"}
+      </h2>
+      {!data.previous && <p>Changes appear once there are two days of results to compare.</p>}
+      {data.previous && total === 0 && <p>Nothing changed since {data.previous}.</p>}
+      {data.yours.length > 0 && <ChangeRows rows={data.yours} onOpen={onOpen} />}
+      {data.others.length > 0 && (
+        <details className="fold" open={data.yours.length === 0}>
+          <summary>
+            {data.others.length} change{data.others.length === 1 ? "" : "s"} to other stocks since{" "}
+            {data.previous}
+          </summary>
+          <ChangeRows rows={data.others} onOpen={onOpen} />
+        </details>
+      )}
+    </section>
+  );
+}
+
 type Big = {
   cards: {
     title: string;

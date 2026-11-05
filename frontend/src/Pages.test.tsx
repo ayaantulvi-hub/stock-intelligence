@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { BigPicture, HoldingsToday, PortfolioPage, ReliabilityPage, Screener } from "./Pages";
+import { BigPicture, HoldingsToday, PortfolioPage, ReliabilityPage, Screener, WhatChanged } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -93,4 +93,35 @@ test("the big picture shows the reading, meaning and source", async () => {
   expect(await screen.findByText("Fixture reading")).toBeTruthy();
   expect(screen.getByText("Fixture meaning.")).toBeTruthy();
   expect(screen.getByText("None stored in the last 60 days.")).toBeTruthy();
+});
+
+test("what changed puts your stocks first and says what moved", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      status: 200,
+      json: async () => ({
+        latest: "2026-11-05",
+        previous: "2026-11-04",
+        yours: [{ ticker: "AAA", topic: "Your holding", was: "Keep", now: "Sell now", why: "Fixture reason.", tone: "sell" }],
+        others: [{ ticker: "BBB", topic: "Model lean", was: "Mixed", now: "Buy", why: "Moved.", tone: "buy" }],
+      }),
+    })),
+  );
+  render(<WhatChanged />);
+  expect(await screen.findByText("1 change to your stocks")).toBeTruthy();
+  expect(screen.getByText("Keep to Sell now").closest("tr")?.className).toBe("row-sell");
+  expect(screen.getByText(/1 change to other stocks since 2026-11-04/)).toBeTruthy();
+});
+
+test("what changed says so when nothing did", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      status: 200,
+      json: async () => ({ latest: "2026-11-05", previous: "2026-11-04", yours: [], others: [] }),
+    })),
+  );
+  render(<WhatChanged />);
+  expect(await screen.findByText("Nothing changed since 2026-11-04.")).toBeTruthy();
 });

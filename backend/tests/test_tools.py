@@ -266,3 +266,20 @@ def test_a_healthy_holding_says_keep(engine):
 
 def test_no_holdings_gives_an_empty_list(engine):
     assert queries.holdings_today(engine, NOW) == []
+
+
+def test_a_holding_that_flips_to_sell_now_is_reported_and_alerted(engine):
+    security = seed(engine)
+    bar(engine, security, "2026-07-07", 150)
+    own(engine, security, stop=100)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """INSERT INTO holding_calls (ticker, day, call, reason)
+                   VALUES ('AAA', '2026-07-07', 'Keep', 'Fixture')"""
+            )
+        )
+        conn.execute(text("UPDATE positions SET stop_price = 160"))
+    monitor.scan(engine, NOW)
+    messages = monitor.take_unsent(engine)
+    assert any("AAA changed. Your holding: Keep to Sell now" in message for message in messages)

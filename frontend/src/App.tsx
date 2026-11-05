@@ -3,7 +3,7 @@ import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
 import { TodaysOrders } from "./ChecklistPanel";
-import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton } from "./Pages";
+import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, PortfolioPage, ReliabilityPage, Screener, WatchButton, WhatChanged } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
 type Status = {
@@ -388,6 +388,7 @@ export default function App() {
 
       {!stock && !failed && (
         <>
+          <WhatChanged onOpen={open} />
           <HoldingsToday onOpen={open} />
           <section className="orders">
             <h2>Hold about a month</h2>

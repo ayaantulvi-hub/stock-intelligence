@@ -216,3 +216,11 @@ needs at least 30 tested cases that beat the baseline.
 - Stock-level rate and policy sensitivity are measured over the past year, up to the day before.
 - All of these go through the same weekly tests. A reading earns weight only if it helps.
 - A topic label on a presidential action is a keyword match, for display and counting only.
+
+## What changed
+
+- The home page compares the two latest forecast days and expert reviews, and each holding's
+  stored Keep or Sell now answer. Stocks held or watched come first and raise an alert.
+- A stock with no earlier result isn't reported as a change.
+- The first full tests on 480 stocks found no candlestick pattern that beat all stocks after
+  costs, so most patterns give no trade.

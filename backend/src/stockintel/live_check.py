@@ -596,7 +596,22 @@ def probe_context() -> None:
         print("context stored", count)
 
 
+def probe_changes() -> None:
+    from datetime import UTC, datetime
+
+    from stockintel import changes
+
+    engine = create_engine(Settings().database_url)
+    result = changes.build(engine, datetime.now(UTC).date())
+    print(
+        "changes", result["latest"], result["previous"], len(result["yours"]), len(result["others"])
+    )
+    for row in (result["yours"] + result["others"])[:12]:
+        print("changes item", row["ticker"], row["topic"], row["was"], row["now"])
+
+
 def main() -> None:
+    probe_changes()
     main_full()
 
 
