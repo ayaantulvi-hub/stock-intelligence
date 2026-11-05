@@ -330,7 +330,11 @@ type Big = {
     date: string | null;
   }[];
   actions: { published: string; kind: string; title: string; topic: string | null; url: string }[];
-  news: NewsGroup[];
+  news: {
+    market: NewsGroup[];
+    industries: NewsGroup[];
+    companies: { subject: string; title: string; url: string; domain: string }[];
+  };
 };
 export type NewsGroup = {
   subject: string;
@@ -355,17 +359,44 @@ function NewsList({ group }: { group: NewsGroup }) {
   );
 }
 
+function NewsLevel({ title, groups }: { title: string; groups: NewsGroup[] }) {
+  return (
+    <>
+      <h4>{title}</h4>
+      {groups.length === 0 && <p>No headlines stored yet.</p>}
+      {groups.map((group) => (
+        <details className="fold" key={group.subject}>
+          <summary>
+            {group.subject}:{" "}
+            <span className={group.tone.includes("negative") ? "bad" : group.tone.includes("positive") ? "ok" : ""}>
+              {group.tone}
+            </span>
+          </summary>
+          <NewsList group={group} />
+        </details>
+      ))}
+    </>
+  );
+}
+
 export function StockNews({ ticker }: { ticker: string }) {
-  const { data, failed } = useData<NewsGroup>(`/api/stocks/${encodeURIComponent(ticker)}/news`);
+  const { data, failed } = useData<NewsGroup & { industry: NewsGroup | null; market: NewsGroup[] }>(
+    `/api/stocks/${encodeURIComponent(ticker)}/news`,
+  );
   if (failed) return <p className="bad">Could not load the news. Refresh to try again.</p>;
   return (
     <details className="fold">
-      <summary>News{data ? `: ${data.tone}` : ""}</summary>
-      {data?.articles.length === 0 && (
-        <p>No headlines naming this company in the last 7 days.</p>
-      )}
+      <summary>News{data ? ` (${data.articles.length} on this company)` : ""}</summary>
+      <h4>This company</h4>
+      {data?.articles.length === 0 && <p>No headlines naming this company in the last 7 days.</p>}
       {data && <NewsList group={data} />}
-      <small>Headlines and links from major outlets. News isn't in the model yet.</small>
+      {data?.industry && data.industry.articles.length > 0 && (
+        <>
+          <h4>Its industry: {data.industry.subject}</h4>
+          <NewsList group={data.industry} />
+        </>
+      )}
+      <small>Headlines and links only. News isn't in the model yet.</small>
     </details>
   );
 }
@@ -399,20 +430,27 @@ export function BigPicture() {
           </small>
         </div>
       ))}
-      <h3>In the news</h3>
+      <h3>News by how far it reaches</h3>
       <small>
-        Latest headlines from major outlets. Mood is a rough word count, compared with the past
-        month. News is for you to read, and it doesn't change the decisions yet.
+        Headlines from major outlets and company announcements. Mood is a rough word count. News
+        is for you to read, and it doesn't change the decisions yet.
       </small>
-      {data.news.length === 0 && <p>No news stored yet.</p>}
-      {data.news.map((group) => (
-        <div key={group.subject}>
-          <h4>
-            {group.subject}: <span className={group.tone.includes("negative") ? "bad" : group.tone.includes("positive") ? "ok" : ""}>{group.tone}</span>
-          </h4>
-          <NewsList group={group} />
-        </div>
-      ))}
+      <NewsLevel title="Affects the whole market" groups={data.news.market} />
+      <NewsLevel title="Affects one industry" groups={data.news.industries} />
+      <details className="fold">
+        <summary>Affects one company ({data.news.companies.length})</summary>
+        <ul>
+          {data.news.companies.map((item) => (
+            <li key={`${item.subject}${item.url}`}>
+              <b>{item.subject}: </b>
+              <a href={item.url} target="_blank" rel="noreferrer">
+                {item.title}
+              </a>{" "}
+              <small>{item.domain}</small>
+            </li>
+          ))}
+        </ul>
+      </details>
       <h3>Recent presidential actions</h3>
       <small>From the Federal Register, the government's official journal. Ceremonial items are left out.</small>
       {data.actions.length === 0 ? (

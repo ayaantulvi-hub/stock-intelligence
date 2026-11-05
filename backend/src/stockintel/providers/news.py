@@ -24,6 +24,55 @@ FEEDS = {
     "The Guardian": "https://www.theguardian.com/uk/business/rss",
     "Financial Times": "https://www.ft.com/markets?format=rss",
 }
+# Company and official announcements. Too many to sort by topic, so only names are matched,
+# except official bodies, whose every release is about the whole market.
+ANNOUNCEMENTS = {
+    "PR Newswire": "https://www.prnewswire.com/rss/news-releases-list.rss",
+    "GlobeNewswire": "https://www.globenewswire.com/RssFeed/orgclass/1/feedTitle/GlobeNewswire",
+}
+OFFICIAL = {
+    "Federal Reserve": "https://www.federalreserve.gov/feeds/press_all.xml",
+    "SEC": "https://www.sec.gov/news/pressreleases.rss",
+}
+# Each industry: words that mark a story, and the SIC code ranges of the companies it touches.
+INDUSTRIES = {
+    "Chips": (r"\b(chips?|semiconductors?|foundry)\b", ((3670, 3679),)),
+    "Software and internet": (r"\b(software|cloud|cybersecurity|social media)\b", ((7370, 7379),)),
+    "Banks and finance": (r"\b(banks?|lenders?|mortgages?|insurers?)\b", ((6000, 6799),)),
+    "Oil and gas": (r"\b(oil|crude|gas|opec|refiners?|drillers?)\b", ((1300, 1399), (2900, 2999))),
+    "Drugs and health": (
+        r"\b(drugs?|pharma\w*|biotech|fda|medicare|hospitals?|vaccines?)\b",
+        ((2830, 2839), (3840, 3859), (8000, 8099)),
+    ),
+    "Retail": (r"\b(retail\w*|shoppers?|consumer spending)\b", ((5200, 5999),)),
+    "Cars": (r"\b(cars?|automakers?|carmakers?|electric vehicles?|evs?)\b", ((3710, 3719),)),
+    "Airlines and travel": (
+        r"\b(airlines?|flights?|hotels?|cruise)\b",
+        ((4500, 4599), (7000, 7099)),
+    ),
+    "Defence": (
+        r"\b(defen[cs]e|military|weapons?|missiles?|pentagon)\b",
+        ((3720, 3769), (3810, 3819)),
+    ),
+    "Power and utilities": (r"\b(utilit\w+|power grid|electricity|nuclear)\b", ((4900, 4999),)),
+    "Metals and mining": (
+        r"\b(steel|aluminum|copper|gold|lithium|mining|miners?)\b",
+        ((1000, 1499), (3300, 3399)),
+    ),
+    "Machinery and building": (
+        r"\b(construction|machinery|housing|homebuilders?)\b",
+        ((1500, 1799), (3500, 3569)),
+    ),
+    "Food and drink": (r"\b(food|beverages?|grocers?|beef|coffee)\b", ((2000, 2099),)),
+    "Telecoms and media": (
+        r"\b(telecoms?|broadband|5g|streaming|broadcasters?)\b",
+        ((4800, 4899),),
+    ),
+    "Property": (
+        r"\b(real estate|landlords?|reits?|office towers?)\b",
+        ((6500, 6599), (6798, 6798)),
+    ),
+}
 TOPICS = {
     "Interest rates and the Fed": r"\b(fed|federal reserve|interest rates?|powell|rate cuts?)\b",
     "Inflation": r"\b(inflation|consumer prices|cpi)\b",
@@ -93,6 +142,24 @@ def topics_of(title: str) -> list[str]:
     return [name for name, words in TOPICS.items() if re.search(words, title, re.IGNORECASE)]
 
 
+def industries_of(title: str) -> list[str]:
+    return [
+        f"Industry: {name}"
+        for name, (words, _) in INDUSTRIES.items()
+        if re.search(words, title, re.IGNORECASE)
+    ]
+
+
+def industry_of(sic: int | None) -> str | None:
+    """Which news group a company belongs to, from its official SEC industry code."""
+    if sic is None:
+        return None
+    for name, (_, ranges) in INDUSTRIES.items():
+        if any(low <= sic <= high for low, high in ranges):
+            return f"Industry: {name}"
+    return None
+
+
 def headline_mood(title: str) -> int:
     """A rough count: positive words minus negative ones. It can't read meaning."""
     return len(GOOD_WORDS.findall(title)) - len(BAD_WORDS.findall(title))
@@ -124,10 +191,12 @@ class NewsProvider:
             timeout=30, follow_redirects=True, headers={"User-Agent": "stock-intelligence"}
         )
 
-    def feed(self, source: str, url: str) -> tuple[list[Headline], Provenance]:
+    def feed(
+        self, source: str, url: str, headers: dict | None = None
+    ) -> tuple[list[Headline], Provenance]:
         retrieved = datetime.now(UTC)
         try:
-            response = self.client.get(url)
+            response = self.client.get(url, headers=headers)
         except httpx.HTTPError as exc:
             raise FeedError(f"{source}: request failed ({type(exc).__name__})") from None
         if response.status_code != 200:

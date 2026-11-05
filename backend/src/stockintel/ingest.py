@@ -601,7 +601,10 @@ def run_news(engine: Engine, provider, now: datetime) -> str:
             for ticker, name in conn.execute(text("SELECT ticker, name FROM securities"))
         ]
     touched = set()
-    for source, url in news.FEEDS.items():
+    feeds = [(source, url, "news") for source, url in news.FEEDS.items()]
+    feeds += [(source, url, "announcement") for source, url in news.ANNOUNCEMENTS.items()]
+    feeds += [(source, url, "official") for source, url in news.OFFICIAL.items()]
+    for source, url, kind in feeds:
         run.attempted += 1
         try:
             headlines, provenance = provider.feed(source, url)
@@ -611,8 +614,11 @@ def run_news(engine: Engine, provider, now: datetime) -> str:
         with engine.begin() as conn:
             fetch_id = add_fetch(conn, provenance)
             for item in headlines:
-                subjects = news.topics_of(item.title)
-                subjects += [t for t, name in companies if news.matches_company(name, item.title)]
+                subjects = [t for t, name in companies if news.matches_company(name, item.title)]
+                if kind == "news":
+                    subjects += news.topics_of(item.title) + news.industries_of(item.title)
+                elif kind == "official":
+                    subjects += ["Official announcements"]
                 for subject in subjects:
                     run.added += conn.execute(
                         text(

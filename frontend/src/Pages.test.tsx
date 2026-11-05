@@ -86,13 +86,17 @@ test("the big picture shows the reading, meaning and source", async () => {
           { title: "Yield curve", reading: "Fixture reading", state: "bad", meaning: "Fixture meaning.", source: "Fixture source", url: "https://fred.stlouisfed.org", date: "2026-11-03" },
         ],
         actions: [],
-        news: [
-          {
-            subject: "Inflation",
-            tone: "More negative than usual",
-            articles: [{ title: "Fixture headline", url: "https://www.reuters.com/x", domain: "reuters.com", seen_at: "2026-11-05T10:00:00Z" }],
-          },
-        ],
+        news: {
+          market: [
+            {
+              subject: "Inflation",
+              tone: "More negative than usual",
+              articles: [{ title: "Fixture headline", url: "https://www.reuters.com/x", domain: "reuters.com", seen_at: "2026-11-05T10:00:00Z" }],
+            },
+          ],
+          industries: [],
+          companies: [],
+        },
       }),
     })),
   );

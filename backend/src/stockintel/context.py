@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from sqlalchemy import Engine, text
 
 from stockintel import calendar_events
-from stockintel.providers.news import TOPICS
+from stockintel.providers.news import INDUSTRIES, TOPICS, industry_of
 
 FRED = "https://fred.stlouisfed.org/series/"
 GOOD, BAD, NEUTRAL, UNKNOWN = "good", "bad", "neutral", "unknown"
@@ -142,9 +142,46 @@ def headlines(engine: Engine, subject: str, today: date, count: int = 5) -> dict
     }
 
 
-def news(engine: Engine, today: date) -> list[dict]:
-    groups = [headlines(engine, subject, today, 3) for subject in TOPICS]
-    return [group for group in groups if group["articles"]]
+def news(engine: Engine, today: date) -> dict:
+    """Headlines sorted by how far they reach: everything, one industry, or one company."""
+    whole = [
+        headlines(engine, subject, today, 3) for subject in (*TOPICS, "Official announcements")
+    ]
+    sectors = [headlines(engine, f"Industry: {name}", today, 3) for name in INDUSTRIES]
+    query = """SELECT n.subject, s.name, n.title, n.url, n.domain, n.seen_at
+               FROM news_articles n JOIN securities s ON s.ticker = n.subject
+               WHERE n.seen_at >= :since ORDER BY n.seen_at DESC LIMIT 40"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query), {"since": today - timedelta(days=2)}).all()
+    return {
+        "market": [group for group in whole if group["articles"]],
+        "industries": [
+            {**group, "subject": group["subject"].removeprefix("Industry: ")}
+            for group in sectors
+            if group["articles"]
+        ],
+        "companies": [dict(row._mapping) for row in rows],
+    }
+
+
+def stock_news(engine: Engine, ticker: str, today: date) -> dict:
+    """News naming a company, plus news on its industry and the whole market."""
+    with engine.connect() as conn:
+        sic = conn.execute(
+            text("SELECT sic FROM securities WHERE ticker = :t"), {"t": ticker}
+        ).scalar()
+    own = headlines(engine, ticker, today, 8)
+    subject = industry_of(sic)
+    group = headlines(engine, subject, today, 5) if subject else None
+    return {
+        **own,
+        "industry": None
+        if group is None
+        else {**group, "subject": subject.removeprefix("Industry: ")},
+        "market": [
+            item for item in news(engine, today)["market"] if item["tone"] != "Not verified"
+        ][:2],
+    }
 
 
 def build(engine: Engine, today: date) -> dict:

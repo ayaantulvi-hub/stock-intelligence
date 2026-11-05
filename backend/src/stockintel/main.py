@@ -273,7 +273,7 @@ def decision_timer() -> dict:
 
 @app.get("/api/stocks/{ticker}/news")
 def stock_news(ticker: str) -> dict:
-    return context.headlines(get_engine(), ticker.upper(), datetime.now(UTC).date(), 8)
+    return context.stock_news(get_engine(), ticker.upper(), datetime.now(UTC).date())
 
 
 @app.get("/api/changes")
