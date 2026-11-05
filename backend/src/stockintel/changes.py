@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from sqlalchemy import Engine, text
 
 from stockintel import advice, horizons, tools
+from stockintel.providers import news as feeds
 
 TOP = 10
 EVENT_DAYS = 3
@@ -198,6 +199,39 @@ def what_to_do(holding: dict | None, followed: bool) -> str:
     return "Wait for today's prices."
 
 
+def _followed_news(conn, tickers: set[str], today: date) -> list[dict]:
+    """Headlines from the last day that name a stock you follow or its industry."""
+    if not tickers:
+        return []
+    query = "SELECT s.ticker, s.sic FROM securities s WHERE s.ticker = ANY(:t)"
+    groups: dict[str, str] = {}
+    for ticker, sic in conn.execute(text(query), {"t": sorted(tickers)}):
+        groups[ticker] = ticker
+        industry = feeds.industry_of(sic)
+        if industry:
+            groups.setdefault(industry, ticker)
+    rows = conn.execute(
+        text(
+            """SELECT DISTINCT ON (subject) subject, title, domain FROM news_articles
+               WHERE subject = ANY(:s) AND seen_at >= :since ORDER BY subject, seen_at DESC"""
+        ),
+        {"s": sorted(groups), "since": today - timedelta(days=1)},
+    )
+    return [
+        item(
+            groups[row.subject],
+            row.subject.replace("Industry: ", "") + " news"
+            if row.subject.startswith("Industry")
+            else "Company news",
+            "",
+            row.title[:110],
+            row.domain,
+            NEUTRAL,
+        )
+        for row in rows
+    ]
+
+
 def build(engine: Engine, today: date) -> dict:
     with engine.connect() as conn:
         latest, previous, old_ranks, new_ranks = _forecasts(conn)
@@ -214,6 +248,7 @@ def build(engine: Engine, today: date) -> dict:
         )
         held = _holding_changes(conn)
         news = _company_news(conn, followed, today)
+        news += _followed_news(conn, followed, today)
     found = (
         held
         + news
@@ -239,5 +274,9 @@ def build(engine: Engine, today: date) -> dict:
         "previous": previous,
         "decisions": decisions,
         "details": details,
-        "yours": [row for row in found if row["yours"] and row["topic"] != "Short trade"],
+        "yours": [
+            row
+            for row in found
+            if row["yours"] and row["topic"] != "Short trade" and not row["topic"].endswith(" news")
+        ],
     }

@@ -46,6 +46,14 @@ def test_topics_and_mood():
     assert news.headline_mood("Profit warning as sales fall") < 1
 
 
+def test_stories_reach_the_right_level():
+    assert "Tariffs and trade" in news.topics_of("Trump raises steel tariffs")
+    assert "Industry: Metals and mining" in news.industries_of("Trump raises steel tariffs")
+    assert news.industry_of(3674) == "Industry: Chips"
+    assert news.industry_of(6021) == "Industry: Banks and finance"
+    assert news.industry_of(None) is None
+
+
 def test_parse_skips_items_with_no_date_and_rejects_bad_xml():
     found = news.parse_feed(XML, "BBC")
     assert [item.title for item in found] == ["Lam Research shares jump as inflation cools"]
@@ -70,6 +78,10 @@ def test_one_failed_feed_doesnt_stop_the_rest(engine):
     stock = context.headlines(engine, "LRCX", NOW.date())
     assert len(stock["articles"]) == 1
     assert context.headlines(engine, "Inflation", NOW.date())["articles"]
+    grouped = context.news(engine, NOW.date())
+    assert grouped["companies"][0]["subject"] == "LRCX"
+    assert grouped["market"][0]["subject"] == "Inflation"
+    assert context.stock_news(engine, "LRCX", NOW.date())["articles"]
 
 
 def test_tone_words():

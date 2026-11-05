@@ -245,3 +245,9 @@ needs at least 30 tested cases that beat the baseline.
 - A grade first appears after 20 trading days, labelled an early sign until day 60, and updates
   daily. Correcting stated chances still waits for 60 days, because 20 is little evidence.
 - The stop study now holds for 20 trading days, to match the plan on Today's orders.
+
+- Headlines are sorted by reach: whole market, one industry, or one company. Industry keywords
+  map to SEC industry codes, so a stock also shows news on its industry.
+- Company announcements come from PR Newswire and GlobeNewswire feeds, and official notices from
+  the Federal Reserve and SEC feeds. Company social media isn't read: X has no free reading access,
+  and social posts would only count as measured sentiment.

@@ -622,74 +622,26 @@ def probe_news() -> None:
     from datetime import UTC, datetime
 
     from stockintel import ingest
-    from stockintel.providers.news import FEEDS, NewsProvider
+    from stockintel.providers import news
 
     engine = create_engine(Settings().database_url)
-    provider = NewsProvider()
-    for source, url in FEEDS.items():
+    provider = news.NewsProvider()
+    for source, url in {**news.ANNOUNCEMENTS, **news.OFFICIAL}.items():
         try:
             found, _ = provider.feed(source, url)
             print("news feed", source, len(found), found[0].title[:70] if found else "")
         except Exception as exc:  # noqa: BLE001
             print("news feed", source, "failed", str(exc)[:80])
     print("news run", ingest.run_news(engine, provider, datetime.now(UTC)))
+    query = """SELECT CASE WHEN subject LIKE 'Industry:%' THEN subject
+                 WHEN subject IN (SELECT ticker FROM securities) THEN 'company'
+                 ELSE 'market' END, count(*) FROM news_articles GROUP BY 1 ORDER BY 2 DESC"""
     with engine.connect() as conn:
-        rows = conn.execute(
-            text("SELECT subject, count(*) FROM news_articles GROUP BY 1 ORDER BY 2 DESC LIMIT 16")
-        ).all()
-    print("news subjects", [tuple(row) for row in rows])
-
-
-def probe_scores() -> None:
-    from datetime import UTC, datetime
-
-    from stockintel import changes, misses, queries, tools
-
-    engine = create_engine(Settings().database_url)
-    result = tools.reliability(engine)
-    print("score", result["days"], result["grade"], result["overall"])
-    print("score misses", misses.summary(engine)["reasons"])
-    update = changes.build(engine, datetime.now(UTC).date())
-    print("score changes", update["latest"], update["previous"], len(update["decisions"]))
-    print(
-        "score mine", [(r["ticker"], r["was"], r["now"]) for r in update["decisions"] if r["yours"]]
-    )
-    print(
-        "score holdings",
-        [(r["ticker"], r["call"], r["reason"][:60]) for r in queries.holdings_today(engine)],
-    )
-    print("score top", [(r["ticker"], round(r["rank"], 2)) for r in queries.ideas(engine)["top"]])
-
-
-def probe_stops() -> None:
-    from stockintel import queries
-
-    engine = create_engine(Settings().database_url)
-    plan = queries.orders(engine)["orders"]
-    for row in plan:
-        levels = (queries.suggested_levels(engine, row["ticker"]) or {}).get("levels") or {}
-        print(
-            "stop",
-            row["ticker"],
-            round(levels.get("price", 0), 2),
-            round(levels.get("atr", 0), 2),
-            round(levels.get("stop", 0), 2),
-            round(levels.get("risk_percent", 0), 1),
-            levels.get("stop_reason", "")[:70],
-        )
-    bars = queries._adjusted_bars(engine, "EME").tail(12)
-    for row in bars.itertuples():
-        print("stop bar", row.market_date, row.open, row.high, row.low, row.close)
-
-
-def rerun_stops() -> None:
-    from stockintel import stops
-
-    for row in stops.run(create_engine(Settings().database_url)):
-        print("stops", row)
+        print("news groups", [tuple(row) for row in conn.execute(text(query))])
 
 
 def main() -> None:
+    probe_news()
     main_full()
 
 
