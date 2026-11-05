@@ -611,7 +611,6 @@ def probe_changes() -> None:
 
 
 def main() -> None:
-    probe_changes()
     main_full()
 
 

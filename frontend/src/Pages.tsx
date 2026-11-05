@@ -245,14 +245,13 @@ export function WhatChanged({ onOpen }: { onOpen?: (ticker: string) => void }) {
           ? `${data.yours.length} change${data.yours.length === 1 ? "" : "s"} to your stocks`
           : "What changed"}
       </h2>
-      {!data.previous && <p>Changes appear once there are two days of results to compare.</p>}
+      {!data.previous && total === 0 && <p>Changes appear once there are two days of results to compare.</p>}
       {data.previous && total === 0 && <p>Nothing changed since {data.previous}.</p>}
       {data.yours.length > 0 && <ChangeRows rows={data.yours} onOpen={onOpen} />}
       {data.others.length > 0 && (
         <details className="fold" open={data.yours.length === 0}>
           <summary>
-            {data.others.length} change{data.others.length === 1 ? "" : "s"} to other stocks since{" "}
-            {data.previous}
+            {data.others.length} change{data.others.length === 1 ? "" : "s"} to other stocks{data.previous ? ` since ${data.previous}` : ""}
           </summary>
           <ChangeRows rows={data.others} onOpen={onOpen} />
         </details>
