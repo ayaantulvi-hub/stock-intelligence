@@ -653,7 +653,6 @@ def probe_watch() -> None:
 
 
 def main() -> None:
-    probe_watch()
     main_full()
 
 
