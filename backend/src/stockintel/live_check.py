@@ -683,7 +683,6 @@ def probe_stops() -> None:
 
 
 def main() -> None:
-    probe_stops()
     main_full()
 
 
