@@ -1,6 +1,6 @@
-"""News feed. Every response here is a TEST FIXTURE."""
+"""News feeds. Every response here is a TEST FIXTURE."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -8,83 +8,72 @@ from sqlalchemy import text
 
 from stockintel import context
 from stockintel.ingest import run_news
-from stockintel.providers.base import FeedError, RateLimited
-from stockintel.providers.gdelt import GdeltProvider, company_query, full_query
+from stockintel.providers import news
+from stockintel.providers.base import FeedError
 
-ARTICLE = {
-    "url": "https://www.reuters.com/fixture",
-    "title": "Fixture headline",
-    "domain": "reuters.com",
-    "seendate": "20261105T100000Z",
-}
-TONE = {
-    "timeline": [
-        {
-            "data": [
-                {"date": "20261104T000000Z", "value": -2.0},
-                {"date": "20261104T120000Z", "value": -4.0},
-                {"date": "20261105T000000Z", "value": 1.0},
-            ]
-        }
-    ]
-}
+XML = """<rss><channel>
+<item><title>Lam Research shares jump as inflation cools</title>
+<link>https://www.bbc.co.uk/news/fixture</link>
+<pubDate>Thu, 05 Nov 2026 10:00:00 GMT</pubDate></item>
+<item><title>No date here</title><link>https://www.bbc.co.uk/x</link></item>
+</channel></rss>"""
+NOW = datetime(2026, 11, 5, 12, tzinfo=UTC)
 
 
 def provider(handler):
-    return GdeltProvider(httpx.Client(transport=httpx.MockTransport(handler)), wait=0)
+    return news.NewsProvider(httpx.Client(transport=httpx.MockTransport(handler)))
 
 
 def good(request):
-    if request.url.params["mode"] == "TimelineTone":
-        return httpx.Response(200, json=TONE)
-    return httpx.Response(200, json={"articles": [ARTICLE]})
+    return httpx.Response(200, text=XML)
 
 
-def test_company_names_become_everyday_searches():
-    assert company_query("LAM RESEARCH CORP").startswith('"Lam Research"')
-    assert company_query("Palantir Technologies Inc.").startswith('"Palantir"')
-    assert company_query("Applied Materials, Inc. /DE").startswith('"Applied Materials"')
+def test_company_names_become_everyday_names():
+    assert news.plain_name("LAM RESEARCH CORP") == "Lam Research"
+    assert news.plain_name("Palantir Technologies Inc.") == "Palantir"
+    assert news.plain_name("Applied Materials, Inc. /DE") == "Applied Materials"
 
 
-def test_only_established_outlets_are_searched():
-    query = full_query("x")
-    assert "domainis:ft.com" in query and "domainis:reuters.com" in query
-    assert "twitter" not in query and "reddit" not in query
+def test_common_word_names_need_business_context():
+    assert news.matches_company("Lam Research", "Lam Research beats forecasts")
+    assert not news.matches_company("Target", "Fed misses Target on inflation")
+    assert news.matches_company("Target", "Target shares fall")
 
 
-def test_articles_and_daily_tone():
-    source = provider(good)
-    found, provenance = source.articles("x")
-    assert found[0].domain == "reuters.com" and provenance.source_name == "GDELT"
-    tones, _ = source.tone("x")
-    assert tones == {date(2026, 11, 4): -3.0, date(2026, 11, 5): 1.0}
+def test_topics_and_mood():
+    assert "Inflation" in news.topics_of("Inflation cools in October")
+    assert news.headline_mood("Shares surge to a record") == 2
+    assert news.headline_mood("Profit warning as sales fall") < 1
 
 
-def test_empty_results_are_empty_not_an_error():
-    source = provider(lambda request: httpx.Response(200, text=""))
-    assert source.articles("x")[0] == []
-
-
-def test_bad_replies_are_reported():
+def test_parse_skips_items_with_no_date_and_rejects_bad_xml():
+    found = news.parse_feed(XML, "BBC")
+    assert [item.title for item in found] == ["Lam Research shares jump as inflation cools"]
     with pytest.raises(FeedError):
-        provider(lambda request: httpx.Response(200, text="Query too short")).articles("x")
-    with pytest.raises(RateLimited):
-        provider(lambda request: httpx.Response(429)).articles("x")
+        news.parse_feed("not xml", "BBC")
 
 
-def test_news_is_stored_once_and_shown_with_its_source(engine):
-    subjects = {"Inflation": "x"}
-    assert run_news(engine, provider(good), subjects) == "ok"
-    assert run_news(engine, provider(good), subjects) == "ok"
-    with engine.connect() as conn:
-        assert conn.execute(text("SELECT count(*) FROM news_articles")).scalar() == 1
-    result = context.headlines(engine, "Inflation", datetime(2026, 11, 6, tzinfo=UTC).date())
-    assert result["articles"][0]["domain"] == "reuters.com"
-    assert result["tone"] == "Not verified"
+def test_one_failed_feed_doesnt_stop_the_rest(engine):
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """INSERT INTO securities (ticker, cik, name, exchange, universe_rank)
+                   VALUES ('LRCX', 1, 'LAM RESEARCH CORP', 'NASDAQ', 1)"""
+            )
+        )
+
+    def mixed(request):
+        return httpx.Response(500) if "bbc" in str(request.url) else httpx.Response(200, text=XML)
+
+    assert run_news(engine, provider(mixed), NOW) == "partial"
+    assert run_news(engine, provider(mixed), NOW) == "partial"
+    stock = context.headlines(engine, "LRCX", NOW.date())
+    assert len(stock["articles"]) == 1
+    assert context.headlines(engine, "Inflation", NOW.date())["articles"]
 
 
 def test_tone_words():
-    assert context.tone_word(-4.0, -1.0) == "More negative than usual"
-    assert context.tone_word(1.0, -1.0) == "More positive than usual"
-    assert context.tone_word(-1.2, -1.0) == "About usual"
+    assert context.tone_word(-1.0, 0.0) == "More negative than usual"
+    assert context.tone_word(1.0, 0.0) == "More positive than usual"
+    assert context.tone_word(0.1, 0.0) == "About usual"
     assert context.tone_word(None, None) == "Not verified"

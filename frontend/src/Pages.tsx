@@ -362,10 +362,10 @@ export function StockNews({ ticker }: { ticker: string }) {
     <details className="fold">
       <summary>News{data ? `: ${data.tone}` : ""}</summary>
       {data?.articles.length === 0 && (
-        <p>Not verified: no news stored for this stock. Only owned, watched and top stocks are read.</p>
+        <p>No headlines naming this company in the last 7 days.</p>
       )}
       {data && <NewsList group={data} />}
-      <small>Headlines and links only, found by GDELT. News tone isn't in the model yet.</small>
+      <small>Headlines and links from major outlets. News isn't in the model yet.</small>
     </details>
   );
 }
@@ -401,8 +401,8 @@ export function BigPicture() {
       ))}
       <h3>In the news</h3>
       <small>
-        Latest headlines from established outlets, found by GDELT. Tone compares this week with
-        the past month. News is shown for you to read, and it doesn't change the decisions yet.
+        Latest headlines from major outlets. Mood is a rough word count, compared with the past
+        month. News is for you to read, and it doesn't change the decisions yet.
       </small>
       {data.news.length === 0 && <p>No news stored yet.</p>}
       {data.news.map((group) => (

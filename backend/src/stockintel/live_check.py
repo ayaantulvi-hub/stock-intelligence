@@ -621,35 +621,23 @@ def probe_holdings() -> None:
 def probe_news() -> None:
     from datetime import UTC, datetime
 
-    from stockintel import context, ingest
-    from stockintel.providers.gdelt import GdeltProvider
+    from stockintel import ingest
+    from stockintel.providers.news import FEEDS, NewsProvider
 
     engine = create_engine(Settings().database_url)
-    import time
-
-    import httpx
-
-    from stockintel.providers import gdelt
-
-    for label, query in (
-        ("full", gdelt.full_query('(inflation OR "consumer prices")')),
-        ("short", '(inflation OR "consumer prices") domainis:reuters.com sourcelang:english'),
-        ("plain", "inflation sourcelang:english"),
-    ):
-        time.sleep(7)
-        answer = httpx.get(
-            gdelt.URL,
-            params={"query": query, "mode": "ArtList", "timespan": "2d", "format": "json"},
-            timeout=45,
-        )
-        print("news try", label, answer.status_code, answer.text[:200].replace(chr(10), " "))
-    subjects = dict(list(ingest.GDELT_TOPICS.items())[:2])
-    print("news run", ingest.run_news(engine, GdeltProvider(), subjects))
-    for subject in subjects:
-        group = context.headlines(engine, subject, datetime.now(UTC).date())
-        print("news", subject, group["tone"], len(group["articles"]))
-        for item in group["articles"][:3]:
-            print("news item", item["domain"], item["title"][:90])
+    provider = NewsProvider()
+    for source, url in FEEDS.items():
+        try:
+            found, _ = provider.feed(source, url)
+            print("news feed", source, len(found), found[0].title[:70] if found else "")
+        except Exception as exc:  # noqa: BLE001
+            print("news feed", source, "failed", str(exc)[:80])
+    print("news run", ingest.run_news(engine, provider, datetime.now(UTC)))
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT subject, count(*) FROM news_articles GROUP BY 1 ORDER BY 2 DESC LIMIT 16")
+        ).all()
+    print("news subjects", [tuple(row) for row in rows])
 
 
 def main() -> None:

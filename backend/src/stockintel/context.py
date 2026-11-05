@@ -8,12 +8,13 @@ from datetime import date, timedelta
 from sqlalchemy import Engine, text
 
 from stockintel import calendar_events
-from stockintel.providers.gdelt import TOPICS
+from stockintel.providers.news import TOPICS
 
 FRED = "https://fred.stlouisfed.org/series/"
 GOOD, BAD, NEUTRAL, UNKNOWN = "good", "bad", "neutral", "unknown"
 MAX_AGE = timedelta(days=14)
 NEWS_DAYS = 7
+TONE_GAP = 0.3
 SERIES = ("DGS2", "DGS10", "T10Y3M", "DFF", "USEPUINDXD")
 
 
@@ -107,9 +108,9 @@ def elections(today: date) -> dict:
 def tone_word(recent: float | None, usual: float | None) -> str:
     if recent is None or usual is None:
         return "Not verified"
-    if recent <= usual - 1:
+    if recent <= usual - TONE_GAP:
         return "More negative than usual"
-    if recent >= usual + 1:
+    if recent >= usual + TONE_GAP:
         return "More positive than usual"
     return "About usual"
 

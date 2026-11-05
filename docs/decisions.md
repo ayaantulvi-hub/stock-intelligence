@@ -227,10 +227,10 @@ needs at least 30 tested cases that beat the baseline.
 
 ## News
 
-- GDELT (free, no key, one request every 5 seconds, 3 months of history) finds headlines and
-  tone from a list of established outlets. Only headlines and links are stored.
-- The Financial Times sells its content and requires a licence, so nothing is read from ft.com.
-  Its headlines appear only when GDELT indexes them, as a link to the original.
-- News covers set world topics and 30 stocks: held, watched, then the strongest and weakest.
-- News tone isn't in the model. There's no long history to test it on, so it stays display-only
-  until months of stored tone can be tested.
+- GDELT was tried first, but it refused GitHub's shared addresses with its rate limit.
+- News now comes from publishers' public RSS feeds, read hourly: BBC, CNBC, MarketWatch, New York
+  Times, The Guardian and Financial Times. Only headlines and links are stored, for one
+  person's private reading. A feed that fails is reported and the others continue.
+- Headlines are matched to all 480 companies by name and to world topics by keyword.
+- Mood is a rough count of positive and negative words, not a reading of meaning. It isn't in
+  the model. There's no long history to test, so it's stored until it can be tested.

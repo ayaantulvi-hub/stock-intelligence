@@ -70,7 +70,7 @@ jobs:
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest policy
       - name: News
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() }}
         run: uv run --no-dev python -m stockintel.ingest news
       - name: Fed dates
         if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
