@@ -371,7 +371,16 @@ type Big = {
     date: string | null;
   }[];
   actions: { published: string; kind: string; title: string; topic: string | null; url: string }[];
-  warnings: { subject: string; bad: number; outlets: number; title: string; url: string }[];
+  warnings: { subject: string; bad: number; outlets: number; title: string; url: string; why?: string }[];
+  judged: {
+    url: string;
+    title: string;
+    scope: string;
+    industries: string[];
+    effect: string;
+    size: string;
+    why: string;
+  }[];
   news: {
     market: NewsGroup[];
     industries: NewsGroup[];
@@ -483,7 +492,31 @@ export function BigPicture() {
         <ul>
           {data.warnings.map((item) => (
             <li key={item.subject} className="bad">
-              <b>{item.subject}:</b> {item.bad} bad headlines from {item.outlets} outlets.{" "}
+              <b>{item.subject}:</b>{" "}
+              {item.why ?? `${item.bad} bad headlines from ${item.outlets} outlets.`}{" "}
+              <a href={item.url} target="_blank" rel="noreferrer">
+                {item.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      <h3>What it means, read by AI</h3>
+      <small>
+        An AI reads each headline like a business person. It can be wrong, it's unproven, and a big
+        negative reading can stop a buy but never creates one.
+      </small>
+      {data.judged.length === 0 ? (
+        <p>No big stories read yet.</p>
+      ) : (
+        <ul>
+          {data.judged.map((item) => (
+            <li key={item.url}>
+              <b className={item.effect === "negative" ? "bad" : item.effect === "positive" ? "ok" : ""}>
+                {item.size === "big" ? "Big" : "Medium"}, {item.effect}
+                {item.industries.length > 0 ? ` for ${item.industries.join(", ")}` : item.scope === "market" ? " for the whole market" : ""}:
+              </b>{" "}
+              {item.why}{" "}
               <a href={item.url} target="_blank" rel="noreferrer">
                 {item.title}
               </a>

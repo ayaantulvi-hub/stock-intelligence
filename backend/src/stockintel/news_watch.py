@@ -10,6 +10,7 @@ from datetime import date, timedelta
 import pandas as pd
 from sqlalchemy import Engine, text
 
+from stockintel import news_judge
 from stockintel.providers.news import TOPIC_INDUSTRIES, headline_mood, industry_of
 
 WINDOW_DAYS = 2
@@ -49,6 +50,23 @@ def warnings(engine: Engine, today: date) -> dict[str, dict]:
         groups.setdefault(row["subject"], []).append(row)
     found = {subject: assess(items) for subject, items in groups.items()}
     found = {subject: value for subject, value in found.items() if value}
+    # An AI reading of a big story counts on its own, because one story can be enough.
+    for item in news_judge.recent(engine, today, ("big",)):
+        if item["effect"] != "negative":
+            continue
+        warning = {
+            "bad": 1,
+            "outlets": 1,
+            "title": item["title"],
+            "url": item["url"],
+            "domain": item["domain"],
+            "why": item["why"],
+        }
+        targets = [f"Industry: {name}" for name in item["industries"]] + list(item["tickers"])
+        if item["scope"] == "market":
+            targets.append("Whole market")
+        for subject in targets:
+            found.setdefault(subject, warning)
     # A story on a broad theme reaches the industries inside it.
     for topic, industries in TOPIC_INDUSTRIES.items():
         if topic in found:
@@ -59,6 +77,8 @@ def warnings(engine: Engine, today: date) -> dict[str, dict]:
 
 def reason(subject: str, warning: dict) -> str:
     name = subject.replace("Industry: ", "the ") + (" industry" if "Industry" in subject else "")
+    if warning.get("why"):
+        return f'of news on {name}: {warning["why"]} ("{warning["title"]}", {warning["domain"]})'
     return (
         f"of bad news on {name}: {warning['bad']} negative headlines from "
         f'{warning["outlets"]} outlets, such as "{warning["title"]}" ({warning["domain"]})'

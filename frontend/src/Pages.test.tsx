@@ -86,6 +86,9 @@ test("the big picture shows the reading, meaning and source", async () => {
           { title: "Yield curve", reading: "Fixture reading", state: "bad", meaning: "Fixture meaning.", source: "Fixture source", url: "https://fred.stlouisfed.org", date: "2026-11-03" },
         ],
         actions: [],
+        judged: [
+          { url: "https://www.bbc.co.uk/j", title: "Fixture story", scope: "industry", industries: ["Chips"], effect: "negative", size: "big", why: "Fixture reasoning." },
+        ],
         warnings: [{ subject: "Chips", bad: 4, outlets: 2, title: "Fixture bad headline", url: "https://www.bbc.co.uk/x" }],
         news: {
           market: [
@@ -107,6 +110,7 @@ test("the big picture shows the reading, meaning and source", async () => {
   expect(screen.getByText("None stored in the last 60 days.")).toBeTruthy();
   expect(screen.getByText("Fixture headline")).toBeTruthy();
   expect(screen.getByText("Fixture bad headline")).toBeTruthy();
+  expect(screen.getByText(/Fixture reasoning/)).toBeTruthy();
   expect(screen.getByText("More negative than usual")).toBeTruthy();
 });
 

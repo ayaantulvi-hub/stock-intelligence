@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 import re
 import sys
 from datetime import UTC, date, datetime, timedelta
@@ -10,7 +11,7 @@ import pandas as pd
 from sqlalchemy import Engine, text
 from sqlalchemy.engine import Connection
 
-from stockintel import localcache, news_watch
+from stockintel import localcache, news_judge, news_watch
 from stockintel.config import get_settings
 from stockintel.db import get_engine
 from stockintel.market import PUBLISH_DELAY, latest_expected_session, session_close
@@ -28,6 +29,7 @@ from stockintel.providers.base import (
 from stockintel.providers.fed import FedProvider
 from stockintel.providers.federal_register import FederalRegisterProvider
 from stockintel.providers.fred import FredProvider
+from stockintel.providers.groq import GroqProvider
 from stockintel.providers.news import NewsProvider
 from stockintel.providers.sec import SecProvider
 from stockintel.providers.tiingo import TiingoProvider
@@ -752,6 +754,18 @@ def run_funds(engine: Engine, provider, now: datetime) -> str:
     return run.finish()
 
 
+def run_judge(engine: Engine, now: datetime) -> str:
+    """Have the AI read new headlines. A failure leaves decisions on the word-count rule."""
+    run = Run(engine, "judge")
+    run.attempted = 1
+    provider = GroqProvider(os.environ.get("GROQ_API_KEY", ""))
+    run.added, problem = news_judge.run(engine, provider, now)
+    if problem:
+        return run.finish(problem)
+    run.ok = 1
+    return run.finish()
+
+
 def run_markets(engine: Engine, provider) -> str:
     """Store the latest price of each fund that tracks a main US index."""
     run = Run(engine, "markets")
@@ -845,6 +859,7 @@ def main() -> None:
             "news",
             "markets",
             "funds",
+            "judge",
             "fed",
         ],
     )
@@ -874,6 +889,8 @@ def main() -> None:
             status = run_fed(engine, FedProvider())
         elif args.feed == "news":
             status = run_news(engine, NewsProvider(), now)
+        elif args.feed == "judge":
+            status = run_judge(engine, now)
         elif args.feed == "funds":
             status = run_funds(engine, SecProvider(settings.sec_contact_email), now)
         elif args.feed == "markets":

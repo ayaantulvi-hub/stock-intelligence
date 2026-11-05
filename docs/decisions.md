@@ -278,3 +278,11 @@ needs at least 30 tested cases that beat the baseline.
   quarter end. Names are matched to the 480 companies. Options are left out.
 - A change is counted from the day after filing, for a quarter. It's a tested factor and a
   checklist line. Congressional trades aren't added: the House publishes them as PDFs.
+
+## AI reading of the news
+
+- Groq's free service reads new headlines and returns scope, affected industries, direction, size
+  and a one-sentence reason. Replies are checked against fixed lists. A big negative reading
+  stops buys in that group and flags holdings. It can't create a buy or force a sale.
+- It's unproven, and every judgment is stored with its model and headline so it can be tested.
+- Monte Carlo simulation isn't in trader-skill's description. It's a separate possible addition.
