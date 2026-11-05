@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # A copy of the database, so each job downloads only new rows. See localcache.py.
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: backend/.dbcopy
           key: dbcopy-${{ github.run_id }}
@@ -112,3 +112,9 @@ jobs:
       - name: Report
         if: always()
         run: uv run --no-dev python -m stockintel.report
+      # Saved even after a failure, so the next job doesn't download everything again.
+      - uses: actions/cache/save@v4
+        if: ${{ always() }}
+        with:
+          path: backend/.dbcopy
+          key: dbcopy-${{ github.run_id }}

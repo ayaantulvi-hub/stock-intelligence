@@ -286,3 +286,9 @@ needs at least 30 tested cases that beat the baseline.
   stops buys in that group and flags holdings. It can't create a buy or force a sale.
 - It's unproven, and every judgment is stored with its model and headline so it can be tested.
 - Monte Carlo simulation isn't in trader-skill's description. It's a separate possible addition.
+
+## Second lock-out
+
+- The new Neon project also ran out of allowance on 2026-11-05. The cause was the live check, which
+  read every company figure on each run, about 20 runs in a day. The check no longer does this.
+- The job copy is now saved even when a job fails. Never put a full read in the live check.

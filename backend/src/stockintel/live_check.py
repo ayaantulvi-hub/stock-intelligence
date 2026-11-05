@@ -700,9 +700,7 @@ def main() -> None:
 
 
 def main_full() -> None:
-    from stockintel import audit
-
-    audit.run(create_engine(Settings().database_url))
+    # Keep this check light. A full read here on every push used up the free transfer allowance.
     checks = {
         "database": check_database,
         "tiingo": check_tiingo,
