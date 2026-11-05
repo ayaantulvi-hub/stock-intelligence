@@ -234,3 +234,8 @@ needs at least 30 tested cases that beat the baseline.
 - Headlines are matched to all 480 companies by name and to world topics by keyword.
 - Mood is a rough count of positive and negative words, not a reading of meaning. It isn't in
   the model. There's no long history to test, so it's stored until it can be tested.
+
+## Sell rule
+
+- A falling rank only gives Sell now after two forecasts in a row in the bottom 30%. The first
+  run on all 480 stocks moved ranks just because the group grew, and one reading can be noise.

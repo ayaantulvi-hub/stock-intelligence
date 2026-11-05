@@ -662,7 +662,6 @@ def probe_scores() -> None:
 
 
 def main() -> None:
-    probe_scores()
     main_full()
 
 

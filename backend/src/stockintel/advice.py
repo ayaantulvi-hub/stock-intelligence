@@ -164,6 +164,7 @@ def keep_or_sell(
     today,
     stale: bool,
     rank: float | None,
+    previous_rank: float | None,
     blocked: str | None,
     bearish_candle: str | None,
     below_50: bool | None,
@@ -181,10 +182,12 @@ def keep_or_sell(
         return answer("Sell now", f"Your planned sell date of {sell_by} has arrived.", "sell")
     if blocked:
         return answer("Sell now", f"Serious concern: {blocked}.", "sell")
-    if rank is not None and rank <= SELL_RANK:
+    # One low reading can be noise, so the ranking has to stay low for two forecasts.
+    if rank is not None and previous_rank is not None and max(rank, previous_rank) <= SELL_RANK:
         return answer(
             "Sell now",
-            f"The model now ranks it in the bottom {SELL_RANK * 100:.0f}% of stocks.",
+            f"The model has ranked it in the bottom {SELL_RANK * 100:.0f}% of stocks "
+            "two forecasts in a row.",
             "sell",
         )
     if bearish_candle and below_50:

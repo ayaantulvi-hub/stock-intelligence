@@ -339,6 +339,12 @@ def holdings_today(engine: Engine, now: datetime | None = None) -> list[dict]:
     if not rows:
         return []
     ranks = {row["ticker"]: row["rank"] for row in screener(engine)}
+    earlier = """SELECT s.ticker, f.rank_20d FROM forecasts f
+                 JOIN securities s ON s.id = f.security_id
+                 WHERE f.target_session = (SELECT max(target_session) FROM forecasts
+                   WHERE target_session < (SELECT max(target_session) FROM forecasts))"""
+    with engine.connect() as conn:
+        previous_ranks = dict(conn.execute(text(earlier)).all())
     blocks = experts.stored_blocks(engine)
     candles_today = {
         item["ticker"]: item["reason"]
@@ -357,6 +363,7 @@ def holdings_today(engine: Engine, now: datetime | None = None) -> list[dict]:
             today=now.date(),
             stale=is_stale(recent[-1].market_date if recent else None, now),
             rank=ranks.get(row.ticker),
+            previous_rank=previous_ranks.get(row.ticker),
             blocked=blocks.get(row.ticker),
             bearish_candle=candles_today.get(row.ticker),
             below_50=None if average is None else price < average,

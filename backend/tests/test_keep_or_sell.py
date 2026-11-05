@@ -12,6 +12,7 @@ PLAIN = {
     "today": TODAY,
     "stale": False,
     "rank": 0.8,
+    "previous_rank": 0.8,
     "blocked": None,
     "bearish_candle": None,
     "below_50": False,
@@ -37,9 +38,14 @@ def test_sell_now_on_the_planned_date():
 
 
 def test_sell_now_when_the_ranking_drops():
-    result = call(rank=0.2)
+    result = call(rank=0.2, previous_rank=0.25)
     assert result["call"] == "Sell now"
-    assert "bottom 30%" in result["reason"]
+    assert "two forecasts in a row" in result["reason"]
+
+
+def test_one_low_ranking_is_not_enough():
+    assert call(rank=0.2, previous_rank=0.9)["call"] == "Keep"
+    assert call(rank=0.2, previous_rank=None)["call"] == "Keep"
 
 
 def test_sell_now_on_serious_trouble():
@@ -52,4 +58,4 @@ def test_bearish_candle_needs_the_trend_to_agree():
 
 
 def test_old_prices_give_no_call():
-    assert call(stale=True, rank=0.1)["call"] == "Wait"
+    assert call(stale=True, rank=0.1, previous_rank=0.1)["call"] == "Wait"
