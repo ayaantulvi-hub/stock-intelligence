@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { BigPicture, HoldingsToday, PortfolioPage, ReliabilityPage, Screener, WhatChanged } from "./Pages";
+import { BigPicture, HoldingsToday, PortfolioPage, ReliabilityPage, Screener, WhatChanged, countdown } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -128,4 +128,11 @@ test("what changed says so when no decision did", async () => {
   );
   render(<WhatChanged />);
   expect(await screen.findByText("No decisions changed")).toBeTruthy();
+});
+
+test("the countdown reads plainly and stops at zero", () => {
+  expect(countdown(26 * 3600000 + 5 * 60000)).toBe("1d 2h 5m");
+  expect(countdown(3 * 3600000 + 60000)).toBe("3h 1m");
+  expect(countdown(125000)).toBe("2m 5s");
+  expect(countdown(0)).toBeNull();
 });

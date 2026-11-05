@@ -11,12 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from stockintel import changes, context, experts, misses, queries, tools
 from stockintel.charts import TIMEFRAMES
 from stockintel.config import get_settings
 from stockintel.db import get_engine
 from stockintel.factors import register
+from stockintel.market import next_decision
 from stockintel.status import get_status
 
 settings = get_settings()
@@ -260,6 +262,13 @@ def track_orders(order: TrackOrders) -> list[dict]:
 @app.get("/api/holdings-today")
 def holdings_today() -> list[dict]:
     return queries.holdings_today(get_engine())
+
+
+@app.get("/api/next-decision")
+def decision_timer() -> dict:
+    with get_engine().connect() as conn:
+        last = conn.execute(text("SELECT max(created_at) FROM forecasts")).scalar()
+    return {"next": next_decision(datetime.now(UTC)), "last": last}
 
 
 @app.get("/api/changes")

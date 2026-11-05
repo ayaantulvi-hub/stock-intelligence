@@ -1,6 +1,6 @@
 """US market calendar: holidays, early closes and when daily prices should exist."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 import exchange_calendars as xcals
 import pandas as pd
@@ -34,6 +34,23 @@ def sessions_between(start: date, end: date) -> list[date]:
     return [
         ts.date() for ts in calendar().sessions_in_range(pd.Timestamp(start), pd.Timestamp(end))
     ]
+
+
+# The daily run, Tuesday to Saturday, after the previous session's prices are in.
+DECISION_TIME = time(10, 50)
+DECISION_DAYS = {1, 2, 3, 4, 5}
+
+
+def next_decision(now: datetime) -> datetime:
+    """When the next set of decisions is due. Monday's come from Saturday's run."""
+    now = now.astimezone(UTC)
+    day = now.date()
+    for _ in range(8):
+        due = datetime.combine(day, DECISION_TIME, tzinfo=UTC)
+        if day.weekday() in DECISION_DAYS and due > now:
+            return due
+        day += timedelta(days=1)
+    raise RuntimeError("no decision time found")
 
 
 def latest_expected_session(now: datetime) -> date:

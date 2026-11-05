@@ -261,6 +261,38 @@ function ChangeRows({ rows, onOpen }: { rows: Change[]; onOpen?: (ticker: string
   );
 }
 
+export function countdown(milliseconds: number) {
+  if (milliseconds <= 0) return null;
+  const minutes = Math.floor(milliseconds / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days}d ${hours % 24}h ${minutes % 60}m`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  return `${minutes}m ${Math.floor(milliseconds / 1000) % 60}s`;
+}
+
+export function NextDecision() {
+  const { data } = useData<{ next: string; last: string | null }>("/api/next-decision");
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, []);
+  if (!data) return null;
+  const due = new Date(data.next);
+  const left = countdown(due.getTime() - now);
+  return (
+    <p className="timer">
+      <small>Next decisions in</small> <strong>{left ?? "due now, refresh in a few minutes"}</strong>{" "}
+      <small>
+        {due.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}. The
+        run can start late.{" "}
+        {data.last && `Last set: ${new Date(data.last).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}.`}
+      </small>
+    </p>
+  );
+}
+
 export function WhatChanged({ onOpen }: { onOpen?: (ticker: string) => void }) {
   const { data } = useData<Changes>("/api/changes");
   if (!data) return null;
