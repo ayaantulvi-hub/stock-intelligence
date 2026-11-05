@@ -597,7 +597,6 @@ def probe_context() -> None:
 
 
 def main() -> None:
-    probe_context()
     main_full()
 
 
