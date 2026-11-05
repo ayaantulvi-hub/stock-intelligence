@@ -28,7 +28,6 @@ FEEDS = {
 # except official bodies, whose every release is about the whole market.
 ANNOUNCEMENTS = {
     "PR Newswire": "https://www.prnewswire.com/rss/news-releases-list.rss",
-    "GlobeNewswire": "https://www.globenewswire.com/RssFeed/orgclass/1/feedTitle/GlobeNewswire",
 }
 OFFICIAL = {
     "Federal Reserve": "https://www.federalreserve.gov/feeds/press_all.xml",

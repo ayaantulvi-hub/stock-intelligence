@@ -248,6 +248,6 @@ needs at least 30 tested cases that beat the baseline.
 
 - Headlines are sorted by reach: whole market, one industry, or one company. Industry keywords
   map to SEC industry codes, so a stock also shows news on its industry.
-- Company announcements come from PR Newswire and GlobeNewswire feeds, and official notices from
+- Company announcements come from the PR Newswire feed (GlobeNewswire refused access), and official notices from
   the Federal Reserve and SEC feeds. Company social media isn't read: X has no free reading access,
   and social posts would only count as measured sentiment.
