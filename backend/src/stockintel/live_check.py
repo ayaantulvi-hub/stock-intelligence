@@ -690,7 +690,6 @@ def rerun_stops() -> None:
 
 
 def main() -> None:
-    rerun_stops()
     main_full()
 
 
