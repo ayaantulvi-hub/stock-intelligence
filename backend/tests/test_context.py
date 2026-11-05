@@ -72,12 +72,12 @@ ROW = {
     "title": "Adjusting Imports of Steel",
     "publication_date": "2026-03-02",
     "html_url": "https://www.federalregister.gov/d/2026-1",
-    "presidential_document_type": "Proclamation",
+    "subtype": "Proclamation",
 }
 
 
 def test_provider_keeps_orders_and_proclamations_only():
-    other = {**ROW, "document_number": "2026-2", "presidential_document_type": "Memorandum"}
+    other = {**ROW, "document_number": "2026-2", "subtype": "Memorandum"}
     found, provenance = FederalRegisterProvider(responses([ROW, other])).documents(
         date(2026, 1, 1), date(2026, 12, 31)
     )
@@ -88,9 +88,9 @@ def test_provider_keeps_orders_and_proclamations_only():
 
 def test_provider_reports_a_bad_shape():
     with pytest.raises(FeedError):
-        FederalRegisterProvider(
-            responses([{"title": "x", "presidential_document_type": "Proclamation"}])
-        ).documents(date(2026, 1, 1), date(2026, 1, 2))
+        FederalRegisterProvider(responses([{"title": "x", "subtype": "Proclamation"}])).documents(
+            date(2026, 1, 1), date(2026, 1, 2)
+        )
 
 
 def test_policy_documents_store_once_with_provenance(engine):

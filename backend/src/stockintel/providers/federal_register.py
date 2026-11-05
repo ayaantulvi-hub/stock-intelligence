@@ -14,7 +14,7 @@ from stockintel.providers.base import FeedError, Provenance
 from stockintel.providers.http import get_json
 
 URL = "https://www.federalregister.gov/api/v1/documents.json"
-FIELDS = ("document_number", "title", "publication_date", "html_url", "presidential_document_type")
+FIELDS = ("document_number", "title", "publication_date", "html_url", "subtype")
 # Plain keywords, shown as a topic only. Ceremonial proclamations match none of these.
 TOPICS = (
     ("Trade and tariffs", r"tariff|duties|duty|import|trade|steel|aluminum|semiconductor"),
@@ -65,7 +65,7 @@ class FederalRegisterProvider:
             data = get_json(self.client, URL, "Federal Register", params=params)
             try:
                 for row in data.get("results", []):
-                    kind = row.get("presidential_document_type")
+                    kind = row.get("subtype")
                     if kind not in ("Executive Order", "Proclamation"):
                         continue
                     found.append(

@@ -569,9 +569,23 @@ def probe_tickets() -> None:
 def probe_context() -> None:
     from datetime import UTC, datetime
 
-    from stockintel import context
+    import httpx
+
+    from stockintel import context, ingest
+    from stockintel.providers.federal_register import URL, FederalRegisterProvider
 
     engine = create_engine(Settings().database_url)
+    answer = httpx.get(
+        URL,
+        params=[("conditions[type][]", "PRESDOCU"), ("per_page", 1), ("fields[]", "subtype")],
+        headers={"User-Agent": "stock-intelligence"},
+        follow_redirects=True,
+    )
+    print("context api", answer.status_code, answer.text[:300])
+    print(
+        "context load",
+        ingest.run_policy(engine, FederalRegisterProvider(), datetime.now(UTC)),
+    )
     result = context.build(engine, datetime.now(UTC).date())
     for card in result["cards"]:
         print("context", card["title"], card["reading"], card["state"], card["date"])
