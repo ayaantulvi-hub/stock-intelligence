@@ -451,3 +451,16 @@ def test_missing_record_raises_not_available():
     provider = SecProvider("a@b.test", client(lambda r: httpx.Response(404)))
     with pytest.raises(NotAvailable):
         provider.company_facts(1)
+
+
+def test_owned_stocks_get_prices_first(stocks):
+    with stocks.begin() as conn:
+        conn.execute(
+            text(
+                """INSERT INTO positions (security_id, shares, buy_price)
+                   SELECT id, 1, 1 FROM securities WHERE ticker = 'BBB'"""
+            )
+        )
+    provider = FixturePrices()
+    run_prices(stocks, provider, START, 1, NOW)
+    assert [call[0] for call in provider.calls] == ["BBB"]

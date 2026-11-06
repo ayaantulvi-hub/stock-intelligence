@@ -1,0 +1,23 @@
+name: Set holdings
+on:
+  workflow_dispatch:
+    inputs:
+      holdings:
+        description: "JSON list: ticker, shares, buy_price, and optionally stop_price, sell_by"
+        required: true
+permissions:
+  contents: read
+jobs:
+  set:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      HOLDINGS: ${{ inputs.holdings }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --no-dev
+      - run: uv run --no-dev python -m stockintel.set_holdings

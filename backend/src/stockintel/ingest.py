@@ -258,7 +258,8 @@ def run_prices(
                                            WHERE p.security_id = s.id) AS last_bar
                    FROM securities s
                    WHERE s.last_price_fetch_at IS NULL OR s.last_price_fetch_at < :due
-                   ORDER BY s.last_price_fetch_at NULLS FIRST, s.universe_rank LIMIT :limit"""
+                   ORDER BY EXISTS (SELECT 1 FROM positions h WHERE h.security_id = s.id) DESC,
+                     s.last_price_fetch_at NULLS FIRST, s.universe_rank LIMIT :limit"""
             ),
             {"due": due_before, "limit": limit},
         ).all()
