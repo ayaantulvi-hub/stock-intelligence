@@ -1,5 +1,5 @@
 name: Update data
-# Started by cron-job.org: hourly for prices, daily for forecasts. See docs/decisions.md.
+# Started hourly by cron-job.org. Whichever run first finds decisions due does the daily work.
 on:
   # A backup for cron-job.org. GitHub can delay these, so forecasts may run late.
   schedule:
@@ -51,24 +51,28 @@ jobs:
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
       - run: uv run --no-dev python -m stockintel.ingest universe
+      # Any run can do the daily work, so one missed trigger can't lose a day's decisions.
+      - name: Are today's decisions due?
+        id: due
+        run: uv run --no-dev python -m stockintel.forecast due >> "$GITHUB_OUTPUT"
       - name: Prices
         if: github.event_name == 'schedule' && github.event.schedule != '50 10 * * 2-6' || inputs.prices
         run: uv run --no-dev python -m stockintel.ingest prices --limit 45
       - name: Filings
         # Runs even if prices failed: one feed's failure must not stop the others.
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest filings
       - name: Company facts
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest facts
       - name: Insider trades
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest insiders --limit 2500
       - name: Past company sizes
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest history
       - name: Government policy actions
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest policy
       - name: Market prices
         if: ${{ !cancelled() }}
@@ -80,23 +84,23 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run --no-dev python -m stockintel.ingest judge
       - name: Big investors
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest funds
       - name: Fed dates
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest fed
       - name: Economic data
         # Runs even if prices failed: one feed's failure must not stop the others.
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest economic
       - name: Forecasts
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.forecasts) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.forecasts) }}
         run: uv run --no-dev python -m stockintel.forecast daily
       - name: Expert review
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.forecasts || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.forecasts || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.experts
       - name: Check company figures
-        if: ${{ !cancelled() && (github.event.schedule == '50 10 * * 2-6' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.audit
       - name: Alerts
         id: alerts

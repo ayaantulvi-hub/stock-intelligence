@@ -24,6 +24,7 @@ from stockintel.charts import adjust
 from stockintel.db import get_engine
 from stockintel.factors import LIVE_IDS, MARKET_WIDE, NAMES, stock_factors
 from stockintel.market import (
+    DECISION_TIME,
     latest_expected_session,
     session_close,
     session_open,
@@ -675,6 +676,18 @@ def current_champion(engine: Engine) -> dict:
     return {"model": row.model, "edge": row.edge}
 
 
+def decisions_due(engine: Engine, now: datetime) -> bool:
+    """True from decision time until the market opens, if no forecasts exist for that session."""
+    expected = latest_expected_session(now)
+    target = next_session(expected)
+    start = datetime.combine(expected + timedelta(days=1), DECISION_TIME, tzinfo=UTC)
+    if not start <= now < session_open(target):
+        return False
+    query = "SELECT 1 FROM forecasts WHERE target_session = :target LIMIT 1"
+    with engine.connect() as conn:
+        return conn.execute(text(query), {"target": target}).first() is None
+
+
 def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
     evaluations = latest_evaluations(engine)
     expected = latest_expected_session(now)
@@ -799,5 +812,7 @@ if __name__ == "__main__":
         evaluate(get_engine())
     elif sys.argv[1:] == ["daily"]:
         daily(get_engine(), datetime.now(UTC))
+    elif sys.argv[1:] == ["due"]:
+        print(f"daily={'yes' if decisions_due(get_engine(), datetime.now(UTC)) else 'no'}")
     else:
         sys.exit(__doc__)
