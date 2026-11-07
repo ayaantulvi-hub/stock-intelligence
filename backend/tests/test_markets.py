@@ -37,3 +37,9 @@ def test_quotes_store_once_and_show_the_days_change(engine):
 def test_a_missing_price_is_an_error_and_not_a_zero():
     with pytest.raises(FeedError):
         provider([{"ticker": "SPY", "timestamp": "2026-11-05T15:00:00+00:00"}]).quotes(("SPY",))
+
+
+def test_a_shared_hourly_limit_pauses_without_an_alert(engine):
+    transport = httpx.MockTransport(lambda request: httpx.Response(429))
+    limited = TiingoProvider("fixture", httpx.Client(transport=transport))
+    assert run_markets(engine, limited) == "ok"

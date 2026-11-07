@@ -1,0 +1,22 @@
+name: Show stock list
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: How many stocks, largest first
+        default: "50"
+permissions:
+  contents: read
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --no-dev
+      - run: uv run --no-dev python -m stockintel.lists ${{ inputs.count }}

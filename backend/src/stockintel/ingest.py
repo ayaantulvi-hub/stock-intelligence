@@ -110,7 +110,11 @@ class Run:
         elif self.paused and len(self.errors) == 1:
             # Reaching the hourly limit mid-run is expected. The next run carries on.
             status = "ok"
-            self.errors = [f"Hourly limit reached after {self.ok} stocks. The next run continues."]
+            self.errors = [
+                f"Hourly limit reached after {self.ok} stocks. The next run continues."
+                if self.feed == "prices"
+                else "Hourly limit reached. The next run tries again."
+            ]
         elif self.errors:
             status = "partial"
         else:
@@ -773,6 +777,11 @@ def run_markets(engine: Engine, provider) -> str:
     run.attempted = 1
     try:
         quotes, provenance = provider.quotes(MARKET_FUNDS)
+    except RateLimited as exc:
+        # Two runs in one hour can share the limit. The last stored prices still show.
+        run.attempted, run.paused = 0, True
+        run.errors.append(str(exc))
+        return run.finish()
     except FeedError as exc:
         return run.finish(str(exc))
     with engine.begin() as conn:
