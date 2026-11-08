@@ -32,6 +32,7 @@ jobs:
       - run: uv run --no-dev python -m stockintel.backtest
       - run: uv run --no-dev python -m stockintel.forecast evaluate
       - run: uv run --no-dev python -m stockintel.compare
+      - run: uv run --no-dev python -m stockintel.regime
       - run: uv run --no-dev python -m stockintel.stops
       - run: uv run --no-dev python -m stockintel.candles
       - run: uv run --no-dev python -m stockintel.overrides

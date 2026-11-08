@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Engine, text
 
-from stockintel import overrides
+from stockintel import overrides, regime
 
 CONGRESS_DAYS = 60
 
@@ -67,3 +67,31 @@ def checks(engine: Engine) -> dict:
             text("SELECT max(started_at) FROM feed_runs WHERE feed = 'cross-check'")
         ).scalar()
     return {"conflicts": conflicts, "last_check": last, "overrides": overrides.latest(engine)}
+
+
+def market_check(engine: Engine) -> dict | None:
+    return regime.current(engine)
+
+
+def decision_tests(engine: Engine) -> dict:
+    """Which factor families help, and how often each ranking really beat the average stock."""
+    with engine.connect() as conn:
+        families = [
+            dict(r._mapping)
+            for r in conn.execute(
+                text(
+                    """SELECT family, change, t_stat, verdict, run_at FROM family_tests
+               WHERE run_at = (SELECT max(run_at) FROM family_tests) ORDER BY t_stat DESC"""
+                )
+            )
+        ]
+        bins = [
+            dict(r._mapping)
+            for r in conn.execute(
+                text(
+                    """SELECT model, low, high, rate, n FROM rank_calibration
+               WHERE run_at = (SELECT max(run_at) FROM rank_calibration) ORDER BY low"""
+                )
+            )
+        ]
+    return {"families": families, "calibration": bins}

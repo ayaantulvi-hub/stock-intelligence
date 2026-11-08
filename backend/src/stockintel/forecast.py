@@ -58,6 +58,13 @@ def usable(frame: pd.DataFrame) -> list[str]:
     return [item for item in LIVE_IDS if frame[item].notna().any()]
 
 
+def stock_columns(frame: pd.DataFrame) -> list[str]:
+    """Factors that differ between stocks. Ranking stocks against each other can only use
+    these: a reading that is the same for every stock on a day can't tell them apart, and a
+    model given one learns past coincidences instead. Those readings feed the market check."""
+    return [item for item in usable(frame) if item not in MARKET_WIDE]
+
+
 def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict | None) -> None:
     """Add filing-based factors, using only what had been filed by each date."""
     for item in (
@@ -129,15 +136,20 @@ def add_company_data(factors: pd.DataFrame, frame: pd.DataFrame, company: dict |
         factors["insider_cluster"] = insider_buyers(trades, dates["date"])
 
 
-def sensitivity(changes: pd.Series, dates: pd.Series, driver: pd.Series | None) -> np.ndarray:
-    """How much a stock has moved with something over a year, up to the day before."""
+def sensitivity(
+    changes: pd.Series, dates: pd.Series, driver: pd.Series | None, lag: int = 1
+) -> np.ndarray:
+    """How much a stock has moved with something over a year, up to `lag` days before.
+
+    The dollar is published about a week late, so its sensitivity uses a longer lag.
+    """
     if driver is None:
         return np.full(len(changes), np.nan)
     moves = pd.Series(changes.to_numpy(), index=pd.DatetimeIndex(dates))
     other = driver.reindex(moves.index)
     together = moves.rolling(SENSITIVITY_DAYS, min_periods=120).cov(other)
     spread = other.rolling(SENSITIVITY_DAYS, min_periods=120).var()
-    return (together / spread.where(spread > 0)).shift(1).to_numpy()
+    return (together / spread.where(spread > 0)).shift(lag).to_numpy()
 
 
 def build_panel(
@@ -165,6 +177,20 @@ def build_panel(
         for name, column in (("rate_beta", "rate_change"), ("policy_beta", "policy_change")):
             source = None if macro is None or column not in macro else macro[column]
             factors[name] = sensitivity(changes, dates, source)
+        # A stock's sensitivity times the recent move: the same yield curve, oil or dollar move
+        # helps some stocks and hurts others, which is how these reach the stock ranking.
+        for name, column, recent, lag in (
+            ("curve_tilt", "curve_change", "curve_20d", 1),
+            ("rate_tilt", "rate_change", "rate_20d", 1),
+            ("oil_tilt", "oil_change", "oil_20d", 1),
+            ("dollar_tilt", "dollar_change", "dollar_20d", 8),
+        ):
+            if macro is None or column not in macro or recent not in macro:
+                factors[name] = np.nan
+                continue
+            beta = sensitivity(changes, dates, macro[column], lag)
+            move = macro[recent].reindex(pd.DatetimeIndex(dates), method="ffill").to_numpy()
+            factors[name] = beta * move
         factors["ticker"] = ticker
         factors["eligible"] = (
             True
@@ -305,7 +331,7 @@ def walk_forward(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list
         rank_test = test[test["date"].isin(pd.to_datetime(spaced))].dropna(subset=["excess_20d"])
         if len(rank_train) < 5000 or rank_test.empty:
             continue
-        columns = usable(rank_train)
+        columns = stock_columns(rank_train)
         ranker = model().fit(rank_train[columns], rank_train["excess_20d"] > 0)
         chance = ranker.predict_proba(rank_test[columns])[:, 1]
         labels = rank_test["excess_20d"].to_numpy() > 0
@@ -545,6 +571,18 @@ def load_macro(engine: Engine) -> pd.DataFrame:
     # Daily changes stay unfilled, because they're only used to measure each stock's sensitivity.
     if "DGS10" in wide:
         macro["rate_change"] = wide["DGS10"].dropna().diff().reindex(macro.index)
+        macro["rate_20d"] = (
+            wide["DGS10"].dropna().diff(20).shift(1, freq="D").reindex(macro.index, method="ffill")
+        )
+    if "T10Y3M" in wide:
+        macro["curve_change"] = wide["T10Y3M"].dropna().diff().reindex(macro.index)
+        macro["curve_20d"] = (
+            wide["T10Y3M"].dropna().diff(20).shift(1, freq="D").reindex(macro.index, method="ffill")
+        )
+    if "DCOILWTICO" in wide:
+        macro["oil_change"] = wide["DCOILWTICO"].dropna().pct_change().reindex(macro.index)
+    if "DTWEXBGS" in wide:
+        macro["dollar_change"] = wide["DTWEXBGS"].dropna().pct_change().reindex(macro.index)
     if "USEPUINDXD" in wide:
         weekly = wide["USEPUINDXD"].dropna().rolling(5).mean().pct_change(5)
         macro["policy_change"] = weekly.reindex(macro.index)
@@ -688,6 +726,24 @@ def decisions_due(engine: Engine, now: datetime) -> bool:
         return conn.execute(text(query), {"target": target}).first() is None
 
 
+def calibration_table(engine: Engine, model_name: str) -> list[tuple[float, float, float]]:
+    """The latest check of how often each ranking really beat the average stock."""
+    query = """SELECT low, high, rate FROM rank_calibration
+               WHERE model = :m AND run_at = (SELECT max(run_at) FROM rank_calibration
+                 WHERE model = :m) ORDER BY low"""
+    with engine.connect() as conn:
+        return [tuple(r) for r in conn.execute(text(query), {"m": model_name})]
+
+
+def beat_chance(bins: list[tuple[float, float, float]], rank: float) -> float | None:
+    """A ranking turned into a plain chance of beating the average stock over 20 days, from what
+    stocks at that ranking really did on years the model wasn't trained on."""
+    for low, high, rate in bins:
+        if low <= rank <= high:
+            return rate
+    return None
+
+
 def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
     evaluations = latest_evaluations(engine)
     expected = latest_expected_session(now)
@@ -706,13 +762,19 @@ def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
         fitted.predict_proba(latest[columns]), columns=fitted.classes_, index=latest.index
     )
     rank_train = pool.dropna(subset=["excess_20d"])
-    rank_columns = usable(rank_train)
+    rank_columns = stock_columns(rank_train)
     # Imported here because compare.py builds on this module.
-    from stockintel.compare import fit_ranker
+    from stockintel.compare import dropped_families, fit_ranker
+    from stockintel.families import FamilyModel, explain
 
     champion = current_champion(engine)
-    predict = fit_ranker(champion["model"], rank_train[rank_columns], rank_train["excess_20d"] > 0)
+    dropped = dropped_families(engine)
+    beat = rank_train["excess_20d"] > 0
+    predict = fit_ranker(champion["model"], rank_train[rank_columns], beat, dropped)
     ranks = pd.Series(predict(latest[rank_columns]), index=latest.index).rank(pct=True)
+    # The family scores explain each call in a few clear ideas, whichever model won.
+    explainer = FamilyModel("equal", dropped).fit(rank_train[rank_columns], beat)
+    bins = calibration_table(engine, champion["model"])
     day_edge = bool(evaluations.get("next_day", {}).get("edge", False))
     rank_edge = bool(current_champion(engine)["edge"])
     pull = correction(engine, base.get("up", 0.5))
@@ -728,9 +790,11 @@ def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
                 text(
                     """INSERT INTO forecasts (created_at, security_id, as_of_session, target_session,
                          target_close, last_close, p_up, p_flat, p_down, range_low, range_high,
-                         rank_20d, next_day_edge, rank_edge, confidence, drivers)
+                         rank_20d, next_day_edge, rank_edge, confidence, drivers, beat_chance,
+                         families)
                        SELECT :now, id, :as_of, :target, :target_close, :close, :up, :flat, :down,
-                         :low, :high, :rank, :day_edge, :rank_edge, :confidence, :drivers
+                         :low, :high, :rank, :day_edge, :rank_edge, :confidence, :drivers, :beat,
+                         CAST(:families AS jsonb)
                        FROM securities WHERE ticker = :ticker
                        ON CONFLICT (security_id, target_session) DO NOTHING"""
                 ),
@@ -749,6 +813,8 @@ def write_forecasts(engine: Engine, panel: pd.DataFrame, now: datetime) -> int:
                     "rank_edge": rank_edge,
                     "confidence": confidence(day_edge, chances, base),
                     "drivers": json.dumps(drivers(row)),
+                    "beat": beat_chance(bins, float(ranks[index])),
+                    "families": json.dumps(explain(row[rank_columns], explainer)),
                 },
             ).rowcount
     return written

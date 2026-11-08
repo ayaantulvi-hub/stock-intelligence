@@ -218,3 +218,9 @@ ul.plan li { margin: 0.35rem 0; }
 .replay-bar .seg { display: block; height: 100%; background: var(--muted); }
 .replay-bar .seg.ok { background: var(--ok); }
 .replay-bar .seg.bad { background: var(--bad); }
+.families table td:first-child { width: 40%; }
+.bar-cell { width: 45%; }
+.score-bar { display: block; height: 10px; border-radius: 5px; background: var(--muted); }
+.row-buy .score-bar { background: var(--ok); }
+.row-sell .score-bar { background: var(--bad); }
+.hint { font-size: 0.9rem; opacity: 0.8; }

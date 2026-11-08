@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import Engine, text
 
-from stockintel import advice, horizons, news_watch, tools
+from stockintel import advice, horizons, rules, tools
 from stockintel.providers import news as feeds
 
 TOP = 10
@@ -261,11 +261,12 @@ def build(engine: Engine, today: date) -> dict:
         + lean_changes(
             old_ranks,
             new_ranks,
-            {ticker: row["blocked"] for ticker, row in old_reviews.items()},
             {
-                **{ticker: row["blocked"] for ticker, row in new_reviews.items()},
-                **news_watch.stock_warnings(engine, today),
+                ticker: row["blocked"]
+                for ticker, row in old_reviews.items()
+                if rules.proven(engine)["Expert checks"]
             },
+            rules.active(engine, today),
         )
     )
     found += review_changes(old_reviews, new_reviews)

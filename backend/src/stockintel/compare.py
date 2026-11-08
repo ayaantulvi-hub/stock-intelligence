@@ -22,12 +22,13 @@ from sqlalchemy import Engine, text
 
 from stockintel.backtest import MIN_Z
 from stockintel.db import get_engine
+from stockintel.families import FAMILIES, FamilyModel
 from stockintel.forecast import (
     FIRST_TEST_YEAR,
     MIN_TEST_DAYS,
     RANK_HORIZON,
     load_panel,
-    usable,
+    stock_columns,
 )
 from stockintel.market import sessions_between
 from stockintel.profiles import TEAM
@@ -72,19 +73,41 @@ def _network():
     )
 
 
+FAMILY_MODELS = {
+    "Families, equal weight": "equal",
+    "Families, linear": "linear",
+    "Families, boosted": "boosted",
+}
 MODELS = {
     "Linear model": _linear,
     "Random forest": _forest,
     "Gradient boosting": _boosted,
     "Neural network": _network,
+    **{name: (lambda kind=kind: FamilyModel(kind)) for name, kind in FAMILY_MODELS.items()},
 }
+ABLATION_T = 2.0
+CALIBRATION_BINS = 10
 
 
-def fit_ranker(name: str, x: pd.DataFrame, y: pd.Series):
+def build(name: str, dropped: tuple[str, ...] = ()):
+    if name in FAMILY_MODELS:
+        return FamilyModel(FAMILY_MODELS[name], dropped)
+    return MODELS[name]()
+
+
+def fit_ranker(name: str, x: pd.DataFrame, y: pd.Series, dropped: tuple[str, ...] = ()):
     """Train a named model and return a function giving each stock's chance of beating others."""
     names = list(MODELS) if name == TEAM else [name]
-    fitted = [MODELS[item]().fit(x, y) for item in names]
+    fitted = [build(item, dropped).fit(x, y) for item in names]
     return lambda rows: np.mean([m.predict_proba(rows)[:, 1] for m in fitted], axis=0)
+
+
+def dropped_families(engine: Engine) -> tuple[str, ...]:
+    """Families the latest test found made results worse on the years it learned from."""
+    query = """SELECT family FROM family_tests
+               WHERE run_at = (SELECT max(run_at) FROM family_tests) AND verdict = 'Hurts'"""
+    with engine.connect() as conn:
+        return tuple(conn.execute(text(query)).scalars())
 
 
 def _t_stat(values: np.ndarray) -> float:
@@ -156,11 +179,10 @@ def has_edge(result: dict) -> bool:
     )
 
 
-def compare(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list[dict]:
+def folds(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR):
+    """Each test year with the training rows before it, leaving a gap so none overlap."""
     data = panel[panel["eligible"]].dropna(subset=["excess_20d"])
     last_year = int(data["date"].dt.year.max())
-    holdout_from = pd.Timestamp(last_year - HOLDOUT_YEARS + 1, 1, 1)
-    collected: dict[str, list[pd.DataFrame]] = {name: [] for name in [*MODELS, TEAM]}
     for year in range(first_year, last_year + 1):
         cutoff = pd.Timestamp(year, 1, 1) - pd.Timedelta(days=RANK_HORIZON * 2)
         history = data[data["date"] < cutoff]
@@ -170,12 +192,86 @@ def compare(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list[dict
         spaced = sessions_between(this_year["date"].min().date(), this_year["date"].max().date())
         test = this_year[this_year["date"].isin(pd.to_datetime(spaced[::RANK_HORIZON]))]
         days = sorted(history["date"].unique())[::TRAIN_EVERY]
-        train = history[history["date"].isin(days)]
-        columns = usable(train)
-        chances = []
-        for name, factory in MODELS.items():
+        yield history[history["date"].isin(days)], test
+
+
+def family_tests(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR) -> list[dict]:
+    """Leave each family out in turn. A family helps if results get worse without it.
+
+    Uses only the years before the hold-out, so the final check stays untouched."""
+    data = panel[panel["eligible"]].dropna(subset=["excess_20d"])
+    holdout_from = pd.Timestamp(int(data["date"].dt.year.max()) - HOLDOUT_YEARS + 1, 1, 1)
+    gains: dict[str, list] = {name: [] for name in ["all", *FAMILIES]}
+    for train, test in folds(panel[panel["date"] < holdout_from], first_year):
+        columns = stock_columns(train)
+        y = train["excess_20d"] > 0
+        for name in list(gains):
+            dropped = () if name == "all" else (name,)
             chance = (
-                factory()
+                FamilyModel("linear", dropped)
+                .fit(train[columns], y)
+                .predict_proba(test[columns])[:, 1]
+            )
+            gains[name].append(_date_results(test, chance)[["date", "gain"]])
+    if not gains["all"]:
+        return []
+    full = pd.concat(gains["all"]).set_index("date")["gain"]
+    out = []
+    for family in FAMILIES:
+        without = pd.concat(gains[family]).set_index("date")["gain"]
+        change = (full - without).dropna().to_numpy()  # Positive: the family adds.
+        t = _t_stat(change)
+        verdict = "Helps" if t >= ABLATION_T else "Hurts" if t <= -ABLATION_T else "No clear effect"
+        out.append(
+            {
+                "family": family,
+                "change": float(change.mean()) if len(change) else 0.0,
+                "t_stat": t,
+                "verdict": verdict,
+            }
+        )
+    return out
+
+
+def calibration(panel: pd.DataFrame, name: str, dropped: tuple[str, ...] = ()) -> list[dict]:
+    """How often stocks at each ranking actually beat the average, on years not trained on.
+    Turns a ranking into a plain chance, checked against what really happened."""
+    rows = []
+    for train, test in folds(panel):
+        columns = stock_columns(train)
+        chance = fit_ranker(name, train[columns], train["excess_20d"] > 0, dropped)(test[columns])
+        ranked = pd.Series(chance, index=test.index).groupby(test["date"]).rank(pct=True)
+        rows.append(pd.DataFrame({"rank": ranked, "beat": test["excess_20d"] > 0}))
+    if not rows:
+        return []
+    table = pd.concat(rows)
+    edges = np.linspace(0, 1, CALIBRATION_BINS + 1)
+    table["bin"] = pd.cut(table["rank"], edges, include_lowest=True, labels=False)
+    out = []
+    for index, group in table.groupby("bin"):
+        out.append(
+            {
+                "low": float(edges[int(index)]),
+                "high": float(edges[int(index) + 1]),
+                "rate": float(group["beat"].mean()),
+                "n": len(group),
+            }
+        )
+    return out
+
+
+def compare(
+    panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR, dropped: tuple[str, ...] = ()
+) -> list[dict]:
+    data = panel[panel["eligible"]].dropna(subset=["excess_20d"])
+    holdout_from = pd.Timestamp(int(data["date"].dt.year.max()) - HOLDOUT_YEARS + 1, 1, 1)
+    collected: dict[str, list[pd.DataFrame]] = {name: [] for name in [*MODELS, TEAM]}
+    for train, test in folds(panel, first_year):
+        columns = stock_columns(train)
+        chances = []
+        for name in MODELS:
+            chance = (
+                build(name, dropped)
                 .fit(train[columns], train["excess_20d"] > 0)
                 .predict_proba(test[columns])[:, 1]
             )
@@ -207,7 +303,7 @@ def factor_weights(panel: pd.DataFrame) -> list[dict]:
     train = data[data["date"].isin(days)]
     if train.empty:
         return []
-    columns = usable(train)
+    columns = stock_columns(train)
     fitted = _forest().fit(train[columns], train["excess_20d"] > 0)
     weights = fitted[-1].feature_importances_
     used = [name for i, name in enumerate(columns) if i < len(weights)]
@@ -219,9 +315,31 @@ def factor_weights(panel: pd.DataFrame) -> list[dict]:
 
 def run(engine: Engine) -> list[dict]:
     panel = load_panel(engine)
-    results = compare(panel)
-    weights = factor_weights(panel)
     now = datetime.now(UTC)
+    tests = family_tests(panel)
+    if tests:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """INSERT INTO family_tests (run_at, family, change, t_stat, verdict)
+                       VALUES (:run_at, :family, :change, :t_stat, :verdict)"""
+                ),
+                [{**row, "run_at": now} for row in tests],
+            )
+    dropped = tuple(row["family"] for row in tests if row["verdict"] == "Hurts")
+    results = compare(panel, dropped=dropped)
+    winner = next((row["model"] for row in results if row["selected"]), None)
+    bins = calibration(panel, winner, dropped) if winner else []
+    if bins:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """INSERT INTO rank_calibration (run_at, model, low, high, rate, n)
+                       VALUES (:run_at, :model, :low, :high, :rate, :n)"""
+                ),
+                [{**row, "run_at": now, "model": winner} for row in bins],
+            )
+    weights = factor_weights(panel)
     if weights:
         with engine.begin() as conn:
             conn.execute(

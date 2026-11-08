@@ -52,6 +52,7 @@ def engine(migrated, database_url):
                    watchlist, practice_trades, journal_entries, stop_studies, stop_changes,
                    closed_trades, day_trade_tests, economic_releases,
                    short_interest, congress_trades, congress_reports, override_tests,
+                   family_tests, rank_calibration, market_checks,
                    factor_weights RESTART IDENTITY CASCADE"""
             )
         )

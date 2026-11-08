@@ -5,6 +5,7 @@ import LongTermPanel from "./LongTermPanel";
 import { TodaysOrders } from "./ChecklistPanel";
 import { DayTradingPage } from "./DayTrading";
 import { CongressTrades, SourceChecks } from "./Crowd";
+import { DecisionTests, MarketCheck } from "./Checks";
 import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, MarketStrip, NextDecision, PortfolioPage, ReliabilityPage, Screener, TradingPlan, WatchButton, WhatChanged } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
@@ -349,6 +350,7 @@ export default function App() {
       )}
       {page === "Big picture" && (
         <>
+          <MarketCheck />
           <BigPicture />
           <CongressTrades />
         </>
@@ -359,6 +361,7 @@ export default function App() {
       {page === "How reliable?" && (
         <>
           <SourceChecks />
+          <DecisionTests />
           <ReliabilityPage />
         </>
       )}
@@ -402,6 +405,7 @@ export default function App() {
       {!stock && !failed && (
         <>
           <MarketStrip />
+          <MarketCheck />
           <NextDecision />
           <WhatChanged onOpen={open} />
           <HoldingsToday onOpen={open} />

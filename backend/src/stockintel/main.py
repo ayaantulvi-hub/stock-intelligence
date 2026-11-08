@@ -264,6 +264,16 @@ def congress_trades() -> dict:
     return extras.congress(get_engine())
 
 
+@app.get("/api/market-check")
+def market_check() -> dict:
+    return {"check": extras.market_check(get_engine())}
+
+
+@app.get("/api/decision-tests")
+def decision_tests() -> dict:
+    return extras.decision_tests(get_engine())
+
+
 @app.get("/api/checks")
 def data_checks() -> dict:
     return extras.checks(get_engine())

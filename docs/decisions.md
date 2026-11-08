@@ -310,3 +310,22 @@ needs at least 30 tested cases that beat the baseline.
 - Time Machine draws 30-minute runs from one past day, so price streaks are kept.
 - Survivorship: the universe is today's largest 480, which flatters past results. Not fixable for
   free; stated on the site.
+
+## Factor families and one decision path (8 November 2026)
+
+- The stock ranking now sees only factors that differ between stocks. Economy-wide readings
+  (yield curve, credit, oil, dollar, VIX and others) can't rank stocks against each other, so
+  they moved to a separate market check (`regime.py`), and reach the ranking through each stock's
+  measured sensitivity to them (curve, rate, oil and dollar "tilts").
+- 35 stock factors are grouped into 9 families. A factor counts only if, on the training years,
+  high and low ranked stocks clearly differed (t at least 3). Each family is left out in turn
+  on the years before the hold-out; one that makes results worse is dropped.
+- Three family models (equal weight, linear, boosted) compete with the old models under the
+  same rules: chosen on early years, confirmed once on the 2 held-back years.
+- The winning ranking is turned into a plain chance of beating the average stock, from how
+  often stocks at that ranking really did on years not trained on.
+- Expert checks, news warnings and the market check change a call only once their own test
+  shows they help. Until then they appear as "Worth knowing" notes. Stops and sell-by dates
+  always apply.
+- Election factors removed: too few elections to test, and elections reach decisions through
+  the news.

@@ -267,7 +267,34 @@ type Decision = {
   reasons_against: string[];
   next_step: string;
   market?: string;
+  notes?: string[];
+  beat_chance?: number | null;
+  families?: Family[] | null;
 };
+
+type Family = { family: string; score: number; push: "buy" | "sell" | "neutral"; factors: string[] };
+
+export function FamilyBars({ families }: { families: Family[] }) {
+  return (
+    <div className="families">
+      <h4>What the ranking weighed</h4>
+      <p className="hint">Each family is several related factors combined. 100 means every factor in it points to beating other stocks, 0 means the opposite. Families with no clear past effect are left out.</p>
+      <table>
+        <tbody>
+          {families.map((f) => (
+            <tr key={f.family} className={f.push === "buy" ? "row-buy" : f.push === "sell" ? "row-sell" : ""}>
+              <td>{f.family}</td>
+              <td className="bar-cell">
+                <span className="score-bar" style={{ width: `${f.score}%` }} />
+              </td>
+              <td>{f.score}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 type Line = {
   topic: string;
@@ -692,10 +719,27 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
         {decision && (
           <>
             {decision.market && <p className="market-line">{decision.market}</p>}
+            {decision.beat_chance != null && (
+              <p className="chance">
+                <b>{Math.round(decision.beat_chance * 100)}% chance of beating the average stock over the next 20 trading days.</b>{" "}
+                That's how often stocks ranked like this really did, on past years the model never trained on. 50% is a coin flip.
+              </p>
+            )}
             <p>
               {decision.reason}
               {!decision.proven && decision.kind !== "neutral" && " Unproven, so treat it as a guess."}
             </p>
+            {decision.families && decision.families.length > 0 && <FamilyBars families={decision.families} />}
+            {decision.notes && decision.notes.length > 0 && (
+              <div className="notes">
+                <h4>Worth knowing (not tested yet, so it doesn't change the call)</h4>
+                <ul>
+                  {decision.notes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="why">
               <div>
                 <h4 className="ok">In its favour</h4>
