@@ -14,6 +14,8 @@ from stockintel.providers.base import FeedError, Observation, Provenance
 from stockintel.providers.http import get_json
 
 BASE = "https://api.stlouisfed.org/fred/series/observations"
+SERIES_RELEASE = "https://api.stlouisfed.org/fred/series/release"
+RELEASE_DATES = "https://api.stlouisfed.org/fred/release/dates"
 
 
 class FredProvider:
@@ -50,3 +52,38 @@ class FredProvider:
             raise FeedError(f"FRED {series_id}: unexpected response shape") from None
         safe_url = f"{BASE}?{urlencode(query)}"
         return observations, Provenance("FRED", safe_url, retrieved, "end_of_day")
+
+    def release_dates(self, series_id: str, start: date) -> tuple[list[date], Provenance]:
+        """Past and scheduled dates of the release that publishes a series.
+
+        Docs: https://fred.stlouisfed.org/docs/api/fred/release_dates.html. The release is looked
+        up from the series, so no release number is hard-coded.
+        """
+        query = {"series_id": series_id, "file_type": "json"}
+        found = get_json(
+            self.client,
+            f"{SERIES_RELEASE}?{urlencode({**query, 'api_key': self.api_key})}",
+            f"FRED release of {series_id}",
+        )
+        try:
+            release_id = found["releases"][0]["id"]
+        except (KeyError, IndexError, TypeError):
+            raise FeedError(f"FRED release of {series_id}: unexpected response shape") from None
+        query = {
+            "release_id": release_id,
+            "realtime_start": start.isoformat(),
+            "include_release_dates_with_no_data": "true",
+            "file_type": "json",
+            "limit": 10000,
+        }
+        data = get_json(
+            self.client,
+            f"{RELEASE_DATES}?{urlencode({**query, 'api_key': self.api_key})}",
+            f"FRED release {release_id} dates",
+        )
+        try:
+            days = sorted({date.fromisoformat(row["date"]) for row in data["release_dates"]})
+        except (KeyError, TypeError, ValueError):
+            raise FeedError(f"FRED release {release_id} dates: unexpected response shape") from None
+        safe_url = f"{RELEASE_DATES}?{urlencode(query)}"
+        return days, Provenance("FRED", safe_url, datetime.now(UTC), "end_of_day")

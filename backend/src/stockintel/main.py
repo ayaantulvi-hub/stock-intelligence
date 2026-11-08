@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from stockintel import changes, context, day_trading, experts, misses, plan, queries, tools
+from stockintel import changes, context, day_trading, experts, extras, misses, plan, queries, tools
 from stockintel.charts import TIMEFRAMES
 from stockintel.config import get_settings
 from stockintel.db import get_engine
@@ -257,6 +257,26 @@ class TrackOrders(BaseModel):
 def track_orders(order: TrackOrders) -> list[dict]:
     queries.track_orders(get_engine(), order.tickers, order.shares)
     return queries.holdings_today(get_engine())
+
+
+@app.get("/api/congress")
+def congress_trades() -> dict:
+    return extras.congress(get_engine())
+
+
+@app.get("/api/checks")
+def data_checks() -> dict:
+    return extras.checks(get_engine())
+
+
+@app.get("/api/stocks/{ticker}/crowd")
+def stock_crowd(ticker: str) -> dict:
+    """Short interest and Congress trades for one stock."""
+    engine = get_engine()
+    return {
+        "short_interest": extras.short_interest(engine, ticker),
+        "congress": extras.congress(engine, ticker, days=365)["trades"],
+    }
 
 
 @app.get("/api/day-trading")

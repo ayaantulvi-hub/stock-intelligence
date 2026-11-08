@@ -34,6 +34,7 @@ jobs:
       - run: uv run --no-dev python -m stockintel.compare
       - run: uv run --no-dev python -m stockintel.stops
       - run: uv run --no-dev python -m stockintel.candles
+      - run: uv run --no-dev python -m stockintel.overrides
       # Saved even after a failure, so the next job doesn't download everything again.
       - uses: actions/cache/save@v4
         if: ${{ always() }}

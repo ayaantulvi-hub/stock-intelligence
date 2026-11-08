@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import ChecklistPanel, { HowMuch } from "./ChecklistPanel";
 import PositionPanel from "./PositionPanel";
 import { StockNews } from "./Pages";
+import { StockCrowd } from "./Crowd";
 import { leanRow } from "./leanRow";
 
 const NOT_VERIFIED = "Not verified";
@@ -727,6 +728,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
       <Horizons ticker={ticker} />
       <CompanyEvents ticker={ticker} />
       <StockNews ticker={ticker} />
+      <StockCrowd ticker={ticker} />
       <ExpertReview ticker={ticker} />
       <details className="fold">
         <summary>{decision?.owned ? "Your position" : "I own this stock"}</summary>

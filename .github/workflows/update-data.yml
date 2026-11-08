@@ -35,6 +35,8 @@ jobs:
       TIINGO_API_TOKEN: ${{ secrets.TIINGO_API_TOKEN }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
       SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
     defaults:
       run:
@@ -93,6 +95,21 @@ jobs:
         # Runs even if prices failed: one feed's failure must not stop the others.
         if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest economic
+      - name: Economic release dates
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.ingest releases
+      - name: Short interest
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.ingest short
+      - name: Install the PDF reader for Congress reports
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
+        run: sudo apt-get install -y -qq poppler-utils
+      - name: Congress trades
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.ingest congress --limit 100
+      - name: Cross-check sources
+        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
+        run: uv run --no-dev python -m stockintel.conflicts
       - name: Forecasts
         if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.forecasts) }}
         run: uv run --no-dev python -m stockintel.forecast daily

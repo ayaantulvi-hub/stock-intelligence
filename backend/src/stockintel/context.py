@@ -16,7 +16,7 @@ MAX_AGE = timedelta(days=14)
 MARKETS = {"SPY": "S&P 500", "QQQ": "Nasdaq 100", "DIA": "Dow Jones"}
 NEWS_DAYS = 7
 TONE_GAP = 0.3
-SERIES = ("DGS2", "DGS10", "T10Y3M", "DFF", "USEPUINDXD")
+SERIES = ("DGS2", "DGS10", "T10Y3M", "DFF", "USEPUINDXD", "DTWEXBGS")
 
 
 def card(title, reading, state, meaning, source, url, day=None):
@@ -86,6 +86,28 @@ def uncertainty(recent, usual, day) -> dict:
         )
         return card(title, reading, BAD, meaning, source, url, day)
     meaning = "News about government policy is close to its usual level of uncertainty."
+    return card(title, reading, NEUTRAL, meaning, source, url, day)
+
+
+def dollar(now, before, day) -> dict:
+    title, source, url = "US dollar", "Federal Reserve, via FRED", f"{FRED}DTWEXBGS"
+    if now is None or before is None:
+        return card(title, "Not verified", UNKNOWN, "The latest reading is missing.", source, url)
+    change = (now / before - 1) * 100
+    reading = f"Broad dollar index {now:.1f}, {change:+.1f}% in about a month"
+    if change >= 2:
+        meaning = (
+            "The dollar has strengthened. That makes US goods dearer abroad and shrinks "
+            "foreign sales when turned back into dollars, which weighs on big exporters."
+        )
+        return card(title, reading, BAD, meaning, source, url, day)
+    if change <= -2:
+        meaning = (
+            "The dollar has weakened. That helps US companies that sell a lot abroad, "
+            "because foreign sales are worth more in dollars."
+        )
+        return card(title, reading, GOOD, meaning, source, url, day)
+    meaning = "The dollar has moved little, so it isn't a big factor for exporters right now."
     return card(title, reading, NEUTRAL, meaning, source, url, day)
 
 
@@ -296,6 +318,11 @@ def build(engine: Engine, today: date) -> dict:
     if funds_day:
         older = [v for d, v in by_series["DFF"] if d <= funds_day - timedelta(days=60)]
         before = older[-1] if older else None
+    dollar_now, dollar_day = fresh("DTWEXBGS")
+    dollar_before = None
+    if dollar_day:
+        older = [v for d, v in by_series["DTWEXBGS"] if d <= dollar_day - timedelta(days=28)]
+        dollar_before = older[-1] if older else None
     policy = by_series.get("USEPUINDXD", [])
     recent = usual = policy_day = None
     if fresh("USEPUINDXD")[0] is not None and len(policy) >= 365:
@@ -311,6 +338,7 @@ def build(engine: Engine, today: date) -> dict:
             curve(ten, two, short, day),
             rates(funds, before, funds_day),
             uncertainty(recent, usual, policy_day),
+            dollar(dollar_now, dollar_before, dollar_day),
             elections(today),
         ],
         "actions": [dict(row._mapping) for row in actions],

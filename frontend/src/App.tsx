@@ -4,6 +4,7 @@ import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
 import { TodaysOrders } from "./ChecklistPanel";
 import { DayTradingPage } from "./DayTrading";
+import { CongressTrades, SourceChecks } from "./Crowd";
 import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, MarketStrip, NextDecision, PortfolioPage, ReliabilityPage, Screener, TradingPlan, WatchButton, WhatChanged } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
@@ -346,11 +347,21 @@ export default function App() {
           />
         </section>
       )}
-      {page === "Big picture" && <BigPicture />}
+      {page === "Big picture" && (
+        <>
+          <BigPicture />
+          <CongressTrades />
+        </>
+      )}
       {page === "My portfolio" && <PortfolioPage />}
       {page === "Journal" && <JournalPage />}
       {page === "Alerts" && <AlertsPage />}
-      {page === "How reliable?" && <ReliabilityPage />}
+      {page === "How reliable?" && (
+        <>
+          <SourceChecks />
+          <ReliabilityPage />
+        </>
+      )}
       {page === "Today" && (
         <>
       {failed && <p className="bad">Cannot reach the API. Status is not verified.</p>}

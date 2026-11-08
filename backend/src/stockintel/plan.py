@@ -13,7 +13,7 @@ from sqlalchemy import Engine, text
 
 from stockintel import charts, stops
 
-MAX_RISK_SHARE = 0.02  # The plan's upper limit: lose at most 2% of the account per holding.
+MAX_RISK_SHARE = 0.015  # The owner's one limit for every page: lose at most 1.5% a trade.
 TOGETHER = 0.7  # Daily moves this correlated over 60 days count as moving together.
 TOGETHER_DAYS = 60
 LOSING_STREAK = 3  # Pause new buys after this many losing sales in a row.
@@ -158,7 +158,7 @@ def review(engine: Engine, account: float | None = None, now: datetime | None = 
             _check(
                 "Risk per holding",
                 "fail",
-                f"If these hit their stop you'd lose more than {MAX_RISK_SHARE:.0%} of "
+                f"If these hit their stop you'd lose more than {MAX_RISK_SHARE:.1%} of "
                 f"{base_name}: {detail}.",
             )
         )
@@ -167,7 +167,7 @@ def review(engine: Engine, account: float | None = None, now: datetime | None = 
             _check(
                 "Risk per holding",
                 "pass",
-                f"No holding risks more than {MAX_RISK_SHARE:.0%} of {base_name}.",
+                f"No holding risks more than {MAX_RISK_SHARE:.1%} of {base_name}.",
             )
         )
 
@@ -276,6 +276,9 @@ def week(engine: Engine, now: datetime) -> dict:
         == r.outcome
         for r in scored
     ]
+    outcomes = [r.outcome for r in scored]
+    # What guessing gives: always calling the outcome that was most common that week.
+    usual = max((outcomes.count(o) for o in set(outcomes)), default=0)
     best = max(zip(results, sales), default=None, key=lambda x: x[0])
     worst = min(zip(results, sales), default=None, key=lambda x: x[0])
     return {
@@ -296,6 +299,7 @@ def week(engine: Engine, now: datetime) -> dict:
         "past_sell_date": late,
         "model_calls": len(calls),
         "model_right": sum(calls),
+        "model_usual": usual,
         "model_in_range": sum(1 for r in scored if r.in_range),
     }
 

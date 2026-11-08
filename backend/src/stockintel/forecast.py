@@ -211,6 +211,7 @@ def build_panel(
         "vix",
         "credit_spread",
         "oil_20d",
+        "dollar_20d",
         "inflation_expected",
         "jobless_claims",
         "fomc",
@@ -485,7 +486,7 @@ def load_macro(engine: Engine) -> pd.DataFrame:
     query = """SELECT DISTINCT ON (series_id, observation_date) series_id, observation_date, value
                FROM economic_observations
                WHERE series_id IN ('VIXCLS', 'BAA10Y', 'DCOILWTICO', 'T10YIE', 'ICSA',
-                 'T10Y3M', 'DFF', 'USEPUINDXD', 'DGS10')
+                 'T10Y3M', 'DFF', 'USEPUINDXD', 'DGS10', 'DTWEXBGS')
                ORDER BY series_id, observation_date, realtime_start DESC"""
     with engine.connect() as conn:
         rows = pd.DataFrame([row._mapping for row in conn.execute(text(query))])
@@ -506,6 +507,9 @@ def load_macro(engine: Engine) -> pd.DataFrame:
         macro["inflation_expected"] = wide["T10YIE"].shift(1, freq="D")
     if "ICSA" in wide:
         macro["jobless_claims"] = wide["ICSA"].dropna().pct_change(4).shift(5, freq="D")
+    if "DTWEXBGS" in wide:
+        # The Fed publishes the dollar index weekly, so a value can be up to a week late.
+        macro["dollar_20d"] = wide["DTWEXBGS"].dropna().pct_change(20).shift(7, freq="D")
     if "T10Y3M" in wide:
         macro["curve_3m"] = wide["T10Y3M"].shift(1, freq="D")
     if "DFF" in wide:

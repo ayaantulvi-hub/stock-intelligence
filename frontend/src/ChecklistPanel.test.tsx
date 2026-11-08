@@ -103,6 +103,7 @@ test("today's orders say when to sell and give each stop", async () => {
     })),
   );
   render(<TodaysOrders onOpen={() => {}} />);
-  expect(await screen.findByText(/Sell them all on 2026-12-03/)).toBeTruthy();
+  expect(await screen.findByText(/Unproven ranking, not a tested buy list/)).toBeTruthy();
+  expect(screen.getByText(/sell them all on/).textContent).toContain("2026-12-03");
   expect(screen.getByText("350.00")).toBeTruthy();
 });

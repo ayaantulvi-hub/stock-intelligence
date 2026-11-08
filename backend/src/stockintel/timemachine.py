@@ -5,9 +5,12 @@ copyright Jake Schincariol), using Alpaca bars instead of Yahoo. Same method:
 
 1. The pool: full past sessions (78 five-minute bars, 9:30 to 16:00 New York time). Each bar
    becomes four ratios to the bar before it: open, high, low and close over the previous close.
-2. One replay starts at the entry price. For each remaining bar it draws a past bar from the
-   same time of day (plus or minus 2 bars) and scales it to the current price. The stop is
-   checked before the target, so a bar touching both counts as the stop.
+2. One replay starts at the entry price and scales past bars to the current price. Changed
+   from the original, which drew every bar on its own: here it draws runs of 6 bars (30
+   minutes) in a row from one past day, from the same time of day plus or minus 2 bars. Real
+   prices run in streaks, and drawing bars one at a time breaks them, pushing every answer
+   towards a coin flip. The stop is checked before the target, so a bar touching both counts
+   as the stop.
 3. The verdict compares how often the target came first, among replays that hit one side,
    with the share needed to break even: 1 in (1 + R).
 
@@ -24,6 +27,7 @@ MIN_SESSIONS = 20
 REPLAYS = 10_000
 SEED = 19
 WINDOW = 2
+BLOCK = 6  # Bars drawn in a row from one past day.
 COIN_FLIP = 0.05
 STRONG = 0.15
 
@@ -57,6 +61,7 @@ def simulate(
     long: bool,
     replays: int = REPLAYS,
     seed: int = SEED,
+    block: int = BLOCK,
 ) -> dict:
     """Replay bars after+1 .. last. Returns the odds and the average R."""
     rng = np.random.default_rng(seed)
@@ -65,9 +70,12 @@ def simulate(
     price = np.full(replays, float(entry))
     outcome = np.zeros(replays, dtype=int)  # 0 open, 1 target, -1 stop
     days = ratios.shape[1]
-    for bar in range(after + 1, last + 1):
-        slots = np.clip(bar + rng.integers(-WINDOW, WINDOW + 1, replays), 1, SESSION_BARS - 1)
-        picks = ratios[slots, rng.integers(0, days, replays)]
+    for step, bar in enumerate(range(after + 1, last + 1)):
+        if step % block == 0:
+            shift = rng.integers(-WINDOW, WINDOW + 1, replays)
+            day = rng.integers(0, days, replays)
+        slots = np.clip(bar + shift, 1, SESSION_BARS - 1)
+        picks = ratios[slots, day]
         high, low, close = price * picks[:, 1], price * picks[:, 2], price * picks[:, 3]
         live = outcome == 0
         hit_stop = live & ((low <= stop) if long else (high >= stop))

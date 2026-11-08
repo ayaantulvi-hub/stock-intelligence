@@ -50,7 +50,12 @@ class AlpacaProvider:
         raise RateLimited("Alpaca bars: rate limit reached (HTTP 429)")
 
     def minute_bars(
-        self, symbols: tuple[str, ...], start: datetime, end: datetime, timeframe: str = "1Min"
+        self,
+        symbols: tuple[str, ...],
+        start: datetime,
+        end: datetime,
+        timeframe: str = "1Min",
+        adjustment: str = "split",
     ) -> tuple[dict[str, pd.DataFrame], Provenance]:
         params = {
             "symbols": ",".join(symbols),
@@ -58,7 +63,7 @@ class AlpacaProvider:
             "start": start.astimezone(UTC).isoformat(),
             "end": end.astimezone(UTC).isoformat(),
             "feed": "iex",
-            "adjustment": "split",
+            "adjustment": adjustment,
             "limit": 10000,
         }
         rows: dict[str, list] = {symbol: [] for symbol in symbols}

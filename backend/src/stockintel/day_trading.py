@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import intraday, orb, timemachine
+from stockintel import intraday, market, news_watch, orb, timemachine
 from stockintel.config import get_settings
 from stockintel.providers.alpaca import AlpacaProvider
 from stockintel.providers.base import FeedError
@@ -26,7 +26,8 @@ MIN_TRADES = 30
 MIN_T = 3.0
 CACHE_SECONDS = 60
 STALE_MINUTES = 10
-RISK_SHARE = 0.01  # TJR: 1% to 3% a trade. The lowest is used.
+from stockintel.plan import MAX_RISK_SHARE as RISK_SHARE  # One limit everywhere: 1.5%.
+
 ORB_TEST_STOCKS = 30  # The opening-range test uses the largest stocks in the universe.
 ORB_SHOWN = 10
 ORB_REPLAYED = 5
@@ -38,6 +39,39 @@ _cache: dict = {}
 def provider() -> AlpacaProvider:
     settings = get_settings()
     return AlpacaProvider(settings.alpaca_api_key_id, settings.alpaca_api_secret_key)
+
+
+def event_days(engine: Engine) -> dict:
+    """Dates of the Fed's rate decisions and the big 8:30am releases, by date."""
+    query = """SELECT release_date AS day, name FROM economic_releases
+               UNION ALL SELECT decision_date, 'Fed rate decision' FROM fed_meetings"""
+    found: dict = {}
+    with engine.connect() as conn:
+        for row in conn.execute(text(query)):
+            found.setdefault(row.day, []).append(row.name)
+    return found
+
+
+def earnings_days(engine: Engine) -> dict[str, set]:
+    """Days each stock announced results (8-K item 2.02), and the day after, for late filers."""
+    query = """SELECT s.ticker, e.filing_date FROM filing_events e
+               JOIN securities s ON s.id = e.security_id WHERE e.items LIKE '%2.02%'"""
+    found: dict[str, set] = {}
+    with engine.connect() as conn:
+        for row in conn.execute(text(query)):
+            days = found.setdefault(row.ticker, set())
+            days.add(row.filing_date)
+            days.add(row.filing_date + timedelta(days=1))
+    return found
+
+
+def label_days(rows: list[dict], events: dict, earnings: dict[str, set]) -> list[dict]:
+    for row in rows:
+        day = pd.Timestamp(row["entered"]).tz_convert(NY).date()
+        row["event_day"] = "Release or Fed day" if day in events else "Ordinary day"
+        if row["symbol"] in earnings:
+            row["results_day"] = "Results day" if day in earnings[row["symbol"]] else "No results"
+    return rows
 
 
 def summarise(values: np.ndarray) -> dict:
@@ -67,7 +101,9 @@ def verdict(rows: list[dict]) -> dict:
     )
     by = {}
     if len(frame):
-        for column in ("confirmed_by", "level", "symbol"):
+        for column in ("confirmed_by", "level", "symbol", "event_day", "results_day"):
+            if column not in frame:
+                continue
             by[column] = {str(k): summarise(g.to_numpy()) for k, g in frame.groupby(column)["r"]}
         years = pd.to_datetime(frame["entered"], utc=True).dt.year
         by["year"] = {str(k): summarise(g.to_numpy()) for k, g in frame.groupby(years)["r"]}
@@ -122,7 +158,7 @@ def run_test(
     frames = {s: pd.concat(p, ignore_index=True) for s, p in parts.items() if p}
     if any(frames.get(s) is None or frames[s].empty for s in SYMBOLS):
         raise FeedError("Alpaca bars: no minute bars returned for SPY or QQQ")
-    rows = intraday.backtest(frames)
+    rows = label_days(intraday.backtest(frames), event_days(engine), {})
     result = verdict(rows)
     with engine.begin() as conn:
         conn.execute(
@@ -168,6 +204,7 @@ def _run_orb_test(engine: Engine, source, months: int, end: datetime) -> dict:
             high = max(f["time"].max() for f in frames.values()).date()
             first, last = min(first or low, low), max(last or high, high)
         rows += orb.backtest(frames)
+    rows = label_days(rows, event_days(engine), earnings_days(engine))
     if provenance is None or first is None:
         raise FeedError("Alpaca bars: no 5-minute bars returned for the opening-range test")
     result = verdict(rows)
@@ -280,7 +317,9 @@ def today(engine: Engine, source=None, now: datetime | None = None) -> dict:
                 "setups": [plan_for(t) for t in trades],
             }
         )
+    events = event_days(engine).get(day, [])
     result = {
+        "events": events,
         "session": day.isoformat(),
         "window": window_times(day),
         "next_window": window_times(next_weekday(ny_now)),
@@ -299,9 +338,28 @@ def today(engine: Engine, source=None, now: datetime | None = None) -> dict:
         result["orb"] = scan_orb(engine, source, day, now)
     except FeedError as exc:
         result["orb"] = {"error": str(exc)}
+    add_cautions(engine, result, day, events)
     result["orb_test"] = latest_test(engine, "ORB")
     _cache["today"] = (clock.monotonic(), result)
     return result
+
+
+def add_cautions(engine: Engine, result: dict, day, events: list[str]) -> None:
+    """Reasons to be careful with each setup: a release day, results day or bad news."""
+    warnings = news_watch.stock_warnings(engine, day)
+    market_wide = news_watch.warnings(engine, day).get("Whole market")
+    results = earnings_days(engine)
+    setups = [s for stock in result["stocks"] for s in stock["setups"]]
+    setups += result.get("orb", {}).get("setups", []) or []
+    for setup in setups:
+        notes = [f"{name} today: prices can jump at the release" for name in events]
+        if day in results.get(setup["ticker"], set()):
+            notes.append("Results announced today or last night: moves can be much bigger")
+        if setup["ticker"] in warnings:
+            notes.append(f"News warning: {warnings[setup['ticker']]}")
+        if market_wide and setup["ticker"] in ("SPY", "QQQ"):
+            notes.append(f"News warning for the whole market: {market_wide['title']}")
+        setup["cautions"] = notes
 
 
 def completed(frame: pd.DataFrame, now: datetime, minutes: int) -> pd.DataFrame:
@@ -408,11 +466,11 @@ def scan_orb(engine: Engine, source, day, now) -> dict:
 
 
 def next_weekday(ny_now: pd.Timestamp):
-    """The next weekday whose window hasn't ended. Holidays aren't skipped here."""
+    """The next trading day whose window hasn't ended, skipping weekends and NYSE holidays."""
     day = ny_now.date()
     if ny_now.time() >= intraday.WINDOW[1]:
         day += timedelta(days=1)
-    while day.weekday() >= 5:
+    while not market.is_session(day):
         day += timedelta(days=1)
     return day
 

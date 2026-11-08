@@ -28,8 +28,10 @@ from stockintel.providers.base import (
 )
 from stockintel.providers.fed import FedProvider
 from stockintel.providers.federal_register import FederalRegisterProvider
+from stockintel.providers.finra import FinraProvider
 from stockintel.providers.fred import FredProvider
 from stockintel.providers.groq import GroqProvider
+from stockintel.providers.house import HouseProvider
 from stockintel.providers.news import NewsProvider
 from stockintel.providers.sec import SecProvider
 from stockintel.providers.tiingo import TiingoProvider
@@ -59,6 +61,7 @@ ECONOMIC_SERIES = (
     "DCOILWTICO",
     "T10YIE",
     "ICSA",
+    "DTWEXBGS",
 )
 FIRST_FED_YEAR = 2009
 FIRST_FLOAT_YEAR = 2009
@@ -77,6 +80,7 @@ CURRENT_VALUES_ONLY = {
     "DCOILWTICO",
     "T10YIE",
     "ICSA",
+    "DTWEXBGS",
 }
 FIRST_POLICY_YEAR = 2010
 MARKET_FUNDS = ("SPY", "QQQ", "DIA")
@@ -853,6 +857,155 @@ def run_economic(engine: Engine, provider: EconomicProvider) -> str:
     return run.finish()
 
 
+RELEASES = {"Inflation figures (CPI)": "CPIAUCSL", "Jobs report": "PAYEMS"}
+RELEASES_FROM = date(2015, 1, 1)
+
+
+def run_releases(engine: Engine, provider) -> str:
+    """Past and scheduled dates of the market-moving economic releases."""
+    run = Run(engine, "releases")
+    for name, series in RELEASES.items():
+        run.attempted += 1
+        try:
+            days, provenance = provider.release_dates(series, RELEASES_FROM)
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        with engine.begin() as conn:
+            fetch_id = add_fetch(conn, provenance)
+            added = conn.execute(
+                text(
+                    """INSERT INTO economic_releases (name, release_date, fetch_id)
+                       VALUES (:name, :day, :fetch_id) ON CONFLICT DO NOTHING"""
+                ),
+                [{"name": name, "day": day, "fetch_id": fetch_id} for day in days],
+            ).rowcount
+        run.ok += 1
+        run.added += max(added, 0)
+    return run.finish()
+
+
+SHORT_LOOKBACK = timedelta(days=60)
+
+
+def run_short_interest(engine: Engine, provider, now: datetime) -> str:
+    """The latest short interest for every tracked stock, from FINRA."""
+    run = Run(engine, "short interest")
+    with engine.connect() as conn:
+        stocks = {
+            row.ticker.replace("-", "."): row.id
+            for row in conn.execute(text("SELECT id, ticker FROM securities"))
+        }
+    run.attempted = len(stocks)
+    try:
+        rows, provenance = provider.short_interest(
+            sorted(stocks), (now - SHORT_LOOKBACK).date(), now.date()
+        )
+    except FeedError as exc:
+        return run.finish(str(exc))
+    found = [r for r in rows if r.symbol in stocks]
+    with engine.begin() as conn:
+        fetch_id = add_fetch(conn, provenance)
+        for row in found:
+            run.added += conn.execute(
+                text(
+                    """INSERT INTO short_interest (security_id, settlement_date, short_shares,
+                         previous_short_shares, avg_daily_volume, days_to_cover, fetch_id)
+                       VALUES (:id, :day, :short, :previous, :volume, :cover, :fetch_id)
+                       ON CONFLICT DO NOTHING"""
+                ),
+                {
+                    "id": stocks[row.symbol],
+                    "day": row.settlement_date,
+                    "short": row.short_shares,
+                    "previous": row.previous_short_shares,
+                    "volume": row.avg_daily_volume,
+                    "cover": row.days_to_cover,
+                    "fetch_id": fetch_id,
+                },
+            ).rowcount
+    run.ok = len({r.symbol for r in found})
+    return run.finish()
+
+
+CONGRESS_FIRST_DAYS = 120
+
+
+def run_congress(engine: Engine, provider, now: datetime, limit: int) -> str:
+    """New House trade reports, newest first. The first run reads the last 120 days only."""
+    run = Run(engine, "congress")
+    reports = []
+    for year in (now.year - 1, now.year):
+        try:
+            found, _ = provider.reports(year)
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        reports += found
+    if not reports:
+        return run.finish()
+    with engine.connect() as conn:
+        seen = set(conn.execute(text("SELECT doc_id FROM congress_reports")).scalars())
+    cutoff = (now - timedelta(days=CONGRESS_FIRST_DAYS)).date()
+    todo = sorted(
+        (r for r in reports if r.doc_id not in seen and r.filed and r.filed >= cutoff),
+        key=lambda r: r.filed,
+        reverse=True,
+    )[:limit]
+    for report in todo:
+        run.attempted += 1
+        try:
+            trades = provider.trades(report)
+            note, ok = None, True
+        except FeedError as exc:
+            trades, note, ok = [], str(exc), False
+            run.errors.append(f"{report.doc_id}: {exc}")
+        with engine.begin() as conn:
+            fetch_id = add_fetch(
+                conn, Provenance("House Clerk", report.url, datetime.now(UTC), "end_of_day")
+            )
+            for trade in trades:
+                run.added += conn.execute(
+                    text(
+                        """INSERT INTO congress_trades (doc_id, member, owner, ticker, asset,
+                             action, trade_date, filed_date, amount, days_to_file, url, fetch_id)
+                           VALUES (:doc, :member, :owner, :ticker, :asset, :action, :trade_date,
+                             :filed, :amount, :days, :url, :fetch_id)
+                           ON CONFLICT DO NOTHING"""
+                    ),
+                    {
+                        "doc": report.doc_id,
+                        "member": report.member,
+                        "owner": trade["owner"],
+                        "ticker": trade["ticker"],
+                        "asset": trade["asset"],
+                        "action": trade["action"],
+                        "trade_date": trade["trade_date"],
+                        "filed": report.filed,
+                        "amount": trade["amount"],
+                        "days": trade["days_to_file"],
+                        "url": report.url,
+                        "fetch_id": fetch_id,
+                    },
+                ).rowcount
+            conn.execute(
+                text(
+                    """INSERT INTO congress_reports (doc_id, member, filed_date, read_ok, note)
+                       VALUES (:doc, :member, :filed, :ok, :note) ON CONFLICT DO NOTHING"""
+                ),
+                {
+                    "doc": report.doc_id,
+                    "member": report.member,
+                    "filed": report.filed,
+                    "ok": ok,
+                    "note": note,
+                },
+            )
+        if ok:
+            run.ok += 1
+    return run.finish()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -871,6 +1024,9 @@ def main() -> None:
             "funds",
             "judge",
             "fed",
+            "releases",
+            "short",
+            "congress",
         ],
     )
     parser.add_argument("--limit", type=int, default=45, help="stocks or documents per run")
@@ -911,6 +1067,12 @@ def main() -> None:
             status = run_facts(engine, SecProvider(settings.sec_contact_email))
         elif args.feed == "insiders":
             status = run_insiders(engine, SecProvider(settings.sec_contact_email), now, args.limit)
+        elif args.feed == "releases":
+            status = run_releases(engine, FredProvider(settings.fred_api_key))
+        elif args.feed == "short":
+            status = run_short_interest(engine, FinraProvider(), now)
+        elif args.feed == "congress":
+            status = run_congress(engine, HouseProvider(), now, args.limit)
         elif args.feed == "filings":
             status = run_filings(engine, SecProvider(settings.sec_contact_email), now)
         else:

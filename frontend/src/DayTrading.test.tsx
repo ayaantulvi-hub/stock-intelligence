@@ -55,3 +55,9 @@ test("missing replay history says Not verified", async () => {
   render(<ReplayBox replay={null} />);
   expect(screen.getByText(/Not verified/)).toBeTruthy();
 });
+
+test("release days and cautions are shown in red", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ status: 200, json: async () => ({ test: null, events: ["Inflation figures (CPI)"], stocks: [] }) })));
+  render(<DayTradingPage />);
+  expect(await screen.findByText(/Today: Inflation figures \(CPI\)/)).toBeTruthy();
+});

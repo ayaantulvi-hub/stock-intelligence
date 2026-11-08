@@ -50,7 +50,8 @@ def engine(migrated, database_url):
                    insider_documents, factor_tests, positions,
                    model_comparisons, historic_float, fed_meetings, alerts,
                    watchlist, practice_trades, journal_entries, stop_studies, stop_changes,
-                   closed_trades, day_trade_tests,
+                   closed_trades, day_trade_tests, economic_releases,
+                   short_interest, congress_trades, congress_reports, override_tests,
                    factor_weights RESTART IDENTITY CASCADE"""
             )
         )

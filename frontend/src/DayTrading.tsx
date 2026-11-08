@@ -14,6 +14,7 @@ type Replay = {
   history?: { sessions: number; triggered: number; target: number; stop: number; avg_r: number | null };
 } | null;
 type Setup = {
+  cautions?: string[];
   replay?: Replay;
   ticker: string;
   side: "long" | "short";
@@ -44,6 +45,7 @@ type Test = {
   win_rate: number | null;
   baseline_mean_r: number | null;
   verdict: string;
+  detail?: { event_day?: Record<string, { trades: number; mean_r: number | null }>; results_day?: Record<string, { trades: number; mean_r: number | null }> };
 };
 type Orb = {
   error?: string;
@@ -52,6 +54,7 @@ type Orb = {
   setups?: (Setup & { range_high: number; range_low: number; price: number })[];
 };
 export type DayData = {
+  events?: string[];
   orb?: Orb;
   orb_test?: Test | null;
   error?: string;
@@ -151,6 +154,24 @@ function TestLine({ name, test }: { name: string; test?: Test | null }) {
             : `No reliable edge. In ${test.trades} past trades it made ${test.mean_r === null ? "Not verified" : test.mean_r.toFixed(2)} times the risk on average, against ${test.baseline_mean_r === null ? "Not verified" : test.baseline_mean_r.toFixed(2)} for coin-flip trades. Practice only.`}
       </b>
       {test && ` Tested on ${test.data_from} to ${test.data_to}.`}
+      {test?.detail?.event_day && (
+        <>
+          {" "}
+          {Object.entries(test.detail.event_day)
+            .map(([k, v]) => `${k}s: ${v.trades} trades, ${v.mean_r === null ? "Not verified" : v.mean_r.toFixed(2)} times the risk`)
+            .join(". ")}
+          .
+        </>
+      )}
+      {test?.detail?.results_day && (
+        <>
+          {" "}
+          {Object.entries(test.detail.results_day)
+            .map(([k, v]) => `${k}: ${v.trades} trades, ${v.mean_r === null ? "Not verified" : v.mean_r.toFixed(2)} times the risk`)
+            .join(". ")}
+          .
+        </>
+      )}
     </p>
   );
 }
@@ -165,6 +186,13 @@ function SetupCard({ setup, account, share }: { setup: Setup; account: number; s
         {buy ? "Buy" : "Sell short"} {setup.ticker} at {clockTime(setup.entered_at)}
         {finished && ` — finished: ${setup.result}, ${setup.r === null ? "" : `${setup.r.toFixed(2)} times the risk`}`}
       </h4>
+      {setup.cautions && setup.cautions.length > 0 && (
+        <ul className="bad">
+          {setup.cautions.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      )}
       <p>
         Why: price reached <b>{setup.level}</b>, confirmed by <b>{setup.confirmed_by}</b>{setup.ticker === "SPY" || setup.ticker === "QQQ" ? ", then a 1-minute signal" : ""}.
       </p>
@@ -235,6 +263,11 @@ export function DayTradingPage() {
         <input type="number" min="0" value={account} onChange={(e) => change(e.target.value)} />
       </label>
       {failed && <p className="bad">Could not load day trading. Refresh to try again.</p>}
+      {data?.events && data.events.length > 0 && (
+        <p className="bad">
+          <b>Today: {data.events.join(", ")}.</b> Prices can jump at the release, and stops may fill worse than planned.
+        </p>
+      )}
       {data?.error && <p className="bad">Live prices unavailable: {data.error}. Nothing below is shown until this is fixed.</p>}
       {data?.stale && <p className="bad">The latest prices are more than 10 minutes old, so no setups are shown.</p>}
       {data?.stocks?.map((stock) => (

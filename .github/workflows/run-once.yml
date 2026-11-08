@@ -1,0 +1,40 @@
+name: Run one step
+# Runs a single light step on demand, to check it without the full hourly job.
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: Which step
+        type: choice
+        options: [releases, short, congress, cross-check, overrides, economic]
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --no-dev
+      - run: uv run --no-dev alembic upgrade head
+      - if: inputs.step == 'congress'
+        run: sudo apt-get install -y -qq poppler-utils
+      - if: inputs.step == 'releases' || inputs.step == 'short' || inputs.step == 'economic'
+        run: uv run --no-dev python -m stockintel.ingest ${{ inputs.step }}
+      - if: inputs.step == 'congress'
+        run: uv run --no-dev python -m stockintel.ingest congress --limit 100
+      - if: inputs.step == 'cross-check'
+        run: uv run --no-dev python -m stockintel.conflicts
+      - if: inputs.step == 'overrides'
+        run: uv run --no-dev python -m stockintel.overrides
+      - if: always()
+        run: uv run --no-dev python -m stockintel.report

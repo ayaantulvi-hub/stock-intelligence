@@ -950,6 +950,7 @@ type Week = {
   past_sell_date: string[];
   model_calls: number;
   model_right: number;
+  model_usual?: number;
   model_in_range: number;
 };
 type PlanData = { checks: PlanCheck[]; paused: boolean; week: Week };
@@ -1019,7 +1020,7 @@ export function WeeklyReview() {
           <tr><td>Worst sale</td><td>{week.worst ? `${week.worst.ticker} ${money(week.worst.result)}` : "None"}</td></tr>
           <tr><td>Stops moved further away</td><td className={week.widened.length ? "bad" : "ok"}>{week.widened.length ? week.widened.join(", ") : "None"}</td></tr>
           <tr><td>Held past the sell date</td><td className={week.past_sell_date.length ? "bad" : "ok"}>{week.past_sell_date.length ? week.past_sell_date.join(", ") : "None"}</td></tr>
-          <tr><td>Model's next-day calls</td><td>{week.model_calls === 0 ? "None scored" : `${week.model_right} of ${week.model_calls} right, ${week.model_in_range} inside the range`}</td></tr>
+          <tr><td>Model's next-day calls</td><td>{week.model_calls === 0 ? "None scored" : `${week.model_right} of ${week.model_calls} right, against ${week.model_usual ?? "Not verified"} for always guessing the most common outcome. ${week.model_in_range} inside the range.`}</td></tr>
           <tr><td>Pause new buys?</td><td className={data.paused ? "bad" : "ok"}>{data.paused ? "Yes: 3 losing sales in a row" : "No"}</td></tr>
         </tbody>
       </table>

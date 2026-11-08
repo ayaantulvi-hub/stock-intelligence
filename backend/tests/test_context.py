@@ -57,7 +57,15 @@ def test_big_picture_says_not_verified_with_no_data(engine):
     result = context.build(engine, date(2026, 11, 5))
     assert result["actions"] == []
     assert result["cards"][0]["reading"] == "Not verified"
-    assert result["cards"][3]["title"] == "US elections"
+    assert result["cards"][3]["title"] == "US dollar"
+    assert result["cards"][3]["reading"] == "Not verified"
+    assert result["cards"][4]["title"] == "US elections"
+
+
+def test_dollar_card_reads_the_month():
+    assert context.dollar(124.0, 120.0, date(2026, 11, 1))["state"] == context.BAD
+    assert context.dollar(118.0, 121.0, date(2026, 11, 1))["state"] == context.GOOD
+    assert context.dollar(120.5, 120.0, date(2026, 11, 1))["state"] == context.NEUTRAL
 
 
 def responses(results, total_pages=1):

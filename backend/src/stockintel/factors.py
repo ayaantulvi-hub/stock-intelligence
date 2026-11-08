@@ -171,6 +171,13 @@ REGISTER = [
         "credit_spread", "Corporate borrowing premium", "Economy", "Moody's, through FRED", LIVE
     ),
     Factor("oil_20d", "Oil price, 20-day change", "Economy", "EIA, through FRED", LIVE),
+    Factor(
+        "dollar_20d",
+        "US dollar, 20-day change",
+        "Economy",
+        "Federal Reserve broad dollar index, through FRED",
+        LIVE,
+    ),
     Factor("inflation_expected", "Expected inflation", "Economy", "Through FRED", LIVE),
     Factor(
         "jobless_claims",
@@ -372,6 +379,7 @@ MARKET_WIDE = {
     "vix",
     "credit_spread",
     "oil_20d",
+    "dollar_20d",
     "inflation_expected",
     "jobless_claims",
     "fomc",

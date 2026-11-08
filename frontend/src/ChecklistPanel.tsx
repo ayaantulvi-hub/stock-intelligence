@@ -252,10 +252,17 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
           Journal before buying again.
         </p>
       )}
-      <p className="plain">
-        <b>Buy these now. Sell them all on {plan.sell_by ?? "Not verified"}.</b>
-        {!plan.proven && " The model hasn't passed its test yet, so this is a guess."}
-      </p>
+      {plan.proven ? (
+        <p className="plain">
+          <b>Buy these now. Sell them all on {plan.sell_by ?? "Not verified"}.</b>
+        </p>
+      ) : (
+        <p className="bad">
+          <b>Unproven ranking, not a tested buy list.</b> These are the model's top 10, but the
+          model hasn't beaten chance in testing. If you practise with them, sell them all on{" "}
+          {plan.sell_by ?? "Not verified"}.
+        </p>
+      )}
       <div className="scroll">
         <table>
           <thead>

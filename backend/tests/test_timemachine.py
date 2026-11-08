@@ -81,3 +81,12 @@ def test_backtest_skips_short_days_and_compares_with_chance():
     assert 0 < len(rows) <= 20
     assert all(row["entered"].time() <= time(15, 30) for row in rows)
     assert all("random_r" in row for row in rows)
+
+
+def test_runs_of_bars_keep_streaks_that_single_bars_break():
+    up = [session(f"2026-10-{d:02d}", 100 * 1.003 ** np.arange(78)) for d in range(1, 13)]
+    down = [session(f"2026-10-{d:02d}", 100 * 0.997 ** np.arange(78)) for d in range(13, 25)]
+    ratios = timemachine.pool([d.iloc[:, 1:5].to_numpy() for d in up + down])
+    runs = timemachine.simulate(ratios, 100, 50, 200, 10, 76, long=True, replays=3000)
+    single = timemachine.simulate(ratios, 100, 50, 200, 10, 76, long=True, replays=3000, block=1)
+    assert runs["close_high"] - runs["close_low"] > 2 * (single["close_high"] - single["close_low"])
