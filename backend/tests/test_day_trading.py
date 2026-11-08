@@ -190,3 +190,29 @@ def test_scanner_finds_breakouts_maps_symbols_and_skips_the_forming_bar(engine):
     assert [hit["ticker"] for hit in result["setups"]] == ["BRK-B"]
     assert result["setups"][0]["side"] == "long" and result["setups"][0]["entry"] == 103.0
     assert result["setups"][0]["replay"] is None  # Too little history for 10,000 replays.
+
+
+def test_alpaca_waits_and_retries_after_the_rate_limit():
+    answers = [httpx.Response(429), httpx.Response(200, json={"bars": {}, "next_page_token": None})]
+    waits = []
+    source = AlpacaProvider(
+        "id",
+        "secret",
+        httpx.Client(transport=httpx.MockTransport(lambda r: answers.pop(0))),
+        sleep=waits.append,
+    )
+    source.minute_bars(("SPY",), NOW, NOW)
+    assert 60 in waits and not answers
+
+
+def test_alpaca_gives_up_after_repeated_limits():
+    from stockintel.providers.base import RateLimited
+
+    source = AlpacaProvider(
+        "id",
+        "secret",
+        httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(429))),
+        sleep=lambda s: None,
+    )
+    with pytest.raises(RateLimited):
+        source.minute_bars(("SPY",), NOW, NOW)

@@ -6,24 +6,48 @@ plan gives real-time IEX data and history back to 2016, at 200 requests a minute
 trading, so a minute's high or low can differ from consolidated prices.
 """
 
+import time
 from datetime import UTC, datetime
 
 import httpx
 import pandas as pd
 
-from stockintel.providers.base import FeedError, Provenance
+from stockintel.providers.base import FeedError, Provenance, RateLimited
 from stockintel.providers.http import get_json
 
 BARS = "https://data.alpaca.markets/v2/stocks/bars"
+GAP = 0.35  # Seconds between requests: about 170 a minute, under the free 200.
+RETRIES = 3
+WAIT = 60  # Seconds to wait after a 429, once the minute's allowance resets.
 
 
 class AlpacaProvider:
-    def __init__(self, key_id: str, secret: str, client: httpx.Client | None = None):
+    def __init__(
+        self, key_id: str, secret: str, client: httpx.Client | None = None, sleep=time.sleep
+    ):
         if not key_id or not secret:
             raise FeedError("Alpaca: ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY are not set")
         self.client = client or httpx.Client(timeout=30)
         # Keys travel in headers, so stored source URLs contain no secret.
         self.headers = {"APCA-API-KEY-ID": key_id, "APCA-API-SECRET-KEY": secret}
+        self.sleep = sleep
+        self.last = 0.0
+
+    def _get(self, params: dict) -> object:
+        for attempt in range(RETRIES + 1):
+            wait = GAP - (time.monotonic() - self.last)
+            if wait > 0:
+                self.sleep(wait)
+            self.last = time.monotonic()
+            try:
+                return get_json(
+                    self.client, BARS, "Alpaca bars", params=params, headers=self.headers
+                )
+            except RateLimited:
+                if attempt == RETRIES:
+                    raise
+                self.sleep(WAIT)
+        raise RateLimited("Alpaca bars: rate limit reached (HTTP 429)")
 
     def minute_bars(
         self, symbols: tuple[str, ...], start: datetime, end: datetime, timeframe: str = "1Min"
@@ -39,7 +63,7 @@ class AlpacaProvider:
         }
         rows: dict[str, list] = {symbol: [] for symbol in symbols}
         while True:
-            data = get_json(self.client, BARS, "Alpaca bars", params=params, headers=self.headers)
+            data = self._get(params)
             if not isinstance(data, dict):
                 raise FeedError("Alpaca bars: expected an object")
             for symbol, bars in (data.get("bars") or {}).items():
