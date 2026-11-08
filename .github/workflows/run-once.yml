@@ -6,7 +6,7 @@ on:
       step:
         description: Which step
         type: choice
-        options: [releases, short, congress, cross-check, overrides, economic]
+        options: [releases, short, congress, cross-check, overrides, economic, sizes]
 permissions:
   contents: read
 jobs:
@@ -36,5 +36,7 @@ jobs:
         run: uv run --no-dev python -m stockintel.conflicts
       - if: inputs.step == 'overrides'
         run: uv run --no-dev python -m stockintel.overrides
+      - if: inputs.step == 'sizes'
+        run: uv run --no-dev python -m stockintel.sizes
       - if: always()
         run: uv run --no-dev python -m stockintel.report
