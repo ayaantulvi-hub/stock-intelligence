@@ -49,7 +49,8 @@ def engine(migrated, database_url):
                    forecast_scores, company_facts, insider_transactions,
                    insider_documents, factor_tests, positions,
                    model_comparisons, historic_float, fed_meetings, alerts,
-                   watchlist, practice_trades, journal_entries, stop_studies,
+                   watchlist, practice_trades, journal_entries, stop_studies, stop_changes,
+                   closed_trades,
                    factor_weights RESTART IDENTITY CASCADE"""
             )
         )

@@ -210,3 +210,5 @@ td.wrap { white-space: normal; min-width: 190px; }
 .timer { margin: 12px 0 0; }
 .timer strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
 .market-line { color: var(--muted); }
+ul.plan { list-style: none; padding-left: 0; }
+ul.plan li { margin: 0.35rem 0; }

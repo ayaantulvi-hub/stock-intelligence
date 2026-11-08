@@ -625,6 +625,7 @@ export function PortfolioPage() {
     <section>
       <h2>My portfolio</h2>
       <HoldingsToday />
+      <TradingPlan />
       <div className="glance">
         <div>
           <small>Worth</small>
@@ -703,6 +704,7 @@ export function JournalPage() {
   return (
     <section>
       <h2>Trade journal</h2>
+      <WeeklyReview />
       <p>Write down why before you decide, then see what happened. Entries can't be edited.</p>
       <form onSubmit={save} className="inputs">
         <label>
@@ -931,6 +933,97 @@ export function ReliabilityPage() {
         </>
       )}
       <IdeasPanel part="record" />
+    </section>
+  );
+}
+
+type PlanCheck = { rule: string; state: "pass" | "fail" | "caution"; text: string };
+type Week = {
+  sales: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  net: number | null;
+  best: { ticker: string; result: number } | null;
+  worst: { ticker: string; result: number } | null;
+  widened: string[];
+  past_sell_date: string[];
+  model_calls: number;
+  model_right: number;
+  model_in_range: number;
+};
+type PlanData = { checks: PlanCheck[]; paused: boolean; week: Week };
+
+const ACCOUNT_KEY = "account-size";
+
+function savedAccount() {
+  try {
+    return window.localStorage.getItem(ACCOUNT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function TradingPlan() {
+  const [account, setAccount] = useState(savedAccount);
+  const query = Number(account) > 0 ? `?account=${Number(account)}` : "";
+  const { data, failed } = useData<PlanData>(`/api/plan${query}`);
+  const change = (value: string) => {
+    setAccount(value);
+    try {
+      window.localStorage.setItem(ACCOUNT_KEY, value);
+    } catch {
+      // The page still works without saving the number.
+    }
+  };
+  if (failed) return <Failed />;
+  if (!data || data.checks.length === 0) return null;
+  const broken = data.checks.filter((check) => check.state === "fail").length;
+  return (
+    <section className="orders">
+      <h2>Your trading plan</h2>
+      <p className="plain">
+        <b>{broken === 0 ? "You're following the plan." : `${broken} plan ${broken === 1 ? "rule is" : "rules are"} broken.`}</b>{" "}
+        Checked by the tool each update. These are risk rules, not forecasts.
+      </p>
+      <ul className="plan">
+        {data.checks.map((check) => (
+          <li key={check.rule + check.text} className={check.state === "pass" ? "ok" : "bad"}>
+            <b>{check.state === "pass" ? "✓" : check.state === "fail" ? "✗" : "!"} {check.rule}:</b> {check.text}
+          </li>
+        ))}
+      </ul>
+      <label className="inputs">
+        Account size in $ (optional, for the 2% risk rule)
+        <input type="number" min="0" value={account} onChange={(e) => change(e.target.value)} />
+      </label>
+    </section>
+  );
+}
+
+export function WeeklyReview() {
+  const { data, failed } = useData<PlanData>("/api/plan");
+  if (failed) return <Failed />;
+  if (!data) return null;
+  const week = data.week;
+  return (
+    <section>
+      <h3>This week's review</h3>
+      <p>The last 7 days, filled in by the tool. Sale prices are the closing price on the day you removed the stock, so they're close but not exact.</p>
+      <table>
+        <tbody>
+          <tr><td>Stocks sold</td><td>{week.sales === 0 ? "None" : `${week.sales}: ${week.wins} won, ${week.losses} lost`}</td></tr>
+          <tr><td>Win rate</td><td>{pct(week.win_rate)}</td></tr>
+          <tr><td>Net profit or loss</td><td className={(week.net ?? 0) >= 0 ? "ok" : "bad"}>{week.net === null ? "None" : money(week.net)}</td></tr>
+          <tr><td>Best sale</td><td>{week.best ? `${week.best.ticker} ${money(week.best.result)}` : "None"}</td></tr>
+          <tr><td>Worst sale</td><td>{week.worst ? `${week.worst.ticker} ${money(week.worst.result)}` : "None"}</td></tr>
+          <tr><td>Stops moved further away</td><td className={week.widened.length ? "bad" : "ok"}>{week.widened.length ? week.widened.join(", ") : "None"}</td></tr>
+          <tr><td>Held past the sell date</td><td className={week.past_sell_date.length ? "bad" : "ok"}>{week.past_sell_date.length ? week.past_sell_date.join(", ") : "None"}</td></tr>
+          <tr><td>Model's next-day calls</td><td>{week.model_calls === 0 ? "None scored" : `${week.model_right} of ${week.model_calls} right, ${week.model_in_range} inside the range`}</td></tr>
+          <tr><td>Pause new buys?</td><td className={data.paused ? "bad" : "ok"}>{data.paused ? "Yes: 3 losing sales in a row" : "No"}</td></tr>
+        </tbody>
+      </table>
+      <p>Then write one lesson below: what you'd do differently next week.</p>
     </section>
   );
 }

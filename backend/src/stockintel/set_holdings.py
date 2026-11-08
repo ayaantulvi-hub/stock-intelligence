@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from stockintel.db import get_engine
-from stockintel.queries import save_position
+from stockintel.queries import close_positions, save_position
 
 
 def apply(engine: Engine, items: list[dict]) -> list[str]:
@@ -32,13 +32,16 @@ def apply(engine: Engine, items: list[dict]) -> list[str]:
     if unknown:
         raise ValueError(f"Not tracked, so nothing was changed: {', '.join(unknown)}")
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                """DELETE FROM positions WHERE security_id NOT IN
-                   (SELECT id FROM securities WHERE ticker = ANY(:t))"""
-            ),
-            {"t": tickers},
+        gone = list(
+            conn.execute(
+                text(
+                    """SELECT security_id FROM positions WHERE security_id NOT IN
+                       (SELECT id FROM securities WHERE ticker = ANY(:t))"""
+                ),
+                {"t": tickers},
+            ).scalars()
         )
+        close_positions(conn, gone)
     for item in items:
         save_position(
             engine,

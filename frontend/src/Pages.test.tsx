@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { BigPicture, HoldingsToday, MarketStrip, PortfolioPage, ReliabilityPage, Screener, WhatChanged, countdown } from "./Pages";
+import { BigPicture, HoldingsToday, MarketStrip, PortfolioPage, ReliabilityPage, Screener, TradingPlan, WhatChanged, countdown } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -174,4 +174,18 @@ test("the market strip shows today's move and compares your stocks", async () =>
   expect(await screen.findByText("-1.00%")).toBeTruthy();
   expect(screen.getByText("Not verified")).toBeTruthy();
   expect(screen.getByText("-6.60%")).toBeTruthy();
+});
+
+test("the trading plan shows broken rules in red", async () => {
+  respond({
+    paused: false,
+    week: {},
+    checks: [
+      { rule: "A stop on every holding", state: "fail", text: "No stop on AAA." },
+      { rule: "Risk per holding", state: "pass", text: "Fine." },
+    ],
+  });
+  render(<TradingPlan />);
+  expect(await screen.findByText(/1 plan rule is broken/)).toBeTruthy();
+  expect(screen.getByText(/No stop on AAA/).closest("li")?.className).toBe("bad");
 });

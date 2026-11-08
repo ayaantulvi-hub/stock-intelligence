@@ -17,6 +17,7 @@ from stockintel import (
     horizons,
     longterm,
     news_watch,
+    plan,
     signals,
     stops,
     tools,
@@ -427,13 +428,21 @@ def orders(engine: Engine) -> dict:
                 "name": card["name"],
                 "price": card["price"],
                 "stop": levels["stop"] if levels else None,
+                "max_price": plan.not_chasing(card["price"], levels.get("atr")) if levels else None,
             }
         )
     sell_by = None
     if target is not None:
         days = sessions_between(target, target + timedelta(days=HOLD_SESSIONS * 2))
         sell_by = days[HOLD_SESSIONS] if len(days) > HOLD_SESSIONS else None
-    return {"session": target, "sell_by": sell_by, "proven": found["edge"], "orders": rows}
+    streak = plan.losing_streak(engine)
+    return {
+        "session": target,
+        "sell_by": sell_by,
+        "proven": found["edge"],
+        "orders": rows,
+        "paused": streak >= plan.LOSING_STREAK,
+    }
 
 
 def track_record(engine: Engine) -> dict:
@@ -573,7 +582,27 @@ def get_position(engine: Engine, ticker: str) -> dict | None:
 
 
 def save_position(engine: Engine, ticker: str, values: dict) -> bool:
+    """Save a holding. A changed stop is logged, so a widened stop shows in the weekly review."""
     with engine.begin() as conn:
+        before = conn.execute(
+            text(
+                """SELECT s.id, p.stop_price, p.security_id IS NOT NULL AS held
+                   FROM securities s LEFT JOIN positions p ON p.security_id = s.id
+                   WHERE s.ticker = :t"""
+            ),
+            {"t": ticker.upper()},
+        ).first()
+        if before is None:
+            return False
+        new_stop = values.get("stop_price")
+        if before.held and before.stop_price != new_stop:
+            conn.execute(
+                text(
+                    """INSERT INTO stop_changes (security_id, old_stop, new_stop)
+                       VALUES (:id, :old, :new)"""
+                ),
+                {"id": before.id, "old": before.stop_price, "new": new_stop},
+            )
         return bool(
             conn.execute(
                 text(
@@ -593,15 +622,31 @@ def save_position(engine: Engine, ticker: str, values: dict) -> bool:
         )
 
 
+def close_positions(conn, security_ids: list[int]) -> None:
+    """Remove holdings, recording each as a closed trade at the latest stored close."""
+    conn.execute(
+        text(
+            """INSERT INTO closed_trades (security_id, shares, buy_price, exit_price,
+                 exit_market_date)
+               SELECT p.security_id, p.shares, p.buy_price, b.close, b.market_date
+               FROM positions p LEFT JOIN LATERAL (
+                 SELECT close, market_date FROM price_bars WHERE security_id = p.security_id
+                 ORDER BY market_date DESC, id DESC LIMIT 1) b ON true
+               WHERE p.security_id = ANY(:ids)"""
+        ),
+        {"ids": security_ids},
+    )
+    conn.execute(text("DELETE FROM positions WHERE security_id = ANY(:ids)"), {"ids": security_ids})
+
+
 def delete_position(engine: Engine, ticker: str) -> None:
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                """DELETE FROM positions WHERE security_id =
-                   (SELECT id FROM securities WHERE ticker = :t)"""
-            ),
-            {"t": ticker.upper()},
+        ids = list(
+            conn.execute(
+                text("SELECT id FROM securities WHERE ticker = :t"), {"t": ticker.upper()}
+            ).scalars()
         )
+        close_positions(conn, ids)
 
 
 def stock_checklist(engine: Engine, ticker: str) -> list[dict] | None:
@@ -739,10 +784,10 @@ def suggested_levels(engine: Engine, ticker: str) -> dict | None:
         tested = _rows(
             conn.execute(
                 text(
-                    """SELECT stop_multiple, trades, avg_return, win_rate, worst_return,
-                         stopped_share FROM stop_studies
+                    """SELECT stop_multiple, trails AS trailing, trades, avg_return, win_rate,
+                         worst_return, stopped_share FROM stop_studies
                        WHERE run_at = (SELECT max(run_at) FROM stop_studies)
-                       ORDER BY stop_multiple NULLS FIRST"""
+                       ORDER BY stop_multiple NULLS FIRST, trails"""
                 )
             )
         )

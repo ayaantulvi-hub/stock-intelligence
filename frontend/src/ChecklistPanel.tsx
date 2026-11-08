@@ -31,6 +31,7 @@ type Suggested = {
 };
 type Tested = {
   stop_multiple: number | null;
+  trailing?: boolean;
   trades: number;
   avg_return: number;
   win_rate: number;
@@ -92,11 +93,11 @@ function Levels({ data, tested }: { data: Suggested | null; tested: Tested[] }) 
               </thead>
               <tbody>
                 {tested.map((row) => (
-                  <tr key={row.stop_multiple ?? 0}>
+                  <tr key={`${row.stop_multiple ?? 0}-${row.trailing ? "t" : "f"}`}>
                     <td>
                       {row.stop_multiple === null
                         ? "No stop"
-                        : `${row.stop_multiple} times daily range`}
+                        : `${row.stop_multiple} times daily range${row.trailing ? ", trailing" : ""}`}
                     </td>
                     <td>{(row.avg_return * 100).toFixed(1)}%</td>
                     <td>{(row.win_rate * 100).toFixed(0)}%</td>
@@ -207,8 +208,8 @@ export function OrderTicket({ stop, target, keep }: {
   );
 }
 
-type Planned = { ticker: string; name: string; price: number; stop: number | null };
-type Plan = { session: string | null; sell_by: string | null; proven: boolean; orders: Planned[] };
+type Planned = { ticker: string; name: string; price: number; stop: number | null; max_price?: number | null };
+type Plan = { session: string | null; sell_by: string | null; proven: boolean; orders: Planned[]; paused?: boolean };
 
 export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -245,6 +246,12 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
   if (plan.orders.length === 0) return <p>No orders yet. They appear after the next forecast.</p>;
   return (
     <>
+      {plan.paused && (
+        <p className="bad">
+          <b>Pause new buys.</b> Your last 3 sales were losses. Your plan says review them in the
+          Journal before buying again.
+        </p>
+      )}
       <p className="plain">
         <b>Buy these now. Sell them all on {plan.sell_by ?? "Not verified"}.</b>
         {!plan.proven && " The model hasn't passed its test yet, so this is a guess."}
@@ -255,6 +262,7 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
             <tr>
               <th>Stock</th>
               <th>Last close</th>
+              <th>Don't pay more than</th>
               <th>Stop loss price</th>
               <th>I bought it</th>
             </tr>
@@ -269,6 +277,7 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
                   {row.name}
                 </td>
                 <td>{row.price.toFixed(2)}</td>
+                <td>{row.max_price == null ? "Not verified" : row.max_price.toFixed(2)}</td>
                 <td>{row.stop === null ? "Not verified" : row.stop.toFixed(2)}</td>
                 <td>
                   <input
@@ -304,7 +313,7 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
         no target price. On the sell date, sell everything left with a Market order, at whatever
         the price is then.
       </p>
-      <small>Skip a stock if its live price is more than 5% from the last close.</small>
+      <small>Don't chase: skip a stock if its live price is above "Don't pay more than". That's the last close plus half a normal day's move.</small>
     </>
   );
 }

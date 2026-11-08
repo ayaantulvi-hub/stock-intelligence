@@ -6,14 +6,14 @@ import secrets
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from stockintel import changes, context, experts, misses, queries, tools
+from stockintel import changes, context, experts, misses, plan, queries, tools
 from stockintel.charts import TIMEFRAMES
 from stockintel.config import get_settings
 from stockintel.db import get_engine
@@ -257,6 +257,11 @@ class TrackOrders(BaseModel):
 def track_orders(order: TrackOrders) -> list[dict]:
     queries.track_orders(get_engine(), order.tickers, order.shares)
     return queries.holdings_today(get_engine())
+
+
+@app.get("/api/plan")
+def trading_plan(account: float | None = Query(default=None, gt=0)) -> dict:
+    return plan.review(get_engine(), account)
 
 
 @app.get("/api/holdings-today")

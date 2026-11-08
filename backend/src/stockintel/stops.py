@@ -80,11 +80,16 @@ def suggest(frame: pd.DataFrame, multiple: float = DEFAULT_MULTIPLE) -> dict | N
 
 
 def simulate(
-    frame: pd.DataFrame, multiple: float | None, eligible: np.ndarray | None = None
+    frame: pd.DataFrame,
+    multiple: float | None,
+    eligible: np.ndarray | None = None,
+    trailing: bool = False,
 ) -> list[tuple[float, bool]]:
     """Buy at the next open on regular dates and hold, exiting early at the stop.
 
     Each stop is set from data known at entry. A gap below the stop fills at the open.
+    A trailing stop rises after each close to the highest close so far less the same distance,
+    and only applies from the next day, so it never uses a price not yet known.
     """
     opens = frame["open"].to_numpy(float)
     lows = frame["low"].to_numpy(float)
@@ -98,23 +103,28 @@ def simulate(
         stop = None if multiple is None else entry - multiple * atr[day]
         leave, stopped = closes[day + 1 + HOLD_DAYS - 1], False
         if stop is not None:
+            distance = entry - stop
             for step in range(day + 1, day + 1 + HOLD_DAYS):
                 if lows[step] <= stop:
                     leave, stopped = min(opens[step], stop), True
                     break
+                if trailing:
+                    stop = max(stop, closes[step] - distance)
         trades.append((leave / entry - 1 - COST, stopped))
     return trades
 
 
 def study(results: dict) -> list[dict]:
     output = []
-    for multiple, trades in results.items():
+    for key, trades in results.items():
+        multiple, trailing = key if isinstance(key, tuple) else (key, False)
         if not trades:
             continue
         returns = np.array([item[0] for item in trades])
         output.append(
             {
                 "stop_multiple": multiple,
+                "trailing": trailing,
                 "trades": len(trades),
                 "avg_return": float(returns.mean()),
                 "win_rate": float((returns > 0).mean()),
@@ -132,21 +142,23 @@ def run(engine: Engine) -> list[dict]:
     sizes = eligibility(engine)
     with engine.connect() as conn:
         ciks = dict(conn.execute(text("SELECT ticker, cik FROM securities")).all())
-    results: dict = {multiple: [] for multiple in MULTIPLES}
+    keys = [(multiple, False) for multiple in MULTIPLES]
+    keys += [(multiple, True) for multiple in MULTIPLES if multiple is not None]
+    results: dict = {key: [] for key in keys}
     for ticker, frame in load_frames(engine).items():
         allowed = eligible_days(frame["market_date"], sizes.get(ciks[ticker], set()))
-        for multiple in MULTIPLES:
-            results[multiple].extend(simulate(frame, multiple, allowed))
+        for multiple, trailing in keys:
+            results[(multiple, trailing)].extend(simulate(frame, multiple, allowed, trailing))
     rows = study(results)
     now = datetime.now(UTC)
     if rows:
         with engine.begin() as conn:
             conn.execute(
                 text(
-                    """INSERT INTO stop_studies (run_at, stop_multiple, trades, avg_return,
-                         win_rate, worst_return, stopped_share)
-                       VALUES (:now, :stop_multiple, :trades, :avg_return, :win_rate,
-                         :worst_return, :stopped_share)"""
+                    """INSERT INTO stop_studies (run_at, stop_multiple, trails, trades,
+                         avg_return, win_rate, worst_return, stopped_share)
+                       VALUES (:now, :stop_multiple, :trailing, :trades, :avg_return,
+                         :win_rate, :worst_return, :stopped_share)"""
                 ),
                 [{**row, "now": now} for row in rows],
             )
