@@ -1,7 +1,20 @@
 import { useEffect, useState } from "react";
 
 type Level = { name: string; price: number };
+type Replay = {
+  replays: number;
+  sessions: number;
+  p_target: number;
+  p_stop: number;
+  p_neither: number;
+  avg_r: number;
+  close_low: number;
+  close_high: number;
+  verdict: string;
+  history?: { sessions: number; triggered: number; target: number; stop: number; avg_r: number | null };
+} | null;
 type Setup = {
+  replay?: Replay;
   ticker: string;
   side: "long" | "short";
   level: string;
@@ -32,7 +45,15 @@ type Test = {
   baseline_mean_r: number | null;
   verdict: string;
 };
+type Orb = {
+  error?: string;
+  scanned?: number;
+  found?: number;
+  setups?: (Setup & { range_high: number; range_low: number; price: number })[];
+};
 export type DayData = {
+  orb?: Orb;
+  orb_test?: Test | null;
   error?: string;
   test: Test | null;
   session?: string;
@@ -81,6 +102,59 @@ export function shares(account: number, share: number, entry: number, stop: numb
   return risk > 0 && account > 0 ? Math.floor((account * share) / risk) : null;
 }
 
+const pc = (x: number) => `${(x * 100).toFixed(0)}%`;
+
+export function ReplayBox({ replay }: { replay?: Replay }) {
+  if (replay === undefined) return null;
+  if (replay === null) return <p><small>Time Machine: Not verified. Fewer than 20 full past sessions to replay from.</small></p>;
+  const parts = [
+    { name: "Target first", share: replay.p_target, cls: "ok" },
+    { name: "Stop first", share: replay.p_stop, cls: "bad" },
+    { name: "Neither by close", share: replay.p_neither, cls: "" },
+  ];
+  return (
+    <div className="replay">
+      <h5>Time Machine: {replay.replays.toLocaleString()} replays of the rest of today, from the last {replay.sessions} days</h5>
+      <div className="replay-bar" role="img" aria-label={parts.map((p) => `${p.name} ${pc(p.share)}`).join(", ")}>
+        {parts.map((p) => (
+          <span key={p.name} className={`seg ${p.cls}`} style={{ width: pc(p.share) }} />
+        ))}
+      </div>
+      <p>
+        {parts.map((p) => (
+          <span key={p.name} className={p.cls}>{p.name} {pc(p.share)}. </span>
+        ))}
+        Average {replay.avg_r.toFixed(2)} times the risk. 9 in 10 replays closed between {replay.close_low.toFixed(2)} and {replay.close_high.toFixed(2)}.
+      </p>
+      <p><b>{replay.verdict}</b></p>
+      {replay.history && (
+        <p>
+          The same rule on those {replay.history.sessions} real days: it triggered {replay.history.triggered} times, hit the target {replay.history.target}, the stop {replay.history.stop}
+          {replay.history.avg_r === null ? "." : `, averaging ${replay.history.avg_r.toFixed(2)} times the risk after costs.`}
+        </p>
+      )}
+      <small>A simulation from the stock's own recent bars, not a forecast. Method from the free day-trader-skill (MIT).</small>
+    </div>
+  );
+}
+
+function TestLine({ name, test }: { name: string; test?: Test | null }) {
+  const proven = test?.verdict === "Edge shown in test";
+  return (
+    <p className={proven ? "ok" : "bad"}>
+      <b>
+        {name}:{" "}
+        {!test
+          ? "Not tested yet. Treat every setup here as a guess."
+          : proven
+            ? `Edge shown in test: ${test.trades} trades, ${test.mean_r?.toFixed(2)} times the risk on average after costs.`
+            : `No reliable edge. In ${test.trades} past trades it made ${test.mean_r === null ? "Not verified" : test.mean_r.toFixed(2)} times the risk on average, against ${test.baseline_mean_r === null ? "Not verified" : test.baseline_mean_r.toFixed(2)} for coin-flip trades. Practice only.`}
+      </b>
+      {test && ` Tested on ${test.data_from} to ${test.data_to}.`}
+    </p>
+  );
+}
+
 function SetupCard({ setup, account, share }: { setup: Setup; account: number; share: number }) {
   const buy = setup.side === "long";
   const count = shares(account, share, setup.entry, setup.stop);
@@ -92,7 +166,7 @@ function SetupCard({ setup, account, share }: { setup: Setup; account: number; s
         {finished && ` — finished: ${setup.result}, ${setup.r === null ? "" : `${setup.r.toFixed(2)} times the risk`}`}
       </h4>
       <p>
-        Why: price reached <b>{setup.level}</b>, confirmed by <b>{setup.confirmed_by}</b>, then a 1-minute signal.
+        Why: price reached <b>{setup.level}</b>, confirmed by <b>{setup.confirmed_by}</b>{setup.ticker === "SPY" || setup.ticker === "QQQ" ? ", then a 1-minute signal" : ""}.
       </p>
       {!finished && (
         <table>
@@ -106,6 +180,7 @@ function SetupCard({ setup, account, share }: { setup: Setup; account: number; s
           </tbody>
         </table>
       )}
+      <ReplayBox replay={setup.replay} />
       <small>Close it yourself by 3:55pm New York time if neither price is hit.</small>
     </div>
   );
@@ -144,23 +219,14 @@ export function DayTradingPage() {
     }
   };
   const test = data?.test;
-  const proven = test?.verdict === "Edge shown in test";
   const today = data?.window ? windowState(now, data.window.start, data.window.end) : null;
   const upcoming = data?.next_window ? windowState(now, data.next_window.start, data.next_window.end) : null;
   const open = Boolean(today?.open && data?.market_open);
   return (
     <section>
       <h2>Day trading: S&amp;P 500 (SPY) and Nasdaq (QQQ)</h2>
-      <p className={proven ? "ok" : "bad"}>
-        <b>
-          {!test
-            ? "Not tested yet. Treat every setup here as a guess."
-            : proven
-              ? `Edge shown in test: ${test.trades} trades, ${test.mean_r?.toFixed(2)} times the risk on average after costs.`
-              : `No reliable edge. In ${test.trades} past trades it made ${test.mean_r === null ? "Not verified" : test.mean_r.toFixed(2)} times the risk on average, against ${test.baseline_mean_r === null ? "Not verified" : test.baseline_mean_r.toFixed(2)} for coin-flip trades. Practice only.`}
-        </b>
-        {test && ` Tested on ${test.data_from} to ${test.data_to}.`}
-      </p>
+      <TestLine name="TJR rules" test={test} />
+      <TestLine name="Opening-range breakout" test={data?.orb_test} />
       <p className="plain">
         <b>Trading window:</b> {open ? today?.text : upcoming?.text ?? "Not verified"} At most 2 trades a day.
       </p>
@@ -196,6 +262,28 @@ export function DayTradingPage() {
           </details>
         </div>
       ))}
+      {data?.orb && (
+        <div className="orders">
+          <h3>Opening-range breakouts across {data.orb.scanned ?? 0} stocks</h3>
+          {data.orb.error ? (
+            <p className="bad">Scanner unavailable: {data.orb.error}</p>
+          ) : (
+            <>
+              <p className="plain">
+                <b>{data.orb.found ?? 0} stocks</b> have closed a 5-minute bar outside their first 15 minutes' range today. The {data.orb.setups?.length ?? 0} most traded are shown. Stop at the middle of the range, target 2 times the risk.
+              </p>
+              {data.orb.setups?.map((setup) => (
+                <SetupCard
+                  key={setup.ticker}
+                  setup={{ ...setup, level: `the opening range ${setup.range_low.toFixed(2)} to ${setup.range_high.toFixed(2)}`, confirmed_by: "a 5-minute close outside it", result: null, exit: null, r: null, reward_to_risk: 2 }}
+                  account={Number(account)}
+                  share={data.risk_share ?? 0.01}
+                />
+              ))}
+            </>
+          )}
+        </div>
+      )}
       {data?.source && (
         <small>
           Prices: {data.source}, last minute {data.last_bar ? clockTime(data.last_bar) : "Not verified"}, fetched{" "}

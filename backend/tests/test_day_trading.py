@@ -54,11 +54,12 @@ class FixtureSource:
     def __init__(self, frames=None, error=None):
         self.frames, self.error, self.calls = frames, error, 0
 
-    def minute_bars(self, symbols, start, end):
+    def minute_bars(self, symbols, start, end, timeframe="1Min"):
         self.calls += 1
         if self.error:
             raise FeedError(self.error)
-        return self.frames, Provenance("Alpaca (IEX)", "https://fixture.test", NOW, "live")
+        found = {k: v for k, v in self.frames.items() if k in symbols}
+        return found, Provenance("Alpaca (IEX)", "https://fixture.test", NOW, "live")
 
 
 def minutes(start, n, seed):
@@ -141,3 +142,51 @@ def test_verdict_needs_enough_trades_and_to_beat_chance():
     assert day_trading.verdict(good[:10])["verdict"] == "No reliable edge"
     worse_than_chance = [{**row, "random_r": 5.0} for row in good]
     assert day_trading.verdict(worse_than_chance)["verdict"] == "No reliable edge"
+
+
+class ByTimeframe(FixtureSource):
+    def minute_bars(self, symbols, start, end, timeframe="1Min"):
+        self.calls += 1
+        frames = self.frames[timeframe]
+        found = {
+            k: v[(v["time"] >= start) & (v["time"] < end)]
+            for k, v in frames.items()
+            if k in symbols
+        }
+        return found, Provenance("Alpaca (IEX)", "https://fixture.test", NOW, "live")
+
+
+def test_scanner_finds_breakouts_maps_symbols_and_skips_the_forming_bar(engine):
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """INSERT INTO securities (ticker, cik, name, exchange, universe_rank)
+                   VALUES ('BRK-B', '1', 'Berkshire', 'NYSE', 1), ('FLAT', '2', 'Flat', 'NYSE', 2)"""
+            )
+        )
+    times = pd.date_range("2026-11-09 09:30", periods=11, freq="5min", tz="America/New_York")
+    up = [100, 101, 99.5, 100.5, 100.4, 100.6, 100.5, 100.7, 100.6, 100.5, 103.0]
+    breakout = pd.DataFrame(
+        {
+            "time": times,
+            "open": up,
+            "high": [c + 0.2 for c in up],
+            "low": [c - 0.2 for c in up],
+            "close": up,
+            "volume": 1e5,
+        }
+    )
+    flat = breakout.assign(open=100.0, high=100.2, low=99.8, close=100.0)
+    source = ByTimeframe({"5Min": {"BRK.B": breakout, "FLAT": flat}})
+    # 10:23 New York: the 10:20 bar (the jump to 103) is still forming, so it must be ignored.
+    result = day_trading.scan_orb(
+        engine, source, times[0].date(), datetime(2026, 11, 9, 15, 23, tzinfo=UTC)
+    )
+    assert result["scanned"] == 2 and result["found"] == 0
+    later = datetime(2026, 11, 9, 15, 26, tzinfo=UTC)
+    result = day_trading.scan_orb(engine, source, times[0].date(), later)
+    assert [hit["ticker"] for hit in result["setups"]] == ["BRK-B"]
+    assert result["setups"][0]["side"] == "long" and result["setups"][0]["entry"] == 103.0
+    assert result["setups"][0]["replay"] is None  # Too little history for 10,000 replays.

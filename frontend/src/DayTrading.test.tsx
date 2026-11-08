@@ -33,6 +33,25 @@ test("a feed error is shown and no levels or setups appear", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => ({ status: 200, json: async () => ({ error: "Alpaca bars: HTTP 403", test: null }) })));
   render(<DayTradingPage />);
   expect(await screen.findByText(/Live prices unavailable: Alpaca bars: HTTP 403/)).toBeTruthy();
-  expect(screen.getByText(/Not tested yet/)).toBeTruthy();
+  expect(screen.getAllByText(/Not tested yet/)).toHaveLength(2);
   expect(screen.queryByText(/Key levels today/)).toBeNull();
+});
+
+test("the Time Machine shows the odds and the verdict", async () => {
+  const { ReplayBox } = await import("./DayTrading");
+  render(
+    <ReplayBox
+      replay={{ replays: 10000, sessions: 59, p_target: 0.294, p_stop: 0.255, p_neither: 0.451, avg_r: 0.02, close_low: 350, close_high: 375,
+        verdict: "Close to a coin flip: target first in 29% of replays.", history: { sessions: 59, triggered: 33, target: 13, stop: 15, avg_r: -0.05 } }}
+    />,
+  );
+  expect(screen.getByText(/Target first 29%/)).toBeTruthy();
+  expect(screen.getByText(/Close to a coin flip/)).toBeTruthy();
+  expect(screen.getByText(/triggered 33 times/)).toBeTruthy();
+});
+
+test("missing replay history says Not verified", async () => {
+  const { ReplayBox } = await import("./DayTrading");
+  render(<ReplayBox replay={null} />);
+  expect(screen.getByText(/Not verified/)).toBeTruthy();
 });

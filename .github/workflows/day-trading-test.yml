@@ -1,5 +1,5 @@
 name: Day trading test
-# Tests the TJR rules on Alpaca 1-minute bars. Bars aren't stored; only the summary is.
+# Tests the TJR rules (1-minute bars) and the opening-range breakout (5-minute bars) on Alpaca data. Bars aren't stored; only the summary is.
 on:
   workflow_dispatch:
     inputs:
@@ -26,4 +26,5 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
-      - run: uv run --no-dev python -m stockintel.day_trading test ${{ inputs.months || '36' }}
+      - run: uv run --no-dev python -m stockintel.day_trading test ${{ inputs.months || '36' }} TJR
+      - run: uv run --no-dev python -m stockintel.day_trading test ${{ inputs.months || '36' }} ORB

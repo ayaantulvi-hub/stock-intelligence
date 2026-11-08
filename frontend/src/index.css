@@ -212,3 +212,9 @@ td.wrap { white-space: normal; min-width: 190px; }
 .market-line { color: var(--muted); }
 ul.plan { list-style: none; padding-left: 0; }
 ul.plan li { margin: 0.35rem 0; }
+.replay { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.replay h5 { margin: 0 0 6px; font-size: 0.95rem; }
+.replay-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); }
+.replay-bar .seg { display: block; height: 100%; background: var(--muted); }
+.replay-bar .seg.ok { background: var(--ok); }
+.replay-bar .seg.bad { background: var(--bad); }

@@ -26,11 +26,11 @@ class AlpacaProvider:
         self.headers = {"APCA-API-KEY-ID": key_id, "APCA-API-SECRET-KEY": secret}
 
     def minute_bars(
-        self, symbols: tuple[str, ...], start: datetime, end: datetime
+        self, symbols: tuple[str, ...], start: datetime, end: datetime, timeframe: str = "1Min"
     ) -> tuple[dict[str, pd.DataFrame], Provenance]:
         params = {
             "symbols": ",".join(symbols),
-            "timeframe": "1Min",
+            "timeframe": timeframe,
             "start": start.astimezone(UTC).isoformat(),
             "end": end.astimezone(UTC).isoformat(),
             "feed": "iex",
