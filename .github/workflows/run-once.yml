@@ -6,7 +6,7 @@ on:
       step:
         description: Which step
         type: choice
-        options: [releases, short, congress, cross-check, overrides, economic, sizes, retention-dry, retention]
+        options: [releases, short, congress, cross-check, overrides, economic, sizes, retention-dry, retention, decision-tests]
 permissions:
   contents: read
 jobs:
@@ -44,5 +44,7 @@ jobs:
         run: uv run --no-dev python -m stockintel.retention
       - if: inputs.step == 'retention' || inputs.step == 'retention-dry'
         run: uv run --no-dev python -m stockintel.sizes
+      - if: inputs.step == 'decision-tests'
+        run: uv run --no-dev python -c "from stockintel import extras; from stockintel.db import get_engine; import json; print(json.dumps(extras.decision_tests(get_engine()), default=str))"
       - if: always()
         run: uv run --no-dev python -m stockintel.report
