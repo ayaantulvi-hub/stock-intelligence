@@ -1,23 +1,6 @@
 import { useEffect, useState } from "react";
-import { leanRow } from "./leanRow";
 
-type Check = { topic: string; state: string; text: string; meaning?: string };
-const MARKS: Record<string, [string, string]> = {
-  pass: ["Pass", "ok"],
-  caution: ["Caution", "bad"],
-  unknown: ["Not verified", ""],
-};
 
-// The fixed-risk rule: decide the most you can lose, then size the trade to fit it.
-export function sharesForRisk(account: number, riskPercent: number, price: number, stop: number) {
-  if (!(account > 0) || !(riskPercent > 0) || !(price > stop) || !(stop > 0)) return null;
-  const allowedLoss = account * (riskPercent / 100);
-  const byRisk = Math.floor(allowedLoss / (price - stop));
-  // Also keep to the 10% limit on one stock.
-  const byLimit = Math.floor((account * 0.1) / price);
-  const shares = Math.min(byRisk, byLimit);
-  return { shares, cost: shares * price, loss: shares * (price - stop), limited: byLimit < byRisk };
-}
 
 type Suggested = {
   price: number;
@@ -115,62 +98,6 @@ function Levels({ data, tested }: { data: Suggested | null; tested: Tested[] }) 
   );
 }
 
-function Sizer({ suggested }: { suggested: Suggested | null }) {
-  const [values, setValues] = useState({ account: "", risk: "1", price: "", stop: "" });
-  useEffect(() => {
-    if (suggested) {
-      setValues((current) => ({
-        ...current,
-        price: suggested.price.toFixed(2),
-        stop: suggested.stop.toFixed(2),
-      }));
-    }
-  }, [suggested]);
-  const result = sharesForRisk(
-    Number(values.account),
-    Number(values.risk),
-    Number(values.price),
-    Number(values.stop),
-  );
-  const fields: [keyof typeof values, string][] = [
-    ["account", "Total money to invest"],
-    ["risk", "Most to lose on this trade (%)"],
-    ["price", "Buy price per share"],
-    ["stop", "Stop price"],
-  ];
-  return (
-    <>
-      <h3>How much to buy</h3>
-      <small>
-        Choose the most you can afford to lose first. Many professionals risk about 1% or less on
-        one trade, so one mistake can't do serious damage. A stop can't guarantee your exit price.
-      </small>
-      <div className="inputs">
-        {fields.map(([key, label]) => (
-          <label key={key}>
-            {label}
-            <input
-              type="number"
-              step="any"
-              min="0"
-              value={values[key]}
-              onChange={(event) => setValues({ ...values, [key]: event.target.value })}
-            />
-          </label>
-        ))}
-      </div>
-      {result && (
-        <p>
-          <strong>
-            {result.shares} shares, costing ${result.cost.toFixed(2)}.
-          </strong>{" "}
-          If it hits your stop, you lose about ${result.loss.toFixed(2)}.
-          {result.limited && " The 10% limit on one stock reduced this."}
-        </p>
-      )}
-    </>
-  );
-}
 
 export function OrderTicket({ stop, target, keep }: {
   stop: number;
@@ -228,7 +155,7 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
     });
     setSaved(
       response.status === 200
-        ? "Saved. The tool now checks these every update and tells you Keep or Sell now at the top of this page."
+        ? "Saved. The tool now checks these every update and tells you Keep or Sell on My portfolio."
         : "Could not save. Check the number of shares and try again.",
     );
   };
@@ -246,12 +173,6 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
   if (plan.orders.length === 0) return <p>No orders yet. They appear after the next forecast.</p>;
   return (
     <>
-      {plan.paused && (
-        <p className="bad">
-          <b>Pause new buys.</b> Your last 3 sales were losses. Your plan says review them in the
-          Journal before buying again.
-        </p>
-      )}
       {plan.proven ? (
         <p className="plain">
           <b>Buy these now. Sell them all on {plan.sell_by ?? "Not verified"}.</b>
@@ -355,11 +276,11 @@ export function HowMuch({ ticker, keep = "The longest offered", stop, target }: 
 }
 
 export default function ChecklistPanel({ ticker }: { ticker: string }) {
-  const [checks, setChecks] = useState<Check[] | null>(null);
   const [levels, setLevels] = useState<{ levels: Suggested | null; tested: Tested[] } | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    setFailed(false);
     fetch(`/api/stocks/${encodeURIComponent(ticker)}/levels`)
       .then((response) => {
         if (response.status !== 200) throw new Error();
@@ -369,44 +290,7 @@ export default function ChecklistPanel({ ticker }: { ticker: string }) {
       .catch(() => setFailed(true));
   }, [ticker]);
 
-  useEffect(() => {
-    setFailed(false);
-    fetch(`/api/stocks/${encodeURIComponent(ticker)}/checklist`)
-      .then((response) => {
-        if (response.status !== 200) throw new Error();
-        return response.json();
-      })
-      .then(setChecks)
-      .catch(() => setFailed(true));
-  }, [ticker]);
-
-  if (failed) return <p className="bad">Checklist failed to load. Not verified.</p>;
-  if (!checks) return null;
-  return (
-    <div>
-      <h3>Before you trade</h3>
-      <small>The questions a careful investor asks. These are not added into a score.</small>
-      <div className="scroll">
-        <table className="checks">
-          <tbody>
-            {checks.map((check) => {
-              const [label, tone] = MARKS[check.state];
-              return (
-                <tr key={check.topic} className={leanRow(check.state)}>
-                  <td>{check.topic}</td>
-                  <td className={tone}>{label}</td>
-                  <td>
-                    {check.text}
-                    {check.meaning && <small>{check.meaning}</small>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {levels && <Levels data={levels.levels} tested={levels.tested} />}
-      <Sizer suggested={levels?.levels ?? null} />
-    </div>
-  );
+  if (failed) return <p className="bad">Exit prices failed to load. Not verified.</p>;
+  if (!levels) return null;
+  return <Levels data={levels.levels} tested={levels.tested} />;
 }

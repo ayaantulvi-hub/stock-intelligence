@@ -67,20 +67,9 @@ export type DayData = {
   last_bar?: string;
   source?: string;
   retrieved_at?: string;
-  risk_share?: number;
   stocks?: Stock[];
 };
 
-const ACCOUNT_KEY = "account-size";
-const clockTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-
-function savedAccount() {
-  try {
-    return window.localStorage.getItem(ACCOUNT_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
 
 export function windowState(now: number, start: string, end: string) {
   const from = Date.parse(start);
@@ -95,15 +84,13 @@ export function stepText(stock: Stock, open: boolean) {
   const touched = stock.step.touched;
   if (!open) return "Outside the trading window, so no new setups.";
   if (!touched) return "Step 1 of 3: waiting for price to reach a key level.";
-  const way = touched.side === "short" ? "sell short" : "buy";
+  const way = touched.side === "short" ? "sell" : "buy";
   if (!stock.step.confirmed) return `Step 2 of 3: price reached ${touched.level}. Waiting for a 5-minute signal to ${way}.`;
   return `Step 3 of 3: confirmed by ${stock.step.confirmed}. Waiting for the 1-minute entry signal to ${way}.`;
 }
 
-export function shares(account: number, share: number, entry: number, stop: number) {
-  const risk = Math.abs(entry - stop);
-  return risk > 0 && account > 0 ? Math.floor((account * share) / risk) : null;
-}
+
+const clockTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 const pc = (x: number) => `${(x * 100).toFixed(0)}%`;
 
@@ -176,14 +163,14 @@ function TestLine({ name, test }: { name: string; test?: Test | null }) {
   );
 }
 
-function SetupCard({ setup, account, share }: { setup: Setup; account: number; share: number }) {
+function SetupCard({ setup }: { setup: Setup }) {
   const buy = setup.side === "long";
-  const count = shares(account, share, setup.entry, setup.stop);
   const finished = setup.result !== null;
   return (
     <div className={`ticket action ${buy ? "buy" : "sell"}`}>
       <h4>
-        {buy ? "Buy" : "Sell short"} {setup.ticker} at {clockTime(setup.entered_at)}
+        {buy ? "Buy" : "Sell"} {setup.ticker} at {clockTime(setup.entered_at)}
+        {!buy && <small> (you don't need to own it: TradingView's Sell opens a short position)</small>}
         {finished && ` — finished: ${setup.result}, ${setup.r === null ? "" : `${setup.r.toFixed(2)} times the risk`}`}
       </h4>
       {setup.cautions && setup.cautions.length > 0 && (
@@ -201,7 +188,7 @@ function SetupCard({ setup, account, share }: { setup: Setup; account: number; s
           <tbody>
             <tr><td>Order tab</td><td><b>Market</b></td></tr>
             <tr><td>Side</td><td><b>{buy ? "Buy" : "Sell"}</b></td></tr>
-            <tr><td>Shares</td><td><b>{count === null ? "Enter your account size above" : count}</b> ({(share * 100).toFixed(0)}% of your account at risk)</td></tr>
+            <tr><td>Shares</td><td>Your choice</td></tr>
             <tr><td>Take profit price (switch on)</td><td><b>{setup.target.toFixed(2)}</b></td></tr>
             <tr><td>Stop loss price (switch on)</td><td><b>{setup.stop.toFixed(2)}</b></td></tr>
             <tr><td>Signal price</td><td>{setup.entry.toFixed(2)}. Skip if the live price has already moved past the halfway point to the target.</td></tr>
@@ -218,7 +205,6 @@ export function DayTradingPage() {
   const [data, setData] = useState<DayData | null>(null);
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(Date.now());
-  const [account, setAccount] = useState(savedAccount);
   useEffect(() => {
     const load = () =>
       fetch("/api/day-trading")
@@ -238,14 +224,6 @@ export function DayTradingPage() {
     }, 60000);
     return () => clearInterval(timer);
   }, []);
-  const change = (value: string) => {
-    setAccount(value);
-    try {
-      window.localStorage.setItem(ACCOUNT_KEY, value);
-    } catch {
-      // Works without saving.
-    }
-  };
   const test = data?.test;
   const today = data?.window ? windowState(now, data.window.start, data.window.end) : null;
   const upcoming = data?.next_window ? windowState(now, data.next_window.start, data.next_window.end) : null;
@@ -258,10 +236,6 @@ export function DayTradingPage() {
       <p className="plain">
         <b>Trading window:</b> {open ? today?.text : upcoming?.text ?? "Not verified"} At most 2 trades a day.
       </p>
-      <label className="inputs">
-        Account size in $
-        <input type="number" min="0" value={account} onChange={(e) => change(e.target.value)} />
-      </label>
       {failed && <p className="bad">Could not load day trading. Refresh to try again.</p>}
       {data?.events && data.events.length > 0 && (
         <p className="bad">
@@ -277,7 +251,7 @@ export function DayTradingPage() {
           </h3>
           <p className="plain"><b>{stepText(stock, open)}</b></p>
           {stock.setups.map((setup) => (
-            <SetupCard key={setup.entered_at} setup={setup} account={Number(account)} share={data.risk_share ?? 0.01} />
+            <SetupCard key={setup.entered_at} setup={setup} />
           ))}
           <details>
             <summary>Key levels today ({stock.levels.length})</summary>
@@ -287,7 +261,7 @@ export function DayTradingPage() {
                   <tr key={level.name} className={level.price > stock.price ? "row-sell" : "row-buy"}>
                     <td>{level.name}</td>
                     <td>{level.price.toFixed(2)}</td>
-                    <td>{level.price > stock.price ? "Above: look to sell short here" : "Below: look to buy here"}</td>
+                    <td>{level.price > stock.price ? "Above: look to sell here" : "Below: look to buy here"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -309,8 +283,6 @@ export function DayTradingPage() {
                 <SetupCard
                   key={setup.ticker}
                   setup={{ ...setup, level: `the opening range ${setup.range_low.toFixed(2)} to ${setup.range_high.toFixed(2)}`, confirmed_by: "a 5-minute close outside it", result: null, exit: null, r: null, reward_to_risk: 2 }}
-                  account={Number(account)}
-                  share={data.risk_share ?? 0.01}
                 />
               ))}
             </>
@@ -330,7 +302,7 @@ export function DayTradingPage() {
           <li>Only trade 9:50 to 10:30am New York time.</li>
           <li>When price reaches a level, wait for a 5-minute signal: a candle closing past the last swing, a broken fair value gap, or SPY and QQQ disagreeing at a swing.</li>
           <li>Then enter on a 1-minute signal the same way. Stop at the extreme since the level was reached. Target the next level at least as far as the stop.</li>
-          <li>Risk 1% of your account a trade. Close everything by 3:55pm New York time.</li>
+          <li>Close everything by 3:55pm New York time.</li>
         </ol>
       </details>
     </section>

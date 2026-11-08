@@ -176,7 +176,7 @@ def scan(engine: Engine, now: datetime) -> int:
     holdings = queries.holdings_today(engine, now)
     with engine.begin() as conn:
         for item in holdings:
-            if item["call"] == "Wait":
+            if item["call"] == "Not verified":
                 continue
             conn.execute(
                 text(
@@ -195,12 +195,12 @@ def scan(engine: Engine, now: datetime) -> int:
     update = changes.build(engine, now.date())
     with engine.begin() as conn:
         for item in holdings:
-            if item["call"] == "Sell now":
+            if item["call"] == "Sell":
                 add(
                     conn,
                     item["ticker"],
                     "sell",
-                    f"Sell now: {item['ticker']}. {item['reason']}",
+                    f"Sell: {item['ticker']}. {item['reason']}",
                     f"sell:{item['ticker']}:{now.date()}",
                 )
         for row in update["yours"]:

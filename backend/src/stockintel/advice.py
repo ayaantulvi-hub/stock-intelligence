@@ -175,10 +175,13 @@ def keep_or_sell(
     """One answer per holding, each day. These are rules, so they can't know what comes next."""
 
     def answer(call, reason, kind="neutral"):
-        return {"call": call, "reason": reason, "kind": kind}
+        call = plain(call, True)
+        return {"call": call, "reason": reason, "kind": kind_of(call)}
 
     if price is None or stale:
-        return answer("Wait", "Today's prices aren't in yet. Check again after the next update.")
+        return answer(
+            NOT_VERIFIED, "Today's prices aren't in yet. Check again after the next update."
+        )
     if stop and price <= stop:
         return answer("Sell now", f"It reached your stop of {stop:.2f}.", "sell")
     if sell_by and today >= sell_by:
@@ -200,13 +203,52 @@ def keep_or_sell(
             "sell",
         )
     if news_warning:
-        return answer(
-            "Check the news", f"Keep for now, but look at this because {news_warning}.", "sell"
-        )
+        # Only reaches here once news warnings have been shown to help (see rules.py).
+        return answer("Sell", f"Bad news that has proven worth acting on: {news_warning}.")
     reason = "No warning signs today."
     if sell_by:
         reason += f" Planned sell date: {sell_by}."
     return answer("Keep", reason, "buy")
+
+
+# Every call the owner sees is one of these four words. "Not verified" is the only other
+# answer, when prices are missing or stale: the brief forbids a call built on stale data.
+BUY, KEEP, SELL, LEAVE = "Buy", "Keep", "Sell", "Leave alone"
+NOT_VERIFIED = "Not verified"
+_BUYISH = {
+    "Buy",
+    "Leans buy",
+    "Buy for a short trade",
+    "Leans buy, short trade",
+    "Good to buy and keep",
+}
+_SELLISH = {
+    "Sell",
+    "Sell now",
+    "Sell or take some profit",
+    "Don't buy",
+    "Leans don't buy",
+    "Leans sell, short trade",
+    "Sell or avoid for now",
+    "Avoid for now",
+    "Not a long-term buy",
+    "Hold and review",
+}
+
+
+def plain(call: str, owned: bool) -> str:
+    """Turn any internal label into Buy, Keep, Sell or Leave alone."""
+    if call == NOT_VERIFIED:
+        return call
+    if call in _SELLISH:
+        return SELL
+    if call in _BUYISH:
+        return KEEP if owned else BUY
+    return KEEP if owned else LEAVE
+
+
+def kind_of(call: str) -> str:
+    return {BUY: "buy", KEEP: "buy", SELL: "sell"}.get(call, "neutral")
 
 
 def decision(action: str | None, rank: float | None, stale: bool, position: dict | None) -> dict:
@@ -218,10 +260,17 @@ def decision(action: str | None, rank: float | None, stale: bool, position: dict
     owned = position is not None and position.get("profit") is not None
 
     def answer(call, reason, proven=False, kind="neutral"):
-        return {"call": call, "reason": reason, "proven": proven, "kind": kind, "owned": owned}
+        call = plain(call, owned)
+        return {
+            "call": call,
+            "reason": reason,
+            "proven": proven,
+            "kind": kind_of(call),
+            "owned": owned,
+        }
 
     if stale:
-        return answer("Wait", "The latest prices aren't in yet, so no call can be made.")
+        return answer(NOT_VERIFIED, "The latest prices aren't in yet, so no call can be made.")
     if owned:
         stop, target, price = position["stop_price"], position["target_price"], position["price"]
         if stop and price <= stop:
@@ -237,7 +286,7 @@ def decision(action: str | None, rank: float | None, stale: bool, position: dict
                 kind="buy",
             )
     if action is None:
-        return answer("Hold" if owned else "Wait", "There's no forecast for this stock yet.")
+        return answer("Hold", "There's no forecast for this stock yet.")
     if action == "Sell candidate":
         return answer(
             "Sell" if owned else "Don't buy",
@@ -284,21 +333,18 @@ def next_step(call: str, levels: dict | None, position: dict | None) -> str:
         if stop and target
         else "Set a sell target and a stop first."
     )
-    if call == "Hold off":
-        return "Don't buy for now. Read the reason above, then look at the next stock on the list."
-    if call == "Wait":
-        return "Do nothing for now, and check again after the next update."
-    if call in {"Buy", "Leans buy"}:
-        return f"If you decide to buy, start small. {exits}"
-    if call in {"Don't buy", "Leans don't buy"}:
-        return "Skip this one for now, and look at the stronger stocks on the home page."
-    if call == "Sell":
-        return "Sell your position, or tell the journal why you're staying in."
-    if call == "Sell or take some profit":
-        return "Decide whether to sell all or part. You reached the price you planned."
-    if call == "Hold and review":
-        return f"You don't need to act today, but check the reasons below. {exits}"
-    return f"Keep holding. {exits}"
+    owned = position is not None and position.get("profit") is not None
+    if call == BUY:
+        return f"Buy it. {exits}"
+    if call == SELL and owned:
+        return "Sell your shares at the market price."
+    if call == SELL:
+        return "Sell. You don't own it, so there's nothing to do: this is one of the weaker stocks."
+    if call == LEAVE:
+        return "Leave it alone. It isn't among the best or the worst right now."
+    if call == NOT_VERIFIED:
+        return "Wait for today's prices, then check again."
+    return f"Keep it. {exits}"
 
 
 def apply_experts(answer: dict, review: dict | None) -> dict:
@@ -306,19 +352,19 @@ def apply_experts(answer: dict, review: dict | None) -> dict:
     blocked = review.get("blocked") if review else None
     if not blocked:
         return answer
-    if answer["call"] in {"Buy", "Leans buy"}:
+    if answer["call"] == BUY:
         return {
             **answer,
-            "call": "Hold off",
-            "reason": f"The model likes it, but hold off because {blocked}.",
+            "call": LEAVE,
+            "reason": f"The model likes it, but leave it alone because {blocked}.",
             "proven": False,
             "kind": "neutral",
         }
-    if answer["owned"] and answer["call"] == "Hold":
+    if answer["owned"] and answer["call"] == KEEP:
         return {
             **answer,
-            "call": "Hold and review",
-            "reason": f"Review this holding because {blocked}.",
+            "call": SELL,
+            "reason": f"Sell, because {blocked}.",
             "proven": False,
             "kind": "sell",
         }
@@ -329,19 +375,19 @@ def apply_news(answer: dict, warning: str | None) -> dict:
     """Bad news stops a buy. It's a caution rule, so it never turns anything into a buy."""
     if not warning:
         return answer
-    if answer["call"] in {"Buy", "Leans buy"}:
+    if answer["call"] == BUY:
         return {
             **answer,
-            "call": "Hold off",
-            "reason": f"The model likes it, but hold off because {warning}.",
+            "call": LEAVE,
+            "reason": f"The model likes it, but leave it alone because {warning}.",
             "proven": False,
             "kind": "neutral",
         }
-    if answer["owned"] and answer["call"] == "Hold":
+    if answer["owned"] and answer["call"] == KEEP:
         return {
             **answer,
-            "call": "Hold and review",
-            "reason": f"Review this holding because {warning}.",
+            "call": SELL,
+            "reason": f"Sell, because {warning}.",
             "proven": False,
             "kind": "sell",
         }

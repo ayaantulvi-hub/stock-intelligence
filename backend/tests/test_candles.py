@@ -115,21 +115,21 @@ def hammer_day():
 
 def test_trade_is_unproven_until_tested_and_gives_exits():
     answer = horizons.trade(hammer_day(), {}, False, None)
-    assert answer["call"] == "Leans buy, short trade"
+    assert answer["call"] == "Buy"
     assert answer["hold"] == 5
     assert answer["stop"] < 100.6 < answer["target"]
     tested = {"hammer": {"signals": 100, "win_rate": 0.6, "extra_return": 0.01, "t_stat": 4.0}}
-    assert horizons.trade(hammer_day(), tested, False, None)["call"] == "Buy for a short trade"
+    assert horizons.trade(hammer_day(), tested, False, None)["call"] == "Buy"
 
 
 def test_a_pattern_that_failed_testing_gives_no_trade():
     failed = {"hammer": {"signals": 100, "win_rate": 0.4, "extra_return": -0.01, "t_stat": -1.0}}
-    assert horizons.trade(hammer_day(), failed, False, None)["call"] == horizons.NO_TRADE
+    assert horizons.trade(hammer_day(), failed, False, None)["call"] == "Leave alone"
 
 
 def test_no_trade_when_stale_or_results_are_due():
-    assert horizons.trade(hammer_day(), {}, True, None)["call"] == "Wait"
-    assert horizons.trade(hammer_day(), {}, False, 1)["call"] == horizons.NO_TRADE
+    assert horizons.trade(hammer_day(), {}, True, None)["call"] == "Not verified"
+    assert horizons.trade(hammer_day(), {}, False, 1)["call"] == "Leave alone"
 
 
 def lens(name, verdict):
@@ -139,10 +139,10 @@ def lens(name, verdict):
 def test_invest_answer_follows_the_company_checks():
     names = horizons.LONG_LENSES
     good = {"lenses": [lens(name, "good") for name in names], "blocked": None}
-    assert horizons.invest(good)["call"] == "Good to buy and keep"
+    assert horizons.invest(good)["call"] == "Buy"
     bad = {"lenses": [lens(name, "bad") for name in names], "blocked": None}
-    assert horizons.invest(bad)["call"] == "Not a long-term buy"
-    assert horizons.invest({**good, "blocked": "x"})["call"] == "Avoid for now"
+    assert horizons.invest(bad)["call"] == "Sell"
+    assert horizons.invest({**good, "blocked": "x"})["call"] == "Sell"
     blank = {"lenses": [lens(name, "unknown") for name in names], "blocked": None}
     assert horizons.invest(blank)["call"] == "Not verified"
 

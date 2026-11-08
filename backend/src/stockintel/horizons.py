@@ -3,6 +3,7 @@
 import pandas as pd
 
 from stockintel import candles
+from stockintel.advice import NOT_VERIFIED, kind_of, plain
 from stockintel.stops import average_true_range
 
 HOLD_DAYS = 5
@@ -38,10 +39,13 @@ def _found(frame: pd.DataFrame, tests: dict) -> list[dict]:
     return output
 
 
-def trade(frame: pd.DataFrame, tests: dict, stale: bool, earnings_in: int | None) -> dict:
+def trade(
+    frame: pd.DataFrame, tests: dict, stale: bool, earnings_in: int | None, owned: bool = False
+) -> dict:
     """A trade of up to five days, from today's candle patterns."""
 
     def answer(call, reason, kind="neutral", exits=None, proven=False):
+        call = plain(call, owned)
         return {
             "call": call,
             "reason": reason,
@@ -55,7 +59,7 @@ def trade(frame: pd.DataFrame, tests: dict, stale: bool, earnings_in: int | None
 
     patterns = _found(frame, tests)
     if stale:
-        return answer("Wait", "The latest prices aren't in yet.")
+        return answer(NOT_VERIFIED, "The latest prices aren't in yet.")
     if earnings_in is not None and 0 <= earnings_in <= 1:
         return answer(NO_TRADE, "Results are due, and candles say nothing about them.")
     live = [
@@ -94,8 +98,17 @@ LONG_LENSES = (
 )
 
 
-def invest(review: dict | None) -> dict:
+def invest(review: dict | None, owned: bool = False) -> dict:
     """An investment of months to years, from the business and its price."""
+    found = _invest(review)
+    return {
+        **found,
+        "call": plain(found["call"], owned),
+        "kind": kind_of(plain(found["call"], owned)),
+    }
+
+
+def _invest(review: dict | None) -> dict:
     if not review:
         return {"call": "Not verified", "reason": "No company review yet.", "kind": "neutral"}
     lenses = [item for item in review["lenses"] if item["name"] in LONG_LENSES]

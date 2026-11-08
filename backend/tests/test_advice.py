@@ -242,17 +242,17 @@ EDGELESS = "No reliable edge"
 @pytest.mark.parametrize(
     "action, rank, stale, position, call, proven",
     [
-        (EDGELESS, 0.9, True, None, "Wait", False),
+        (EDGELESS, 0.9, True, None, "Not verified", False),
         ("Buy candidate", 0.95, False, None, "Buy", True),
-        ("Buy candidate", 0.95, False, OWNED, "Hold", True),
-        ("Sell candidate", 0.05, False, None, "Don't buy", True),
+        ("Buy candidate", 0.95, False, OWNED, "Keep", True),
+        ("Sell candidate", 0.05, False, None, "Sell", True),
         ("Sell candidate", 0.05, False, OWNED, "Sell", True),
-        ("No action", 0.5, False, OWNED, "Hold", True),
-        (EDGELESS, 0.9, False, None, "Leans buy", False),
-        (EDGELESS, 0.1, False, None, "Leans don't buy", False),
-        (EDGELESS, 0.1, False, OWNED, "Hold and review", False),
-        (EDGELESS, 0.5, False, None, "Wait", False),
-        (None, None, False, OWNED, "Hold", False),
+        ("No action", 0.5, False, OWNED, "Keep", True),
+        (EDGELESS, 0.9, False, None, "Buy", False),
+        (EDGELESS, 0.1, False, None, "Sell", False),
+        (EDGELESS, 0.1, False, OWNED, "Sell", False),
+        (EDGELESS, 0.5, False, None, "Leave alone", False),
+        (None, None, False, OWNED, "Keep", False),
     ],
 )
 def test_decision(action, rank, stale, position, call, proven):
@@ -264,7 +264,7 @@ def test_owners_stop_and_target_come_first():
     stopped = {**OWNED, "stop_price": 160.0}
     assert advice.decision(EDGELESS, 0.9, False, stopped)["call"] == "Sell"
     hit = {**OWNED, "target_price": 140.0}
-    assert advice.decision(EDGELESS, 0.9, False, hit)["call"] == "Sell or take some profit"
+    assert advice.decision(EDGELESS, 0.9, False, hit)["call"] == "Sell"
 
 
 def test_price_paid_does_not_change_the_decision():
@@ -275,7 +275,7 @@ def test_price_paid_does_not_change_the_decision():
     )
 
 
-ANSWER = {"call": "Leans buy", "reason": "Fixture.", "proven": False, "kind": "buy", "owned": False}
+ANSWER = {"call": "Buy", "reason": "Fixture.", "proven": False, "kind": "buy", "owned": False}
 LINES = [
     {"tone": "good", "text": "Up trend."},
     {"tone": "bad", "text": "Weak recent trend."},
@@ -303,23 +303,24 @@ def test_reasons_are_limited_to_three():
 
 def test_owners_own_prices_are_used():
     position = {"stop_price": 80.0, "target_price": 150.0}
-    step = advice.next_step("Hold", LEVELS, position)
+    step = advice.next_step("Keep", LEVELS, position)
     assert "80.00" in step and "150.00" in step
 
 
 @pytest.mark.parametrize(
     "call",
-    [
-        "Wait",
-        "Buy",
-        "Leans buy",
-        "Don't buy",
-        "Leans don't buy",
-        "Sell",
-        "Hold",
-        "Hold and review",
-        "Sell or take some profit",
-    ],
+    ["Buy", "Keep", "Sell", "Leave alone", "Not verified"],
 )
 def test_every_call_has_a_next_step(call):
     assert advice.next_step(call, None, None)
+
+
+@pytest.mark.parametrize("owned", [True, False])
+def test_every_answer_is_one_of_four_words(owned):
+    allowed = {"Buy", "Keep", "Sell", "Leave alone", "Not verified"}
+    position = OWNED if owned else None
+    for action in ("Buy candidate", "Sell candidate", "No action", EDGELESS, None):
+        for rank in (0.05, 0.5, 0.95, None):
+            assert advice.decision(action, rank, False, position)["call"] in allowed
+    if owned:
+        assert "Buy" not in {advice.plain(c, True) for c in ("Buy", "Leans buy", "Hold")}

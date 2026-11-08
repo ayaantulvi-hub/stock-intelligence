@@ -578,18 +578,13 @@ type Holding = {
 export function HoldingsToday({ onOpen }: { onOpen?: (ticker: string) => void }) {
   const { data } = useData<Holding[]>("/api/holdings-today");
   if (!data || data.length === 0) return null;
-  const selling = data.filter((row) => row.call === "Sell now").length;
-  const checking = data.filter((row) => row.call === "Check the news").length;
+  const selling = data.filter((row) => row.call === "Sell").length;
   return (
     <section className="orders">
       <h2>Your stocks today</h2>
       <p className="plain">
         <b>
-          {selling === 0
-            ? checking === 0
-              ? "Keep everything."
-              : `Keep everything, and check the news on ${checking}.`
-            : `Sell ${selling} now, keep the rest.`}
+          {selling === 0 ? "Keep everything." : `Sell ${selling}, keep the rest.`}
         </b> Checked
         every update. These are rules, not a promise of what comes next.
       </p>
@@ -597,7 +592,7 @@ export function HoldingsToday({ onOpen }: { onOpen?: (ticker: string) => void })
         <table>
           <tbody>
             {data.map((row) => (
-              <tr key={row.ticker} className={leanRow(row.call === "Sell now" ? "Sell" : row.call === "Keep" ? "Buy" : row.call === "Check the news" ? "Hold off" : "")}>
+              <tr key={row.ticker} className={leanRow(row.call)}>
                 <td>
                   <button className="link" onClick={() => onOpen?.(row.ticker)}>
                     {row.ticker}
@@ -625,7 +620,6 @@ export function PortfolioPage() {
     <section>
       <h2>My portfolio</h2>
       <HoldingsToday />
-      <TradingPlan />
       <div className="glance">
         <div>
           <small>Worth</small>
@@ -955,52 +949,6 @@ type Week = {
 };
 type PlanData = { checks: PlanCheck[]; paused: boolean; week: Week };
 
-const ACCOUNT_KEY = "account-size";
-
-function savedAccount() {
-  try {
-    return window.localStorage.getItem(ACCOUNT_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-export function TradingPlan() {
-  const [account, setAccount] = useState(savedAccount);
-  const query = Number(account) > 0 ? `?account=${Number(account)}` : "";
-  const { data, failed } = useData<PlanData>(`/api/plan${query}`);
-  const change = (value: string) => {
-    setAccount(value);
-    try {
-      window.localStorage.setItem(ACCOUNT_KEY, value);
-    } catch {
-      // The page still works without saving the number.
-    }
-  };
-  if (failed) return <Failed />;
-  if (!data || data.checks.length === 0) return null;
-  const broken = data.checks.filter((check) => check.state === "fail").length;
-  return (
-    <section className="orders">
-      <h2>Your trading plan</h2>
-      <p className="plain">
-        <b>{broken === 0 ? "You're following the plan." : `${broken} plan ${broken === 1 ? "rule is" : "rules are"} broken.`}</b>{" "}
-        Checked by the tool each update. These are risk rules, not forecasts.
-      </p>
-      <ul className="plan">
-        {data.checks.map((check) => (
-          <li key={check.rule + check.text} className={check.state === "pass" ? "ok" : "bad"}>
-            <b>{check.state === "pass" ? "✓" : check.state === "fail" ? "✗" : "!"} {check.rule}:</b> {check.text}
-          </li>
-        ))}
-      </ul>
-      <label className="inputs">
-        Account size in $ (optional, for the 2% risk rule)
-        <input type="number" min="0" value={account} onChange={(e) => change(e.target.value)} />
-      </label>
-    </section>
-  );
-}
 
 export function WeeklyReview() {
   const { data, failed } = useData<PlanData>("/api/plan");
@@ -1018,13 +966,9 @@ export function WeeklyReview() {
           <tr><td>Net profit or loss</td><td className={(week.net ?? 0) >= 0 ? "ok" : "bad"}>{week.net === null ? "None" : money(week.net)}</td></tr>
           <tr><td>Best sale</td><td>{week.best ? `${week.best.ticker} ${money(week.best.result)}` : "None"}</td></tr>
           <tr><td>Worst sale</td><td>{week.worst ? `${week.worst.ticker} ${money(week.worst.result)}` : "None"}</td></tr>
-          <tr><td>Stops moved further away</td><td className={week.widened.length ? "bad" : "ok"}>{week.widened.length ? week.widened.join(", ") : "None"}</td></tr>
-          <tr><td>Held past the sell date</td><td className={week.past_sell_date.length ? "bad" : "ok"}>{week.past_sell_date.length ? week.past_sell_date.join(", ") : "None"}</td></tr>
           <tr><td>Model's next-day calls</td><td>{week.model_calls === 0 ? "None scored" : `${week.model_right} of ${week.model_calls} right, against ${week.model_usual ?? "Not verified"} for always guessing the most common outcome. ${week.model_in_range} inside the range.`}</td></tr>
-          <tr><td>Pause new buys?</td><td className={data.paused ? "bad" : "ok"}>{data.paused ? "Yes: 3 losing sales in a row" : "No"}</td></tr>
         </tbody>
       </table>
-      <p>Then write one lesson below: what you'd do differently next week.</p>
     </section>
   );
 }

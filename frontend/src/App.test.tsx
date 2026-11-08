@@ -1,6 +1,6 @@
 // Every API response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 
 afterEach(() => {
@@ -59,6 +59,7 @@ test("shows a failed feed and its message", async () => {
     "/api/backtest": [200, null],
   });
   render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "How reliable?" }));
   expect(await screen.findByText("Error")).toBeTruthy();
   expect(screen.getByText(/Tiingo AAPL: HTTP 500/)).toBeTruthy();
   expect(screen.getByText("Stale")).toBeTruthy();
@@ -88,6 +89,7 @@ test("shows Not verified for a value the source did not publish", async () => {
     "/api/backtest": [200, null],
   });
   render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Data" }));
   expect((await screen.findAllByText("Not verified")).length).toBeGreaterThan(0);
 });
 
@@ -130,6 +132,18 @@ test("says No reliable edge when a tested signal has none", async () => {
     ],
   });
   render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "How reliable?" }));
   expect(await screen.findByText("No reliable edge")).toBeTruthy();
   expect(screen.getByText("Fixture warning about bias.")).toBeTruthy();
+});
+
+test("the site has a search bar and five pages", () => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ status: 200, json: async () => null })));
+  render(<App />);
+  expect(screen.getByLabelText("Search stocks")).toBeTruthy();
+  const names = screen.getAllByRole("button").map((b) => b.textContent);
+  for (const page of ["Long-term", "Trading", "My portfolio", "How reliable?", "Data"]) {
+    expect(names).toContain(page);
+  }
+  expect(names).not.toContain("Today");
 });

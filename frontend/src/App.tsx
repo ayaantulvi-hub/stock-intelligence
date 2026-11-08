@@ -6,7 +6,7 @@ import { TodaysOrders } from "./ChecklistPanel";
 import { DayTradingPage } from "./DayTrading";
 import { CongressTrades, SourceChecks } from "./Crowd";
 import { DecisionTests, MarketCheck } from "./Checks";
-import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, MarketStrip, NextDecision, PortfolioPage, ReliabilityPage, Screener, TradingPlan, WatchButton, WhatChanged } from "./Pages";
+import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, MarketStrip, NextDecision, PortfolioPage, ReliabilityPage, Screener, WatchButton, WhatChanged } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
 type Status = {
@@ -149,7 +149,7 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
-const PAGES = ["Today", "Day trading", "Short trades", "Long-term", "Big picture", "My portfolio", "Journal", "Alerts", "How reliable?"];
+const PAGES = ["Long-term", "Trading", "My portfolio", "How reliable?", "Data"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
@@ -307,11 +307,26 @@ export default function App() {
     }
   };
 
+  const showStock = (ticker: string) => {
+    setResults(null);
+    open(ticker);
+  };
+
   return (
     <main>
-      <h1>Stock Intelligence</h1>
-      <p>Verified data, tested signals and scored forecasts. Not financial advice.</p>
-      <div className="tabs pages" role="group" aria-label="Pages">
+      <header className="top">
+        <h1>Stock Intelligence</h1>
+        <form onSubmit={search} className="search">
+          <input
+            aria-label="Search stocks"
+            placeholder="Search a company or ticker"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <button type="submit">Search</button>
+        </form>
+      </header>
+      <nav className="tabs pages" role="group" aria-label="Pages">
         {PAGES.map((name) => (
           <button
             key={name}
@@ -324,68 +339,16 @@ export default function App() {
             {name}
           </button>
         ))}
-      </div>
-      {page === "Day trading" && <DayTradingPage />}
-      {page === "Short trades" && (
-        <section className="orders">
-          <h2>Short trades, 1 to 5 days</h2>
-          <TradesPanel
-            onOpen={(ticker) => {
-              setPage("Today");
-              open(ticker);
-            }}
-          />
-        </section>
-      )}
-      {page === "Long-term" && (
-        <section className="orders">
-          <h2>Long-term, years</h2>
-          <InvestPanel
-            onOpen={(ticker) => {
-              setPage("Today");
-              open(ticker);
-            }}
-          />
-        </section>
-      )}
-      {page === "Big picture" && (
-        <>
-          <MarketCheck />
-          <BigPicture />
-          <CongressTrades />
-        </>
-      )}
-      {page === "My portfolio" && <PortfolioPage />}
-      {page === "Journal" && <JournalPage />}
-      {page === "Alerts" && <AlertsPage />}
-      {page === "How reliable?" && (
-        <>
-          <SourceChecks />
-          <DecisionTests />
-          <ReliabilityPage />
-        </>
-      )}
-      {page === "Today" && (
-        <>
+      </nav>
+      <p className="small-print">Every call is Buy, Keep, Sell or Leave alone. Not financial advice.</p>
       {failed && <p className="bad">Cannot reach the API. Status is not verified.</p>}
-      {!failed && !status && <p>Checking…</p>}
-
-      <form onSubmit={search}>
-        <input
-          aria-label="Search stocks"
-          placeholder="Ticker or company"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <button type="submit">Search</button>
-      </form>
       {stockError && <p className="bad">{stockError}</p>}
       {results?.length === 0 && <p>Not verified: no covered stock matches.</p>}
       {results && results.length > 0 && !stock && (
         <ul>
           {results.map((item) => (
             <li key={item.ticker}>
-              <button className="link" onClick={() => open(item.ticker)}>
+              <button className="link" onClick={() => showStock(item.ticker)}>
                 {item.ticker}
               </button>{" "}
               {item.name}
@@ -396,100 +359,139 @@ export default function App() {
       {stock && (
         <>
           <p>
-            <button onClick={goHome}>Back to today's list</button>
+            <button onClick={goHome}>Back to {page}</button>
           </p>
           <StockView stock={stock} />
         </>
       )}
 
-      {!stock && !failed && (
+      {!stock && page === "Long-term" && (
         <>
           <MarketStrip />
-          <MarketCheck />
+          <section className="orders">
+            <h2>Long-term investing: months to years</h2>
+            <p className="plain">From each company's business and price. Buy the ones marked Buy, sell the ones marked Sell.</p>
+            <InvestPanel onOpen={showStock} />
+          </section>
+        </>
+      )}
+
+      {!stock && page === "Trading" && (
+        <>
+          <MarketStrip />
           <NextDecision />
-          <WhatChanged onOpen={open} />
-          <HoldingsToday onOpen={open} />
-          <TradingPlan />
           <section className="orders">
             <h2>Hold about a month</h2>
-            <TodaysOrders onOpen={open} />
+            <TodaysOrders onOpen={showStock} />
           </section>
+          <section className="orders">
+            <h2>Short trades: 1 to 5 days</h2>
+            <TradesPanel onOpen={showStock} />
+          </section>
+          <DayTradingPage />
           <details className="fold">
-            <summary>See all stocks and the market</summary>
-            <IdeasPanel onOpen={open} />
-            <Screener onOpen={open} />
-            <MarketMood />
+            <summary>Every stock, best to worst for the next month</summary>
+            <IdeasPanel onOpen={showStock} />
+            <Screener onOpen={showStock} />
           </details>
         </>
       )}
-      {backtest && <BacktestView backtest={backtest} />}
 
-      {status && (
-        <details className="fold">
-          <summary>Is everything running?</summary>
-          <dl>
-            <div>
-              <dt>Database</dt>
-              <dd>
-                <State state={status.database.state} />
-              </dd>
-            </div>
-            <div>
-              <dt>Database schema</dt>
-              <dd>
-                <State state={status.migrations.state} />
-              </dd>
-            </div>
-            <div>
-              <dt>Scheduled updates</dt>
-              <dd>
-                <State state={status.worker.state} />
-              </dd>
-            </div>
-          </dl>
-        </details>
+      {!stock && page === "My portfolio" && (
+        <>
+          <HoldingsToday onOpen={showStock} />
+          <WhatChanged onOpen={showStock} />
+          <PortfolioPage />
+          <details className="fold">
+            <summary>Journal and weekly review</summary>
+            <JournalPage />
+          </details>
+          <details className="fold">
+            <summary>Alerts</summary>
+            <AlertsPage />
+          </details>
+        </>
       )}
 
-      {feeds.length > 0 && (
-        <section>
-          <h2>Data feeds</h2>
-          <dl>
-            {feeds.map((feed) => (
-              <div key={feed.feed}>
-                <dt>
-                  {feed.feed} · {feed.source}
-                  <small>
-                    Last run {when(feed.last_run)}
-                    {feed.message ? `: ${feed.message}` : ""}
-                  </small>
-                </dt>
-                <dd>
-                  <State state={feed.status} />
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+      {!stock && page === "How reliable?" && (
+        <>
+          <SourceChecks />
+          <DecisionTests />
+          <ReliabilityPage />
+          {backtest && <BacktestView backtest={backtest} />}
+          {status && (
+            <details className="fold">
+              <summary>Is everything running?</summary>
+              <dl>
+                <div>
+                  <dt>Database</dt>
+                  <dd>
+                    <State state={status.database.state} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Database schema</dt>
+                  <dd>
+                    <State state={status.migrations.state} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Scheduled updates</dt>
+                  <dd>
+                    <State state={status.worker.state} />
+                  </dd>
+                </div>
+              </dl>
+            </details>
+          )}
+          {feeds.length > 0 && (
+            <details className="fold">
+              <summary>Data feeds</summary>
+              <dl>
+                {feeds.map((feed) => (
+                  <div key={feed.feed}>
+                    <dt>
+                      {feed.feed} · {feed.source}
+                      <small>
+                        Last run {when(feed.last_run)}
+                        {feed.message ? `: ${feed.message}` : ""}
+                      </small>
+                    </dt>
+                    <dd>
+                      <State state={feed.status} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+        </>
       )}
 
-      {economic.length > 0 && (
-        <section>
-          <h2>Economic data</h2>
-          <dl>
-            {economic.map((row) => (
-              <div key={row.series_id}>
-                <dt>
-                  {row.series_id} · {row.observation_date}
-                  <small>
-                    {row.source}, retrieved {when(row.retrieved_at)}
-                  </small>
-                </dt>
-                <dd>{row.value ?? NOT_VERIFIED}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      )}
+      {!stock && page === "Data" && (
+        <>
+          <MarketCheck />
+          <BigPicture />
+          <MarketMood />
+          <CongressTrades />
+          {economic.length > 0 && (
+            <details className="fold">
+              <summary>Economic data</summary>
+              <dl>
+                {economic.map((row) => (
+                  <div key={row.series_id}>
+                    <dt>
+                      {row.series_id} · {row.observation_date}
+                      <small>
+                        {row.source}, retrieved {when(row.retrieved_at)}
+                      </small>
+                    </dt>
+                    <dd>{row.value ?? NOT_VERIFIED}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
         </>
       )}
       <p>

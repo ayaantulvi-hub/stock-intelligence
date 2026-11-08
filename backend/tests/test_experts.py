@@ -136,11 +136,11 @@ def test_serious_trouble_overrides_a_buy_and_says_why():
     health = experts.lens("Health", "s", experts.MIXED, "Scores 3.", "t")
     review = {"blocked": experts.block_reason([{**health, "score": 3}, {**danger, "z": 1.0}])}
     result = advice.apply_experts(verdict_for("Buy"), review)
-    assert result["call"] == "Hold off"
+    assert result["call"] == "Leave alone"
     assert result["proven"] is False
     assert "danger zone" in result["reason"]
-    assert advice.apply_experts(verdict_for("Hold", True), review)["call"] == "Hold and review"
-    assert advice.apply_experts(verdict_for("Don't buy"), review)["call"] == "Don't buy"
+    assert advice.apply_experts(verdict_for("Keep", True), review)["call"] == "Sell"
+    assert advice.apply_experts(verdict_for("Sell"), review)["call"] == "Sell"
 
 
 def test_an_expensive_stock_is_not_blocked():

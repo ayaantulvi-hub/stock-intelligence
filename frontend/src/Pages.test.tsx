@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { BigPicture, HoldingsToday, MarketStrip, PortfolioPage, ReliabilityPage, Screener, TradingPlan, WhatChanged, countdown } from "./Pages";
+import { BigPicture, HoldingsToday, MarketStrip, PortfolioPage, ReliabilityPage, Screener, WhatChanged, countdown } from "./Pages";
 
 afterEach(() => {
   cleanup();
@@ -65,14 +65,14 @@ test("your stocks today says plainly what to sell", async () => {
     vi.fn(async () => ({
       status: 200,
       json: async () => [
-        { ticker: "AAA", name: "A", price: 10, buy_price: 9, sell_by: null, call: "Sell now", reason: "Fixture reason.", kind: "sell" },
+        { ticker: "AAA", name: "A", price: 10, buy_price: 9, sell_by: null, call: "Sell", reason: "Fixture reason.", kind: "sell" },
         { ticker: "BBB", name: "B", price: 10, buy_price: 9, sell_by: null, call: "Keep", reason: "No warning signs today.", kind: "buy" },
       ],
     })),
   );
   render(<HoldingsToday />);
-  expect(await screen.findByText("Sell 1 now, keep the rest.")).toBeTruthy();
-  expect(screen.getByText("Sell now").closest("tr")?.className).toBe("row-sell");
+  expect(await screen.findByText("Sell 1, keep the rest.")).toBeTruthy();
+  expect(screen.getByText("Sell").closest("tr")?.className).toBe("row-sell");
   expect(screen.getByText("Keep").closest("tr")?.className).toBe("row-buy");
 });
 
@@ -176,16 +176,3 @@ test("the market strip shows today's move and compares your stocks", async () =>
   expect(screen.getByText("-6.60%")).toBeTruthy();
 });
 
-test("the trading plan shows broken rules in red", async () => {
-  respond({
-    paused: false,
-    week: {},
-    checks: [
-      { rule: "A stop on every holding", state: "fail", text: "No stop on AAA." },
-      { rule: "Risk per holding", state: "pass", text: "Fine." },
-    ],
-  });
-  render(<TradingPlan />);
-  expect(await screen.findByText(/1 plan rule is broken/)).toBeTruthy();
-  expect(screen.getByText(/No stop on AAA/).closest("li")?.className).toBe("bad");
-});

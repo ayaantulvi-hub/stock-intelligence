@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from stockintel import candles, context, horizons, localcache, longterm, tools
+from stockintel import advice, candles, context, horizons, localcache, longterm, tools
 from stockintel.charts import fibonacci, sma
 from stockintel.db import get_engine
 
@@ -340,26 +340,34 @@ def stored_trades(engine: Engine) -> list[dict]:
                WHERE r.short_term IS NOT NULL ORDER BY s.ticker, r.id DESC"""
     with engine.connect() as conn:
         rows = conn.execute(text(query)).all()
-    found = [
-        {"ticker": row.ticker, "name": row.name, "date": row.review_date, **row.short_term}
-        for row in rows
-        if row.short_term["kind"] != "neutral"
-    ]
-    return sorted(found, key=lambda item: (not item["proven"], item["ticker"]))
+    found = []
+    for row in rows:
+        if row.short_term["kind"] == "neutral":
+            continue
+        # Older rows were stored with longer labels; every call shown is one of four words.
+        call = advice.plain(row.short_term["call"], False)
+        found.append(
+            {"ticker": row.ticker, "name": row.name, "date": row.review_date,
+             **row.short_term, "call": call}
+        )
+    return sorted(found, key=lambda item: (not item["proven"], item["call"] != "Buy", item["ticker"]))
 
 
 def stored_investments(engine: Engine) -> list[dict]:
-    """Stocks whose company checks make them long-term buys, strongest first."""
+    """Long-term Buy and Sell calls from the company checks: best buys first, then sells,
+    weakest first. Stocks you own say Keep instead of Buy. Leave-alone stocks are left out."""
     query = """SELECT DISTINCT ON (s.ticker) s.ticker, s.name, r.detail, r.blocked, r.agree,
                  r.against
                FROM expert_reviews r JOIN securities s ON s.id = r.security_id
                ORDER BY s.ticker, r.id DESC"""
+    owned_query = """SELECT s.ticker FROM positions p JOIN securities s ON s.id = p.security_id"""
     with engine.connect() as conn:
         rows = conn.execute(text(query)).all()
+        owned = set(conn.execute(text(owned_query)).scalars())
     found = []
     for row in rows:
-        view = horizons.invest({"lenses": row.detail, "blocked": row.blocked})
-        if view["kind"] == "buy":
+        view = horizons.invest({"lenses": row.detail, "blocked": row.blocked}, row.ticker in owned)
+        if view["call"] in ("Buy", "Keep", "Sell"):
             found.append(
                 {
                     "ticker": row.ticker,
@@ -368,7 +376,7 @@ def stored_investments(engine: Engine) -> list[dict]:
                     **view,
                 }
             )
-    return sorted(found, key=lambda item: (-item["score"], item["ticker"]))
+    return sorted(found, key=lambda item: (item["call"] == "Sell", -item["score"], item["ticker"]))
 
 
 def stored_blocks(engine: Engine) -> dict[str, str]:

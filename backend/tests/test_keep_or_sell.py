@@ -30,16 +30,16 @@ def test_keep_when_nothing_is_wrong_and_shows_the_date():
 
 
 def test_sell_now_when_the_stop_is_hit():
-    assert call(price=89.0)["call"] == "Sell now"
+    assert call(price=89.0)["call"] == "Sell"
 
 
 def test_sell_now_on_the_planned_date():
-    assert call(today=date(2026, 12, 3))["call"] == "Sell now"
+    assert call(today=date(2026, 12, 3))["call"] == "Sell"
 
 
 def test_sell_now_when_the_ranking_drops():
     result = call(rank=0.2, previous_rank=0.25)
-    assert result["call"] == "Sell now"
+    assert result["call"] == "Sell"
     assert "two forecasts in a row" in result["reason"]
 
 
@@ -49,13 +49,13 @@ def test_one_low_ranking_is_not_enough():
 
 
 def test_sell_now_on_serious_trouble():
-    assert call(blocked="a filing")["call"] == "Sell now"
+    assert call(blocked="a filing")["call"] == "Sell"
 
 
 def test_bearish_candle_needs_the_trend_to_agree():
     assert call(bearish_candle="Shooting star")["call"] == "Keep"
-    assert call(bearish_candle="Shooting star", below_50=True)["call"] == "Sell now"
+    assert call(bearish_candle="Shooting star", below_50=True)["call"] == "Sell"
 
 
 def test_old_prices_give_no_call():
-    assert call(stale=True, rank=0.1, previous_rank=0.1)["call"] == "Wait"
+    assert call(stale=True, rank=0.1, previous_rank=0.1)["call"] == "Not verified"

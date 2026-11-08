@@ -37,13 +37,13 @@ def answer(call, owned=False):
 
 def test_bad_news_stops_a_buy_and_never_creates_one():
     result = advice.apply_news(answer("Buy"), "of bad news")
-    assert result["call"] == "Hold off" and result["proven"] is False
-    assert advice.apply_news(answer("Hold", True), "of bad news")["call"] == "Hold and review"
-    assert advice.apply_news(answer("Don't buy"), "of bad news")["call"] == "Don't buy"
+    assert result["call"] == "Leave alone" and result["proven"] is False
+    assert advice.apply_news(answer("Keep", True), "of bad news")["call"] == "Sell"
+    assert advice.apply_news(answer("Sell"), "of bad news")["call"] == "Sell"
     assert advice.apply_news(answer("Buy"), None)["call"] == "Buy"
 
 
-def test_a_holding_gets_a_warning_not_a_forced_sale():
+def test_a_proven_news_warning_sells_a_holding():
     result = advice.keep_or_sell(
         price=100.0,
         stop=90.0,
@@ -57,7 +57,7 @@ def test_a_holding_gets_a_warning_not_a_forced_sale():
         below_50=False,
         news_warning="of bad news",
     )
-    assert result["call"] == "Check the news"
+    assert result["call"] == "Sell"
 
 
 def add_news(engine, subject, items):

@@ -224,3 +224,8 @@ ul.plan li { margin: 0.35rem 0; }
 .row-buy .score-bar { background: var(--ok); }
 .row-sell .score-bar { background: var(--bad); }
 .hint { font-size: 0.9rem; opacity: 0.8; }
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+header.top h1 { margin: 0; }
+form.search { display: flex; gap: 8px; flex: 1 1 280px; max-width: 480px; }
+form.search input { flex: 1; min-width: 0; }
+.small-print { font-size: 0.85rem; opacity: 0.75; }

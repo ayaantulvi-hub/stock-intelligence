@@ -484,42 +484,6 @@ function Horizons({ ticker }: { ticker: string }) {
 
 type Listed = { ticker: string; name: string; call: string; reason: string; kind: string };
 
-function ListTable({ url, onOpen, empty }: {
-  url: string;
-  onOpen: (ticker: string) => void;
-  empty: string;
-}) {
-  const [rows, setRows] = useState<Listed[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    getJson<Listed[]>(url)
-      .then(setRows)
-      .catch(() => setFailed(true));
-  }, [url]);
-  if (failed) return <p className="bad">Could not load this list. Refresh to try again.</p>;
-  if (!rows) return <p>Loading…</p>;
-  if (rows.length === 0) return <p>{empty}</p>;
-  return (
-    <div className="scroll">
-      <table>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.ticker} className={row.kind === "buy" ? "row-buy" : "row-sell"}>
-              <td>
-                <button className="link" onClick={() => onOpen(row.ticker)}>
-                  {row.ticker}
-                </button>
-              </td>
-              <td>{row.call}</td>
-              <td>{row.reason}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export function TradesPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
   const [rows, setRows] = useState<(TradeView & { ticker: string; date: string })[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -600,17 +564,47 @@ export function TradesPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
 }
 
 export function InvestPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
+  const [rows, setRows] = useState<Listed[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    getJson<Listed[]>("/api/investments")
+      .then(setRows)
+      .catch(() => setFailed(true));
+  }, []);
+  if (failed) return <p className="bad">Could not load this list. Refresh to try again.</p>;
+  if (!rows) return <p>Loading…</p>;
+  const buys = rows.filter((row) => row.call !== "Sell");
+  const sells = rows.filter((row) => row.call === "Sell");
+  const table = (list: Listed[], empty: string) =>
+    list.length === 0 ? (
+      <p>{empty}</p>
+    ) : (
+      <div className="scroll">
+        <table>
+          <tbody>
+            {list.map((row) => (
+              <tr key={row.ticker} className={row.call === "Sell" ? "row-sell" : "row-buy"}>
+                <td>
+                  <button className="link" onClick={() => onOpen(row.ticker)}>
+                    {row.ticker}
+                  </button>
+                </td>
+                <td><b>{row.call}</b></td>
+                <td>{row.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   return (
     <>
-      <p className="plain">
-        <b>Buy and keep for years while the company checks hold.</b> Review after each yearly
-        report. These rules aren't proven in this app.
-      </p>
-      <ListTable
-        url="/api/investments"
-        onOpen={onOpen}
-        empty="No stock passes the company checks yet. More appear as data loads."
-      />
+      <p className="plain">These are written company checks, not a tested edge. Review after each yearly report.</p>
+      <h3 className="ok">Best to buy, strongest first</h3>
+      {table(buys, "No stock passes the company checks yet.")}
+      <h3 className="bad">Sell, weakest first</h3>
+      {table(sells, "No stock fails enough company checks to sell.")}
+      <p className="plain">Every stock not listed is Leave alone. Search any company to see its own call.</p>
     </>
   );
 }
@@ -763,7 +757,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
             <p className="step">
               <b>Your next step:</b> {decision.next_step}
             </p>
-            {!decision.owned && ["Buy", "Leans buy"].includes(decision.call) && (
+            {!decision.owned && decision.call === "Buy" && (
               <HowMuch ticker={ticker} />
             )}
           </>
@@ -830,7 +824,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
         </details>
       )}
       <details className="fold">
-        <summary>Before you trade: checklist, exit prices and how much to buy</summary>
+        <summary>Exit prices: where to sell for a loss or a profit</summary>
         <ChecklistPanel ticker={ticker} />
       </details>
       </details>

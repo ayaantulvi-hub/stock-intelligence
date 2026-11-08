@@ -812,7 +812,8 @@ def screener(engine: Engine) -> list[dict]:
         name = action(row.pop("rank_edge"), row["rank"])
         lean = advice.overall(name, row["rank"])["lean"]
         if lean == "Buy" and row["ticker"] in blocks:
-            lean = "Hold off"
+            lean = advice.LEAVE
+        lean = {"Buy": advice.BUY, "Sell": advice.SELL}.get(lean, advice.LEAVE)
         output.append({**row, "action": name, "lean": lean})
     return output
 
@@ -844,8 +845,8 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
     )
     answer = advice.apply_news(answer, warning)
     hold = rules.market_hold(engine)
-    if hold and answer["call"] in {"Buy", "Leans buy"}:
-        answer = {**answer, "call": "Hold off", "reason": hold, "kind": "neutral"}
+    if hold and answer["call"] == advice.BUY:
+        answer = {**answer, "call": advice.LEAVE, "reason": hold, "kind": "neutral"}
     levels = suggested_levels(engine, ticker) or {}
     return {
         **advice.brief(
@@ -872,14 +873,16 @@ def stock_horizons(engine: Engine, ticker: str) -> dict | None:
     review = expert_review(engine, ticker, today)
     frame = _adjusted_bars(engine, ticker)
     earnings = tools.next_earnings(engine, ticker, today)
+    owned = get_position(engine, ticker) is not None
     return {
         "trade": horizons.trade(
             frame,
             candles.latest_tests(engine),
             data["stale"],
             (earnings - today).days if earnings else None,
+            owned,
         ),
-        "invest": horizons.invest(review),
+        "invest": horizons.invest(review, owned),
     }
 
 

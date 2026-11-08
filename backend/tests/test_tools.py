@@ -252,11 +252,11 @@ def test_a_holding_at_its_stop_says_sell_now_and_alerts_once(engine):
     bar(engine, security, "2026-07-07", 150)
     own(engine, security, stop=160)
     result = queries.holdings_today(engine, NOW)
-    assert result[0]["call"] == "Sell now"
+    assert result[0]["call"] == "Sell"
     monitor.scan(engine, NOW)
     monitor.scan(engine, NOW)
     messages = monitor.take_unsent(engine)
-    assert sum(message.startswith("Sell now: AAA") for message in messages) == 1
+    assert sum(message.startswith("Sell: AAA") for message in messages) == 1
 
 
 def test_a_healthy_holding_says_keep(engine):
@@ -284,4 +284,4 @@ def test_a_holding_that_flips_to_sell_now_is_reported_and_alerted(engine):
         conn.execute(text("UPDATE positions SET stop_price = 160"))
     monitor.scan(engine, NOW)
     messages = monitor.take_unsent(engine)
-    assert any("AAA changed. Your holding: Keep to Sell now" in message for message in messages)
+    assert any("AAA changed. Your holding: Keep to Sell" in message for message in messages)

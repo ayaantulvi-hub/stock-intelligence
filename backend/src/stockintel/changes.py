@@ -14,14 +14,7 @@ from stockintel.providers import news as feeds
 TOP = 10
 EVENT_DAYS = 3
 BETTER, WORSE, NEUTRAL = "buy", "sell", "neutral"
-CALL_ORDER = {
-    "Don't buy": 0,
-    "Leans don't buy": 1,
-    "Hold off": 2,
-    "Wait": 3,
-    "Leans buy": 4,
-    "Buy": 5,
-}
+CALL_ORDER = {"Sell": 0, "Leave alone": 1, "Keep": 2, "Buy": 3}
 MAIN_TOPICS = ("Decision", "Your holding")
 
 
@@ -75,9 +68,9 @@ def review_changes(old: dict, new: dict) -> list[dict]:
         if was is None:
             continue
         if now["blocked"] and not was["blocked"]:
-            found.append(item(ticker, "Warning", "None", "Hold off", now["blocked"], WORSE))
+            found.append(item(ticker, "Warning", "None", "Leave alone", now["blocked"], WORSE))
         if was["blocked"] and not now["blocked"]:
-            found.append(item(ticker, "Warning", "Hold off", "Cleared", was["blocked"], BETTER))
+            found.append(item(ticker, "Warning", "Leave alone", "Cleared", was["blocked"], BETTER))
         before = horizons.invest({"lenses": was["detail"], "blocked": was["blocked"]})
         after = horizons.invest({"lenses": now["detail"], "blocked": now["blocked"]})
         if before["call"] != after["call"]:
@@ -156,9 +149,9 @@ def _holding_changes(conn) -> list[dict]:
             row.call,
             row.reason,
             WORSE
-            if row.call in ("Sell now", "Check the news")
+            if row.call in ("Sell", "Sell now")
             else NEUTRAL
-            if row.call == "Wait"
+            if row.call != "Keep"
             else BETTER,
         )
         for row in conn.execute(text(query))
@@ -196,13 +189,11 @@ def what_to_do(holding: dict | None, followed: bool) -> str:
     """The plain instruction beside each change, whatever the change was."""
     if holding is None:
         return "You don't own it, so nothing to do." if followed else "No action."
-    if holding["call"] == "Sell now":
-        return f"Sell now. {holding['reason']}"
-    if holding["call"] == "Check the news":
-        return f"Check the news. {holding['reason']}"
+    if holding["call"] == "Sell":
+        return f"Sell. {holding['reason']}"
     if holding["call"] == "Keep":
         return "Keep. Don't sell, your plan hasn't changed."
-    return "Wait for today's prices."
+    return "Not verified: wait for today's prices."
 
 
 def _followed_news(conn, tickers: set[str], today: date) -> list[dict]:

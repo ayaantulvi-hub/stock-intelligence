@@ -1,7 +1,7 @@
 // Every response here is a labelled test fixture, stubbed in place of fetch.
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { DayTradingPage, shares, stepText, windowState } from "./DayTrading";
+import { DayTradingPage, stepText, windowState } from "./DayTrading";
 
 afterEach(() => {
   cleanup();
@@ -21,12 +21,7 @@ test("window countdown and states", () => {
 test("each step says what it's waiting for", () => {
   expect(stepText(stock, false)).toMatch(/Outside the trading window/);
   expect(stepText(stock, true)).toMatch(/Step 1 of 3/);
-  expect(stepText({ ...stock, step: { touched: { level: "Previous day high", side: "short" } } }, true)).toMatch(/Previous day high.*sell short/);
-});
-
-test("shares come from 1% risk and the stop distance", () => {
-  expect(shares(10000, 0.01, 500, 499)).toBe(100);
-  expect(shares(0, 0.01, 500, 499)).toBeNull();
+  expect(stepText({ ...stock, step: { touched: { level: "Previous day high", side: "short" } } }, true)).toMatch(/Previous day high.*sell/);
 });
 
 test("a feed error is shown and no levels or setups appear", async () => {
