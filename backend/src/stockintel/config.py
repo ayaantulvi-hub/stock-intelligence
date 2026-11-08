@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # Data sources. Empty means the feed reports an error when run, never a fallback.
     tiingo_api_token: str = ""
     fred_api_key: str = ""
+    alpaca_api_key_id: str = ""
+    alpaca_api_secret_key: str = ""
     sec_contact_email: str = ""
     universe_size: int = Field(default=480, gt=0)
     price_history_start: str = "2010-01-01"

@@ -1,0 +1,29 @@
+name: Day trading test
+# Tests the TJR rules on Alpaca 1-minute bars. Bars aren't stored; only the summary is.
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: Months of history to test
+        default: "36"
+  schedule:
+    - cron: "10 13 * * 6"
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --no-dev
+      - run: uv run --no-dev alembic upgrade head
+      - run: uv run --no-dev python -m stockintel.day_trading test ${{ inputs.months || '36' }}

@@ -3,6 +3,7 @@ import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
 import { TodaysOrders } from "./ChecklistPanel";
+import { DayTradingPage } from "./DayTrading";
 import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, MarketStrip, NextDecision, PortfolioPage, ReliabilityPage, Screener, TradingPlan, WatchButton, WhatChanged } from "./Pages";
 import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
 
@@ -146,7 +147,7 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
-const PAGES = ["Today", "Short trades", "Long-term", "Big picture", "My portfolio", "Journal", "Alerts", "How reliable?"];
+const PAGES = ["Today", "Day trading", "Short trades", "Long-term", "Big picture", "My portfolio", "Journal", "Alerts", "How reliable?"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
@@ -322,6 +323,7 @@ export default function App() {
           </button>
         ))}
       </div>
+      {page === "Day trading" && <DayTradingPage />}
       {page === "Short trades" && (
         <section className="orders">
           <h2>Short trades, 1 to 5 days</h2>

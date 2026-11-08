@@ -10,3 +10,7 @@ services:
         sync: false
       - key: DASHBOARD_PASSWORD
         sync: false
+      - key: ALPACA_API_KEY_ID
+        sync: false
+      - key: ALPACA_API_SECRET_KEY
+        sync: false
