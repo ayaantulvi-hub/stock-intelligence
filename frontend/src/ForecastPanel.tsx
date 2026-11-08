@@ -778,6 +778,11 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
       {forecast && (
         <>
           <h3>Chances for {forecast.target_session}</h3>
+          {!forecast.next_day_edge && (
+            <p className="bad">
+              No reliable edge for the next day. In testing, this model did worse than simply using how often stocks usually rise, fall or stay flat, so don't trade on these odds.
+            </p>
+          )}
           <div className="odds" role="img" aria-label={`Down ${percent(forecast.p_down)}, flat ${percent(forecast.p_flat)}, up ${percent(forecast.p_up)}`}>
             <span className="down" style={{ flexGrow: forecast.p_down, flexBasis: 0 }}>
               Down {percent(forecast.p_down)}
