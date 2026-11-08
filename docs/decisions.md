@@ -292,3 +292,21 @@ needs at least 30 tested cases that beat the baseline.
 - The new Neon project also ran out of allowance on 2026-11-05. The cause was the live check, which
   read every company figure on each run, about 20 runs in a day. The check no longer does this.
 - The job copy is now saved even when a job fails. Never put a full read in the live check.
+
+## Audit fixes (8 November 2026)
+
+- One risk limit everywhere: 1.5% of the account a trade (the owner's choice, between 1% and 2%).
+- Today's top 10 is labelled "Unproven ranking" until the model passes its test.
+- Caution rules (expert checks, news warnings) are now measured weekly: stocks they blocked
+  against the rest, 20 trading days later (`overrides.py`). "Not enough history yet" until 30 cases.
+- Sources are cross-checked daily (`conflicts.py`): Tiingo against Alpaca closes (flag over 1%), and
+  FRED's S&P 500 and Dow against SPY and DIA daily changes (flag over 0.3 points). Both values are
+  shown; nothing is averaged.
+- Day trading marks setups on CPI, jobs-report and Fed days, results days and news warnings, and
+  the 3-year tests report those days separately.
+- New free sources: FRED broad dollar index (DTWEXBGS, used with a 7-day lag), FRED release dates,
+  FINRA short interest (public, no key) and House trade reports (House Clerk; Senate not covered).
+  Short interest and Congress trades are shown for context, not used in decisions.
+- Time Machine draws 30-minute runs from one past day, so price streaks are kept.
+- Survivorship: the universe is today's largest 480, which flatters past results. Not fixable for
+  free; stated on the site.
