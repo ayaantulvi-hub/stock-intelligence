@@ -303,3 +303,12 @@ def week(engine: Engine, now: datetime) -> dict:
 def not_chasing(price: float, atr: float | None) -> float | None:
     """The highest price worth paying today: the last close plus half a typical day's move."""
     return None if atr is None else price + NOT_CHASING_ATR * atr
+
+
+if __name__ == "__main__":
+    from stockintel.db import get_engine
+
+    result = review(get_engine())
+    for check in result["checks"]:
+        print(check["state"], "|", check["rule"], "|", check["text"])
+    print("week", result["week"])
