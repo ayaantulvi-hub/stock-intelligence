@@ -329,20 +329,6 @@ REGISTER = [
         "https://www.federalregister.gov/presidential-documents",
     ),
     Factor(
-        "election_window",
-        "Close to a US federal election",
-        "Government",
-        "Santa-Clara & Valkanov (2003), Journal of Finance",
-        LIVE,
-    ),
-    Factor(
-        "midterm_year",
-        "Midterm election year",
-        "Government",
-        "Santa-Clara & Valkanov (2003), Journal of Finance",
-        LIVE,
-    ),
-    Factor(
         "rate_beta",
         "Sensitivity to interest rates",
         "Economy",
@@ -387,8 +373,6 @@ MARKET_WIDE = {
     "fed_direction",
     "policy_uncertainty",
     "policy_actions",
-    "election_window",
-    "midterm_year",
 }
 NAMES = {factor.id: factor.name for factor in REGISTER}
 

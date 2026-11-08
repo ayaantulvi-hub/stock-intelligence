@@ -1,10 +1,17 @@
 name: Update data
-# Started hourly by cron-job.org. Whichever run first finds decisions due does the daily work.
+# Runs only when there is work, to stay inside GitHub's free 2,000 minutes a month (UTC times):
+# - After the US close, 11 runs to refresh all 480 prices (Tiingo allows about 45 an hour).
+# - 10:50, four hours before the open: the daily decisions. 12:25 and 13:25 are backups, and
+#   whichever run first finds the decisions due does the daily work.
+# - Three runs during the US session for market prices and news.
+# Day trading needs no job: its page fetches live prices itself.
 on:
-  # A backup for cron-job.org. GitHub can delay these, so forecasts may run late.
   schedule:
-    - cron: "25 * * * *"
+    - cron: "25 21-23 * * 1-5"
+    - cron: "25 0-7 * * 2-6"
     - cron: "50 10 * * 2-6"
+    - cron: "25 12,13 * * 1-5"
+    - cron: "25 15,17,19 * * 1-5"
   workflow_dispatch:
     inputs:
       prices:

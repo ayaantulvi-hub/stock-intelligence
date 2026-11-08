@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import Engine, text
 
-from stockintel import calendar_events, news_judge, news_watch
+from stockintel import news_judge, news_watch
 from stockintel.providers.news import INDUSTRIES, TOPICS, industry_of
 
 FRED = "https://fred.stlouisfed.org/series/"
@@ -109,23 +109,6 @@ def dollar(now, before, day) -> dict:
         return card(title, reading, GOOD, meaning, source, url, day)
     meaning = "The dollar has moved little, so it isn't a big factor for exporters right now."
     return card(title, reading, NEUTRAL, meaning, source, url, day)
-
-
-def elections(today: date) -> dict:
-    title = "US elections"
-    url = "https://www.usa.gov/election-day"
-    day, kind = calendar_events.next_election(today)
-    window = calendar_events.election_window(today)
-    last = calendar_events.election_day(today.year if today.year % 2 == 0 else today.year - 1)
-    if window == 1:
-        reading = f"{(today - last).days} days after the vote on {last}"
-    else:
-        reading = f"Next: {kind} on {day}"
-    meaning = (
-        "Policy expectations can shift around a vote, and some industries gain or lose more than "
-        "others. Only a few elections are in this app's data, so no election pattern can be proven."
-    )
-    return card(title, reading, NEUTRAL, meaning, "US federal election law", url, last)
 
 
 def tone_word(recent: float | None, usual: float | None) -> str:
@@ -339,7 +322,6 @@ def build(engine: Engine, today: date) -> dict:
             rates(funds, before, funds_day),
             uncertainty(recent, usual, policy_day),
             dollar(dollar_now, dollar_before, dollar_day),
-            elections(today),
         ],
         "actions": [dict(row._mapping) for row in actions],
     }

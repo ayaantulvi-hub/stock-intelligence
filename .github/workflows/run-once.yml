@@ -6,7 +6,7 @@ on:
       step:
         description: Which step
         type: choice
-        options: [releases, short, congress, cross-check, overrides, economic, sizes]
+        options: [releases, short, congress, cross-check, overrides, economic, sizes, retention-dry, retention]
 permissions:
   contents: read
 jobs:
@@ -37,6 +37,12 @@ jobs:
       - if: inputs.step == 'overrides'
         run: uv run --no-dev python -m stockintel.overrides
       - if: inputs.step == 'sizes'
+        run: uv run --no-dev python -m stockintel.sizes
+      - if: inputs.step == 'retention-dry'
+        run: uv run --no-dev python -m stockintel.retention --dry
+      - if: inputs.step == 'retention'
+        run: uv run --no-dev python -m stockintel.retention
+      - if: inputs.step == 'retention' || inputs.step == 'retention-dry'
         run: uv run --no-dev python -m stockintel.sizes
       - if: always()
         run: uv run --no-dev python -m stockintel.report

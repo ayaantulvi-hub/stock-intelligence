@@ -19,7 +19,6 @@ from sqlalchemy import Engine, text
 
 from stockintel import localcache, longterm, misses
 from stockintel.backtest import MIN_Z, eligibility, eligible_days
-from stockintel.calendar_events import election_window, is_midterm_year
 from stockintel.charts import adjust
 from stockintel.db import get_engine
 from stockintel.factors import LIVE_IDS, MARKET_WIDE, NAMES, stock_factors
@@ -224,9 +223,6 @@ def build_panel(
         if macro is not None and item in macro:
             known_values = macro[item].reindex(all_days, method="ffill")
         panel[item] = np.nan if known_values is None else panel["date"].map(known_values)
-    calendar_days = pd.Series(all_days, index=all_days).dt.date
-    panel["election_window"] = panel["date"].map(calendar_days.map(election_window))
-    panel["midterm_year"] = panel["date"].map(calendar_days.map(is_midterm_year).astype(float))
     panel["target_day"] = panel["next_change"].map(lambda v: None if pd.isna(v) else outcome(v))
     median = panel.groupby("date")["future_20d"].transform("median")
     panel["excess_20d"] = panel["future_20d"] - median

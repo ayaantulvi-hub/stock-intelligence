@@ -8,29 +8,10 @@ import pandas as pd
 import pytest
 from sqlalchemy import text
 
-from stockintel import calendar_events, context, forecast
+from stockintel import context, forecast
 from stockintel.ingest import run_policy
 from stockintel.providers.base import FeedError
 from stockintel.providers.federal_register import FederalRegisterProvider, topic_of
-
-
-def test_election_days_match_the_rule():
-    assert calendar_events.election_day(2026) == date(2026, 11, 3)
-    assert calendar_events.election_day(2024) == date(2024, 11, 5)
-    assert calendar_events.election_day(2028) == date(2028, 11, 7)
-
-
-def test_election_windows_use_only_the_calendar():
-    assert calendar_events.election_window(date(2026, 10, 1)) == -1
-    assert calendar_events.election_window(date(2026, 11, 5)) == 1
-    assert calendar_events.election_window(date(2027, 1, 1)) == 1
-    assert calendar_events.election_window(date(2026, 6, 1)) == 0
-    assert calendar_events.election_window(date(2027, 6, 1)) == 0
-
-
-def test_next_election_after_a_midterm_is_presidential():
-    assert calendar_events.next_election(date(2026, 11, 5)) == (date(2028, 11, 7), "presidential")
-    assert calendar_events.next_election(date(2026, 11, 1)) == (date(2026, 11, 3), "midterm")
 
 
 def test_only_policy_titles_get_topics():
@@ -59,7 +40,7 @@ def test_big_picture_says_not_verified_with_no_data(engine):
     assert result["cards"][0]["reading"] == "Not verified"
     assert result["cards"][3]["title"] == "US dollar"
     assert result["cards"][3]["reading"] == "Not verified"
-    assert result["cards"][4]["title"] == "US elections"
+    assert len(result["cards"]) == 4
 
 
 def test_dollar_card_reads_the_month():
