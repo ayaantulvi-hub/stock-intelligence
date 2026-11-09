@@ -149,7 +149,7 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
-const PAGES = ["Long-term", "Trading", "My portfolio", "How reliable?", "Data"];
+const PAGES = ["Trading", "Long-term", "My portfolio", "How reliable?", "Data"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
@@ -378,12 +378,12 @@ export default function App() {
 
       {!stock && page === "Trading" && (
         <>
-          <MarketStrip />
-          <NextDecision />
           <section className="orders">
-            <h2>Hold about a month</h2>
+            <h2>Today's top 10: hold about a month</h2>
             <TodaysOrders onOpen={showStock} />
           </section>
+          <NextDecision />
+          <MarketStrip />
           <section className="orders">
             <h2>Short trades: 1 to 5 days</h2>
             <TradesPanel onOpen={showStock} />
