@@ -382,6 +382,7 @@ export default function App() {
             <h2>Today's top 10: hold about a month</h2>
             <TodaysOrders onOpen={showStock} />
           </section>
+          <WhatChanged onOpen={showStock} />
           <NextDecision />
           <MarketStrip />
           <section className="orders">
@@ -400,7 +401,6 @@ export default function App() {
       {!stock && page === "My portfolio" && (
         <>
           <HoldingsToday onOpen={showStock} />
-          <WhatChanged onOpen={showStock} />
           <PortfolioPage />
           <details className="fold">
             <summary>Journal and weekly review</summary>
