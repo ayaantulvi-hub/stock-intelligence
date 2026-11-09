@@ -6,7 +6,7 @@ on:
       step:
         description: Which step
         type: choice
-        options: [releases, short, congress, cross-check, overrides, economic, sizes, retention-dry, retention, decision-tests]
+        options: [releases, short, congress, cross-check, overrides, economic, sizes, retention-dry, retention, decision-tests, orders]
 permissions:
   contents: read
 jobs:
@@ -46,5 +46,7 @@ jobs:
         run: uv run --no-dev python -m stockintel.sizes
       - if: inputs.step == 'decision-tests'
         run: uv run --no-dev python -c "from stockintel import extras; from stockintel.db import get_engine; import json; print(json.dumps(extras.decision_tests(get_engine()), default=str))"
+      - if: inputs.step == 'orders'
+        run: uv run --no-dev python -c "from stockintel import queries; from stockintel.db import get_engine; import json; e=get_engine(); print('ORDERS', json.dumps(queries.orders(e), default=str)); from sqlalchemy import text; c=e.connect(); print('TARGETS', c.execute(text('SELECT target_session, count(*), max(created_at) FROM forecasts GROUP BY 1 ORDER BY 1 DESC LIMIT 4')).all())"
       - if: always()
         run: uv run --no-dev python -m stockintel.report
