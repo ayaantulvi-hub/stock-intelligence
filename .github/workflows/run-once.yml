@@ -51,6 +51,6 @@ jobs:
       - if: inputs.step == 'recent-news'
         run: uv run --no-dev python -c "from sqlalchemy import text; from stockintel.db import get_engine; c=get_engine().connect(); [print('NEWS', r) for r in c.execute(text(\"SELECT judged_at::date, size, effect, tickers, left(title, 110), left(why, 140) FROM news_judgments WHERE title ILIKE '%nvidia%' OR title ILIKE '%huang%' ORDER BY judged_at DESC LIMIT 15\"))]; [print('WARN', r) for r in c.execute(text(\"SELECT day, subject, left(title, 100) FROM news_warnings WHERE day >= current_date - 3 ORDER BY day DESC LIMIT 30\"))]"
       - if: inputs.step == 'replay'
-        run: uv run --no-dev python -c "from stockintel import queries; from stockintel.db import get_engine; e=get_engine(); [print('REPLAY', t, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in (queries.replay_hold(e, t)['replay'] or {}).items() if k != 'verdict'}) for t in ('CAT','PANW','NVS','EME','MU','HAL','CLS','CRDO','NVDA')]"
+        run: uv run --no-dev python -m stockintel.replay_check CAT PANW NVS EME MU HAL CLS CRDO NVDA
       - if: always()
         run: uv run --no-dev python -m stockintel.report
