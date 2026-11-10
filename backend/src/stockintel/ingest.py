@@ -140,6 +140,9 @@ class Run:
                 },
             )
         log.info("%s: %s, %s records added", self.feed, status, self.added)
+        if self.errors:
+            # Feed errors name sources and stocks, never holdings, so they're safe in public logs.
+            log.info("%s problems: %s", self.feed, "; ".join(self.errors[:5]))
         return status
 
 

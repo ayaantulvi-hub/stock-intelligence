@@ -6,7 +6,7 @@ on:
       step:
         description: Which step
         type: choice
-        options: [releases, short, congress, cross-check, overrides, economic, sizes, retention-dry, retention, decision-tests, orders, recent-news, replay, tm-eval]
+        options: [releases, short, congress, cross-check, overrides, economic, sizes, retention-dry, retention, decision-tests, orders, recent-news, replay, tm-eval, inspect-nvda]
 permissions:
   contents: read
 jobs:
@@ -54,5 +54,7 @@ jobs:
         run: uv run --no-dev python -m stockintel.replay_check CAT PANW NVS EME MU HAL CLS CRDO NVDA
       - if: inputs.step == 'tm-eval'
         run: uv run --no-dev python -m stockintel.tm_eval 10 24
+      - if: inputs.step == 'inspect-nvda'
+        run: uv run --no-dev python -m stockintel.inspect_stock NVDA
       - if: always()
         run: uv run --no-dev python -m stockintel.report
