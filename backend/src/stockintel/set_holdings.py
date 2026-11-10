@@ -57,9 +57,27 @@ def apply(engine: Engine, items: list[dict]) -> list[str]:
     return tickers
 
 
+def record_sales(engine: Engine, items: list[dict]) -> None:
+    """Replace the estimated price of a recent sale with the real one the owner reports."""
+    for item in items:
+        with engine.begin() as conn:
+            changed = conn.execute(
+                text(
+                    """UPDATE closed_trades SET exit_price = :price, exit_market_date = NULL
+                       WHERE id = (SELECT c.id FROM closed_trades c
+                         JOIN securities s ON s.id = c.security_id WHERE s.ticker = :t
+                         ORDER BY c.closed_at DESC, c.id DESC LIMIT 1)"""
+                ),
+                {"price": item["price"], "t": item["ticker"].upper()},
+            ).rowcount
+        if not changed:
+            raise ValueError(f"No recorded sale of {item['ticker']} to correct")
+
+
 def main() -> None:
     engine = get_engine()
     apply(engine, json.loads(os.environ["HOLDINGS"]))
+    record_sales(engine, json.loads(os.environ.get("SALES") or "[]"))
     query = """SELECT s.ticker, p.shares, p.buy_price, p.stop_price, p.sell_by
                FROM positions p JOIN securities s ON s.id = p.security_id ORDER BY s.ticker"""
     with engine.connect() as conn:

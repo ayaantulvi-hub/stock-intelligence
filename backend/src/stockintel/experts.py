@@ -347,10 +347,17 @@ def stored_trades(engine: Engine) -> list[dict]:
         # Older rows were stored with longer labels; every call shown is one of four words.
         call = advice.plain(row.short_term["call"], False)
         found.append(
-            {"ticker": row.ticker, "name": row.name, "date": row.review_date,
-             **row.short_term, "call": call}
+            {
+                "ticker": row.ticker,
+                "name": row.name,
+                "date": row.review_date,
+                **row.short_term,
+                "call": call,
+            }
         )
-    return sorted(found, key=lambda item: (not item["proven"], item["call"] != "Buy", item["ticker"]))
+    return sorted(
+        found, key=lambda item: (not item["proven"], item["call"] != "Buy", item["ticker"])
+    )
 
 
 def stored_investments(engine: Engine) -> list[dict]:

@@ -63,3 +63,15 @@ def test_set_holdings_replaces_the_list_and_refuses_unknown_tickers(engine):
 def get_count(engine):
     with engine.connect() as conn:
         return conn.execute(text("SELECT count(*) FROM positions")).scalar()
+
+
+def test_a_reported_sale_price_replaces_the_estimate(engine):
+    with engine.begin() as conn:
+        _security(conn, "HOLDC", 9003)
+    set_holdings.apply(engine, [{"ticker": "HOLDC", "shares": 20, "buy_price": 378.46}])
+    set_holdings.apply(engine, [])
+    set_holdings.record_sales(engine, [{"ticker": "HOLDC", "price": 318.0}])
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT exit_price FROM closed_trades")).scalar() == 318.0
+    with pytest.raises(ValueError, match="NOPE"):
+        set_holdings.record_sales(engine, [{"ticker": "NOPE", "price": 1.0}])

@@ -5,6 +5,10 @@ on:
       holdings:
         description: "JSON list: ticker, shares, buy_price, and optionally stop_price, sell_by"
         required: true
+      sales:
+        description: "Optional JSON list of real sale prices: ticker, price"
+        required: false
+        default: "[]"
 permissions:
   contents: read
 jobs:
@@ -13,6 +17,7 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       HOLDINGS: ${{ inputs.holdings }}
+      SALES: ${{ inputs.sales }}
     defaults:
       run:
         working-directory: backend
