@@ -312,6 +312,12 @@ def trading_plan(account: float | None = Query(default=None, gt=0)) -> dict:
     return plan.review(get_engine(), account)
 
 
+@app.get("/api/stocks/{ticker}/live")
+def live_price(ticker: str) -> dict:
+    """The latest trade from the free IEX feed, for reference beside the stored close."""
+    return day_trading.live_price(ticker)
+
+
 @app.get("/api/holdings-today")
 def holdings_today() -> list[dict]:
     return queries.holdings_today(get_engine())

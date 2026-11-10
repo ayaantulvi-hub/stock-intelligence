@@ -251,7 +251,16 @@ def kind_of(call: str) -> str:
     return {BUY: "buy", KEEP: "buy", SELL: "sell"}.get(call, "neutral")
 
 
-def decision(action: str | None, rank: float | None, stale: bool, position: dict | None) -> dict:
+HISTORY_NEEDED = 250  # Days of prices the model needs for its price ranges (forecast.py).
+
+
+def decision(
+    action: str | None,
+    rank: float | None,
+    stale: bool,
+    position: dict | None,
+    history_days: int | None = None,
+) -> dict:
     """One plain answer for this stock, adapted to whether it is owned.
 
     `proven` is true only when the call rests on a test the model passed. A stop or target
@@ -286,6 +295,12 @@ def decision(action: str | None, rank: float | None, stale: bool, position: dict
                 kind="buy",
             )
     if action is None:
+        if history_days is not None and history_days < HISTORY_NEEDED:
+            return answer(
+                "Hold",
+                f"It started trading too recently to judge: {history_days} days of prices, "
+                f"and the model needs {HISTORY_NEEDED}.",
+            )
         return answer("Hold", "There's no forecast for this stock yet.")
     if action == "Sell candidate":
         return answer(

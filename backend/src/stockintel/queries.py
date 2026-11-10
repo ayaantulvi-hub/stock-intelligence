@@ -881,6 +881,7 @@ def stock_decision(engine: Engine, ticker: str) -> dict | None:
             forecast["rank_20d"] if forecast else None,
             data["stale"],
             position,
+            len(data["candles"]),
         ),
         review,
     )

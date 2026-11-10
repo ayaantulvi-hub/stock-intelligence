@@ -324,3 +324,12 @@ def test_every_answer_is_one_of_four_words(owned):
             assert advice.decision(action, rank, False, position)["call"] in allowed
     if owned:
         assert "Buy" not in {advice.plain(c, True) for c in ("Buy", "Leans buy", "Hold")}
+
+
+def test_a_new_listing_says_it_is_too_new_rather_than_no_forecast():
+    from stockintel.advice import decision
+
+    young = decision(None, None, False, None, history_days=29)
+    assert young["call"] == "Leave alone"
+    assert "29 days of prices" in young["reason"]
+    assert decision(None, None, False, None, history_days=900)["reason"].startswith("There's no")

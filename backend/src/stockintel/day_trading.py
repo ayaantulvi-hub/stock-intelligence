@@ -485,3 +485,38 @@ if __name__ == "__main__":
         print(strategy, json.dumps({k: v for k, v in output.items() if k != "by"}, indent=2))
     else:
         sys.exit(__doc__)
+
+
+LIVE_SECONDS = 60  # One Alpaca request per stock per minute at most, however often pages load.
+
+
+def live_price(ticker: str, source=None, now: datetime | None = None) -> dict:
+    """The latest trade price from Alpaca's free IEX feed, with its time and source.
+
+    IEX is one exchange, about 2.5% of US trading, so this can differ slightly from the official
+    close the decisions use. Decisions never use it; it is shown beside them for reference.
+    """
+    now = now or datetime.now(UTC)
+    key = ("live", ticker.upper())
+    cached = _cache.get(key)
+    if cached and clock.monotonic() - cached[0] < LIVE_SECONDS:
+        return cached[1]
+    try:
+        source = source or provider()
+        symbol = alpaca_symbol(ticker.upper())
+        frames, provenance = source.minute_bars((symbol,), now - timedelta(days=4), now)
+    except FeedError as exc:
+        return {"error": str(exc)}
+    frame = frames.get(symbol)
+    if frame is None or frame.empty:
+        return {"error": "Not verified: Alpaca returned no recent trades"}
+    last = frame.iloc[-1]
+    result = {
+        "price": float(last["close"]),
+        "at": last["time"].isoformat(),
+        "source": provenance.source_name,
+        "source_url": provenance.source_url,
+        "status": provenance.data_status,
+    }
+    _cache[key] = (clock.monotonic(), result)
+    return result

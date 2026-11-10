@@ -216,3 +216,27 @@ def test_alpaca_gives_up_after_repeated_limits():
     )
     with pytest.raises(RateLimited):
         source.minute_bars(("SPY",), NOW, NOW)
+
+
+def test_live_price_shows_its_source_and_says_not_verified_when_empty():
+    import pandas as pd
+
+    from stockintel import day_trading
+    from stockintel.providers.base import Provenance
+
+    class Source:
+        calls = 0
+
+        def minute_bars(self, symbols, start, end):
+            Source.calls += 1
+            when = pd.Timestamp("2026-11-10 10:31", tz="America/New_York")
+            frame = pd.DataFrame({"time": [when], "close": [178.5]})
+            got = {"BRK.B": frame} if symbols == ("BRK.B",) else {}
+            return got, Provenance("Alpaca (IEX)", "https://fixture.test/bars", end, "live")
+
+    day_trading._cache.clear()
+    live = day_trading.live_price("BRK-B", Source())
+    assert (live["price"], live["source"], live["status"]) == (178.5, "Alpaca (IEX)", "live")
+    day_trading.live_price("BRK-B", Source())
+    assert Source.calls == 1  # Cached for a minute.
+    assert day_trading.live_price("NONE", Source())["error"].startswith("Not verified")

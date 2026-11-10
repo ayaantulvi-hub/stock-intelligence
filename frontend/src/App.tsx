@@ -153,6 +153,47 @@ const PAGES = ["Trading", "Long-term", "My portfolio", "How reliable?", "Data"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
+type Live = { price: number; at: string; source: string; status: string } | { error: string };
+
+/** The latest trade beside the official close the decisions use. Refreshed each minute. */
+function LivePrice({ stock }: { stock: Stock }) {
+  const [live, setLive] = useState<Live | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      getJson<Live>(`/api/stocks/${encodeURIComponent(stock.ticker)}/live`)
+        .then((value) => alive && setLive(value))
+        .catch(() => alive && setLive({ error: "Not verified: the live price didn't load" }));
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [stock.ticker]);
+  const close = stock.bars[0];
+  return (
+    <p className="live-price">
+      {close ? (
+        <>
+          Last close <b>{close.close.toFixed(2)}</b> on {close.market_date} ({close.source}). The
+          decision uses this.
+        </>
+      ) : (
+        NOT_VERIFIED
+      )}{" "}
+      {live && "price" in live && (
+        <>
+          Latest trade <b>{live.price.toFixed(2)}</b>
+          {close && ` (${((live.price / close.close - 1) * 100).toFixed(1)}%)`} at{" "}
+          {new Date(live.at).toLocaleTimeString()}, from {live.source}, one exchange.
+        </>
+      )}
+      {live && "error" in live && <span className="bad">{live.error}</span>}
+    </p>
+  );
+}
+
 function StockView({ stock }: { stock: Stock }) {
   const [tab, setTab] = useState(TABS[0]);
   return (
@@ -160,6 +201,7 @@ function StockView({ stock }: { stock: Stock }) {
       <h2>
         {stock.ticker} · {stock.name}
       </h2>
+      <LivePrice stock={stock} />
       <div className="tabs pages" role="group" aria-label="Stock page">
         {TABS.map((name) => (
           <button key={name} aria-pressed={name === tab} onClick={() => setTab(name)}>
