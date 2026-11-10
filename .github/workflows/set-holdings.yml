@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      HOLDINGS: ${{ inputs.holdings }}
-      SALES: ${{ inputs.sales }}
+      # The holdings are read from the trigger's own file, never put in env, because the
+      # public job log prints every env value at the top of each step.
     defaults:
       run:
         working-directory: backend

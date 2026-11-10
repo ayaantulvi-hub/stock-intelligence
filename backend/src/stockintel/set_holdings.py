@@ -74,10 +74,22 @@ def record_sales(engine: Engine, items: list[dict]) -> None:
             raise ValueError(f"No recorded sale of {item['ticker']} to correct")
 
 
+def inputs() -> tuple[list[dict], list[dict]]:
+    """The lists from the GitHub trigger file when run as a workflow, otherwise from env."""
+    event = os.environ.get("GITHUB_EVENT_PATH")
+    if event:
+        with open(event) as f:
+            given = json.load(f).get("inputs") or {}
+    else:
+        given = {"holdings": os.environ["HOLDINGS"], "sales": os.environ.get("SALES")}
+    return json.loads(given["holdings"]), json.loads(given.get("sales") or "[]")
+
+
 def main() -> None:
     engine = get_engine()
-    apply(engine, json.loads(os.environ["HOLDINGS"]))
-    record_sales(engine, json.loads(os.environ.get("SALES") or "[]"))
+    holdings, sales = inputs()
+    apply(engine, holdings)
+    record_sales(engine, sales)
     # Job logs are public, so only the count is printed, never the holdings themselves.
     with engine.connect() as conn:
         count = conn.execute(text("SELECT count(*) FROM positions")).scalar()
