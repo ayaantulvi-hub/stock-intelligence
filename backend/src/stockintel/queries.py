@@ -20,6 +20,7 @@ from stockintel import (
     rules,
     signals,
     stops,
+    timemachine,
     tools,
 )
 from stockintel.market import is_stale, latest_expected_session, sessions_between
@@ -763,6 +764,40 @@ def model_comparison(engine: Engine) -> dict | None:
         "weights": [
             {**row, "name": factors.NAMES.get(row["factor"], row["factor"])} for row in weights
         ],
+    }
+
+
+def replay_hold(engine: Engine, ticker: str, days: int = 20) -> dict | None:
+    """Time Machine for a month-long hold: 10,000 replays from this stock's own past two years,
+    with the stop the site suggests, or the owner's own stop if they hold it."""
+    with engine.connect() as conn:
+        security = conn.execute(
+            text("SELECT id FROM securities WHERE ticker = :t"), {"t": ticker.upper()}
+        ).first()
+        if security is None:
+            return None
+        rows = conn.execute(
+            text(
+                """SELECT * FROM (SELECT DISTINCT ON (market_date) market_date, open, high, low,
+                     close, volume, div_cash, split_factor FROM price_bars
+                     WHERE security_id = :id ORDER BY market_date DESC, id DESC LIMIT 600) AS b
+                   ORDER BY market_date"""
+            ),
+            {"id": security.id},
+        ).all()
+    if not rows:
+        return {"replay": None, "reason": "Not verified: no prices stored."}
+    frame = charts.adjust(pd.DataFrame([r._mapping for r in rows]))
+    position = get_position(engine, ticker)
+    stop = position.get("stop_price") if position else None
+    if stop is None:
+        found = stops.suggest(frame)
+        stop = found["stop"] if found else None
+    result = timemachine.hold(frame, stop, days)
+    return {
+        "replay": result,
+        "as_of": str(frame["market_date"].iloc[-1]),
+        "own_stop": bool(position and position.get("stop_price")),
     }
 
 

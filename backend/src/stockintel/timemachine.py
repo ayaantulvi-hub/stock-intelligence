@@ -147,3 +147,94 @@ def run(
     if history is not None:
         mc["history"] = history(days, last)
     return mc
+
+
+# The same idea for holds of about a month, on daily candles.
+DAILY_HISTORY = 504  # About two years of trading days.
+HOLD_DAYS = 20
+DAILY_BLOCK = 5  # Draw a week of days in a row, so streaks carry through.
+MIN_DAILY = 250
+
+
+def daily_ratios(frame: pd.DataFrame) -> np.ndarray:
+    """Each day as open, high, low and close over the day before's close, from adjusted bars."""
+    recent = frame.tail(DAILY_HISTORY + 1)
+    values = recent[["open", "high", "low", "close"]].to_numpy(dtype=float)
+    return values[1:] / values[:-1, 3:4]
+
+
+def simulate_hold(
+    ratios: np.ndarray,
+    entry: float,
+    stop: float | None,
+    days: int = HOLD_DAYS,
+    replays: int = REPLAYS,
+    seed: int = SEED,
+    block: int = DAILY_BLOCK,
+) -> dict:
+    """Replay the next `days` trading days 10,000 times from the stock's own past days.
+
+    A replay picks a random past week and plays its days in order, then another, scaled to the
+    current price. A day whose low reaches the stop sells at the stop, or at the open if it
+    opened below it. Otherwise the replay sells at the last day's close."""
+    rng = np.random.default_rng(seed)
+    price = np.full(replays, float(entry))
+    exit_price = np.full(replays, np.nan)
+    start = rng.integers(0, len(ratios) - block, replays)
+    for step in range(days):
+        if step % block == 0:
+            start = rng.integers(0, len(ratios) - block, replays)
+        day = ratios[start + step % block]
+        open_, low, close = price * day[:, 0], price * day[:, 2], price * day[:, 3]
+        live = np.isnan(exit_price)
+        if stop is not None:
+            hit = live & (low <= stop)
+            exit_price[hit] = np.minimum(open_[hit], stop)
+        price = close
+    stopped = ~np.isnan(exit_price)
+    final = np.where(stopped, exit_price, price)
+    change = final / entry - 1
+    return {
+        "replays": replays,
+        "days": days,
+        "p_stop": float(stopped.mean()),
+        "p_gain": float((change > 0).mean()),
+        "median": float(np.median(change)),
+        "average": float(change.mean()),
+        "low": float(np.percentile(change, 5)),
+        "high": float(np.percentile(change, 95)),
+    }
+
+
+def hold_record(frame: pd.DataFrame, days: int = HOLD_DAYS) -> dict:
+    """What really happened: every past `days`-day hold over the same two years."""
+    close = frame["close"].tail(DAILY_HISTORY + days).to_numpy(dtype=float)
+    ahead = close[days:] / close[:-days] - 1
+    return {
+        "holds": len(ahead),
+        "p_gain": float((ahead > 0).mean()) if len(ahead) else None,
+        "median": float(np.median(ahead)) if len(ahead) else None,
+    }
+
+
+def hold_verdict(mc: dict) -> str:
+    if mc["p_gain"] >= 0.6:
+        head = "Leans toward a gain"
+    elif mc["p_gain"] <= 0.4:
+        head = "Leans toward a loss"
+    else:
+        head = "Close to a coin flip"
+    return (
+        f"{head}: {mc['p_gain']:.0%} of replays ended up, {mc['p_stop']:.0%} hit the stop, "
+        f"and 9 in 10 ended between {mc['low']:+.0%} and {mc['high']:+.0%}."
+    )
+
+
+def hold(frame: pd.DataFrame, stop: float | None, days: int = HOLD_DAYS) -> dict | None:
+    """Replays and the real record for holding from today's close for `days` trading days."""
+    if len(frame) < MIN_DAILY:
+        return None
+    entry = float(frame["close"].iloc[-1])
+    mc = simulate_hold(daily_ratios(frame), entry, stop, days)
+    mc.update(entry=entry, stop=stop, verdict=hold_verdict(mc), record=hold_record(frame, days))
+    return mc

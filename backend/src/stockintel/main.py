@@ -164,6 +164,14 @@ def checklist(ticker: str) -> list[dict]:
     return result
 
 
+@app.get("/api/stocks/{ticker}/replay")
+def replay_hold(ticker: str) -> dict:
+    result = queries.replay_hold(get_engine(), ticker)
+    if result is None:
+        raise HTTPException(404, "Not verified: this stock is not in the covered list")
+    return result
+
+
 @app.get("/api/stocks/{ticker}/levels")
 def suggested_levels(ticker: str) -> dict:
     result = queries.suggested_levels(get_engine(), ticker)

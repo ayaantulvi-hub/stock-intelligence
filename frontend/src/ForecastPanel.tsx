@@ -274,6 +274,66 @@ type Decision = {
 
 type Family = { family: string; score: number; push: "buy" | "sell" | "neutral"; factors: string[] };
 
+type Hold = {
+  replays: number;
+  days: number;
+  p_stop: number;
+  p_gain: number;
+  median: number;
+  low: number;
+  high: number;
+  entry: number;
+  stop: number | null;
+  verdict: string;
+  record: { holds: number; p_gain: number | null; median: number | null };
+};
+
+const signedPct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
+
+export function HoldReplay({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<{ replay: Hold | null; as_of?: string; own_stop?: boolean } | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setData(null);
+    setFailed(false);
+    getJson<{ replay: Hold | null; as_of?: string; own_stop?: boolean }>(`/api/stocks/${encodeURIComponent(ticker)}/replay`)
+      .then(setData)
+      .catch(() => setFailed(true));
+  }, [ticker]);
+  if (failed) return <p className="bad">Time Machine failed to load. Not verified.</p>;
+  if (!data) return null;
+  const r = data.replay;
+  if (!r) return <p>Time Machine: Not verified. It needs at least a year of prices.</p>;
+  const down = Math.max(0, 1 - r.p_gain - r.p_stop);
+  const pc = (x: number) => `${Math.round(x * 100)}%`;
+  return (
+    <section className="replay">
+      <h3>Time Machine: {r.replays.toLocaleString()} replays of the next {r.days} trading days</h3>
+      <p className="hint">
+        Each replay plays this stock's own past weeks from the last two years in a random order, starting from {r.entry.toFixed(2)} on {data.as_of}
+        {r.stop !== null ? `, selling if it falls to ${r.stop.toFixed(2)} (${data.own_stop ? "your stop" : "the site's suggested stop"})` : ""}.
+      </p>
+      <div className="replay-bar" role="img" aria-label={`Up ${pc(r.p_gain)}, down ${pc(down)}, stopped ${pc(r.p_stop)}`}>
+        <span className="seg ok" style={{ width: pc(r.p_gain) }} />
+        <span className="seg" style={{ width: pc(down) }} />
+        <span className="seg bad" style={{ width: pc(r.p_stop) }} />
+      </div>
+      <p>
+        <span className="ok">Ended up {pc(r.p_gain)}. </span>
+        <span>Ended down {pc(down)}. </span>
+        <span className="bad">Hit the stop {pc(r.p_stop)}.</span>
+      </p>
+      <p><b>{r.verdict}</b> The middle result was {signedPct(r.median)}.</p>
+      {r.record.p_gain !== null && r.record.median !== null && (
+        <p>
+          What really happened: over the last two years, holding it for {r.days} trading days ended up {pc(r.record.p_gain)} of the time ({r.record.holds} holds), with a middle result of {signedPct(r.record.median)}.
+        </p>
+      )}
+      <small>A simulation from the stock's own past, not a forecast. Method adapted from the free day-trader-skill (MIT).</small>
+    </section>
+  );
+}
+
 export function FamilyBars({ families }: { families: Family[] }) {
   return (
     <div className="families">
@@ -723,6 +783,7 @@ export function ForecastPanel({ ticker }: { ticker: string }) {
               {decision.reason}
               {!decision.proven && decision.kind !== "neutral" && " Unproven, so treat it as a guess."}
             </p>
+            <HoldReplay ticker={ticker} />
             {decision.families && decision.families.length > 0 && <FamilyBars families={decision.families} />}
             {decision.notes && decision.notes.length > 0 && (
               <div className="notes">

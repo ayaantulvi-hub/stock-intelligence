@@ -90,3 +90,42 @@ def test_runs_of_bars_keep_streaks_that_single_bars_break():
     runs = timemachine.simulate(ratios, 100, 50, 200, 10, 76, long=True, replays=3000)
     single = timemachine.simulate(ratios, 100, 50, 200, 10, 76, long=True, replays=3000, block=1)
     assert runs["close_high"] - runs["close_low"] > 2 * (single["close_high"] - single["close_low"])
+
+
+def daily(closes):
+    closes = np.asarray(closes, dtype=float)
+    opens = np.r_[closes[0], closes[:-1]]
+    return pd.DataFrame(
+        {
+            "market_date": pd.bdate_range("2024-01-01", periods=len(closes)).date,
+            "open": opens,
+            "high": np.maximum(opens, closes) * 1.005,
+            "low": np.minimum(opens, closes) * 0.995,
+            "close": closes,
+        }
+    )
+
+
+def test_a_steady_riser_gains_in_almost_every_replay():
+    result = timemachine.hold(daily(100 * 1.002 ** np.arange(400)), stop=50.0)
+    assert result["p_gain"] > 0.99 and result["p_stop"] == 0
+    assert result["record"]["p_gain"] == 1.0
+    assert result["verdict"].startswith("Leans toward a gain")
+
+
+def test_the_stop_caps_losses_and_counts_in_the_replays():
+    falling = daily(100 * 0.995 ** np.arange(400))
+    entry = float(falling["close"].iloc[-1])
+    result = timemachine.hold(falling, stop=entry * 0.95)
+    assert result["p_stop"] > 0.9
+    assert result["low"] >= -0.06  # A gap can sell a little below the stop, not far.
+
+
+def test_too_little_history_gives_no_replay():
+    assert timemachine.hold(daily(100 + np.arange(100)), stop=90.0) is None
+
+
+def test_replays_repeat_with_the_same_seed():
+    frame = daily(100 + np.cumsum(np.random.default_rng(3).normal(0, 1, 400)))
+    first = timemachine.hold(frame, stop=None)
+    assert first == timemachine.hold(frame, stop=None)

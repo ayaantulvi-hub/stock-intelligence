@@ -29,3 +29,13 @@ test("family bars are green for buy and red for sell", () => {
   expect(screen.getByText("Value").closest("tr")?.className).toBe("row-buy");
   expect(screen.getByText("Risk").closest("tr")?.className).toBe("row-sell");
 });
+
+test("the month Time Machine shows the three outcomes and the real record", async () => {
+  const { HoldReplay } = await import("./ForecastPanel");
+  reply({ as_of: "2026-11-09", own_stop: false, replay: { replays: 10000, days: 20, p_stop: 0.12, p_gain: 0.56, median: 0.018, average: 0.01, low: -0.11, high: 0.14, entry: 100, stop: 90, verdict: "Close to a coin flip: 56% of replays ended up.", record: { holds: 504, p_gain: 0.58, median: 0.02 } } });
+  render(<HoldReplay ticker="AAA" />);
+  expect(await screen.findByText(/Ended up 56%/)).toBeTruthy();
+  expect(screen.getByText(/Hit the stop 12%/)).toBeTruthy();
+  expect(screen.getByText(/the site's suggested stop/)).toBeTruthy();
+  expect(screen.getByText(/ended up 58% of the time \(504 holds\)/)).toBeTruthy();
+});
