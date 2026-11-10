@@ -70,3 +70,31 @@ def test_a_failure_is_reported_and_stores_nothing(engine):
 
     add_headline(engine, "https://x.test/b")
     assert news_judge.run(engine, Broken(), NOW) == (0, "Groq: HTTP 500")
+
+
+def test_groq_retries_invalid_json_then_reports_the_code():
+    import httpx
+    import pytest
+
+    from stockintel.providers.base import FeedError
+    from stockintel.providers.groq import GroqProvider
+
+    replies = [
+        httpx.Response(400, json={"error": {"code": "json_validate_failed"}}),
+        httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": 1}'}}]}),
+    ]
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return replies.pop(0)
+
+    provider = GroqProvider("test-key", httpx.Client(transport=httpx.MockTransport(handler)))
+    assert provider.judge("s", "u") == {"ok": 1}
+    assert len(seen) == 2
+
+    always = httpx.MockTransport(
+        lambda r: httpx.Response(400, json={"error": {"code": "json_validate_failed"}})
+    )
+    with pytest.raises(FeedError, match="json_validate_failed"):
+        GroqProvider("test-key", httpx.Client(transport=always)).judge("s", "u")
