@@ -140,3 +140,21 @@ def test_original_notes_when_many_replays_hit_neither():
     notes = timemachine.verdict_notes(mc)
     assert notes[0].startswith("70.0% of the replays hit neither")
     assert "Average R is -0.050 all the same" in notes[1]
+
+
+def test_the_evaluation_scores_both_versions_against_real_outcomes():
+    from stockintel import tm_eval
+
+    rng = np.random.default_rng(5)
+    days = [
+        session(f"2026-01-{1 + d % 28:02d}", 100 + np.cumsum(rng.normal(0, 0.15, 78)))
+        .iloc[:, 1:5]
+        .to_numpy()
+        for d in range(75)
+    ]
+    result = tm_eval.evaluate({"AAA": days})
+    assert result["setups"] > 0
+    assert sum(result["actual"]) == result["setups"]
+    for name in ("Baseline: past frequencies", *tm_eval.VERSIONS):
+        assert 0 <= result[name]["brier"] <= 2
+    assert result["Original: one bar at a time"]["vs_original"] == 0
