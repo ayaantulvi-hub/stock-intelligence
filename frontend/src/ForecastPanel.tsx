@@ -1,3 +1,4 @@
+import { Tick } from "./Names";
 import { useCallback, useEffect, useState } from "react";
 import ChecklistPanel, { HowMuch } from "./ChecklistPanel";
 import PositionPanel from "./PositionPanel";
@@ -583,7 +584,7 @@ export function TradesPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
                 <tr key={row.ticker} className="row-buy">
                   <td>
                     <button className="link" onClick={() => onOpen(row.ticker)}>
-                      {row.ticker}
+                      <Tick t={row.ticker} />
                     </button>
                   </td>
                   <td>{row.target?.toFixed(2)}</td>
@@ -609,7 +610,7 @@ export function TradesPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
                 <tr key={row.ticker} className="row-sell">
                   <td>
                     <button className="link" onClick={() => onOpen(row.ticker)}>
-                      {row.ticker}
+                      <Tick t={row.ticker} />
                     </button>
                   </td>
                   <td>{row.reason}</td>
@@ -646,7 +647,7 @@ export function InvestPanel({ onOpen }: { onOpen: (ticker: string) => void }) {
               <tr key={row.ticker} className={row.call === "Sell" ? "row-sell" : "row-buy"}>
                 <td>
                   <button className="link" onClick={() => onOpen(row.ticker)}>
-                    {row.ticker}
+                    <Tick t={row.ticker} />
                   </button>
                 </td>
                 <td><b>{row.call}</b></td>

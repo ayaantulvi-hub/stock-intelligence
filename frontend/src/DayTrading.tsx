@@ -1,3 +1,4 @@
+import { Tick } from "./Names";
 import { useEffect, useState } from "react";
 
 type Level = { name: string; price: number };
@@ -173,7 +174,7 @@ function SetupCard({ setup }: { setup: Setup }) {
   return (
     <div className={`ticket action ${buy ? "buy" : "sell"}`}>
       <h4>
-        {buy ? "Buy" : "Sell"} {setup.ticker} at {clockTime(setup.entered_at)}
+        {buy ? "Buy" : "Sell"} <Tick t={setup.ticker} /> at {clockTime(setup.entered_at)}
         {!buy && <small> (you don't need to own it: TradingView's Sell opens a short position)</small>}
         {finished && ` — finished: ${setup.result}, ${setup.r === null ? "" : `${setup.r.toFixed(2)} times the risk`}`}
       </h4>
@@ -251,7 +252,7 @@ export function DayTradingPage() {
       {data?.stocks?.map((stock) => (
         <div key={stock.ticker} className="orders">
           <h3>
-            {stock.ticker} {stock.price.toFixed(2)}
+            <Tick t={stock.ticker} /> {stock.price.toFixed(2)}
           </h3>
           <p className="plain"><b>{stepText(stock, open)}</b></p>
           {stock.setups.map((setup) => (

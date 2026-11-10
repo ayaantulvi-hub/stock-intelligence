@@ -56,13 +56,14 @@ class AlpacaProvider:
         end: datetime,
         timeframe: str = "1Min",
         adjustment: str = "split",
+        feed: str = "iex",
     ) -> tuple[dict[str, pd.DataFrame], Provenance]:
         params = {
             "symbols": ",".join(symbols),
             "timeframe": timeframe,
             "start": start.astimezone(UTC).isoformat(),
             "end": end.astimezone(UTC).isoformat(),
-            "feed": "iex",
+            "feed": feed,
             "adjustment": adjustment,
             "limit": 10000,
         }
@@ -94,5 +95,7 @@ class AlpacaProvider:
                 raise FeedError("Alpaca bars: a bar is missing a value") from None
             frame["time"] = frame["time"].dt.tz_convert("America/New_York")
             frames[symbol] = frame.sort_values("time").reset_index(drop=True)
-        provenance = Provenance("Alpaca (IEX)", BARS, datetime.now(UTC), "live")
+        name = "Alpaca (SIP)" if feed == "sip" else "Alpaca (IEX)"
+        status = "end_of_day" if feed == "sip" else "live"
+        provenance = Provenance(name, BARS, datetime.now(UTC), status)
         return frames, provenance

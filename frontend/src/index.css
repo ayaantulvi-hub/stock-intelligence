@@ -229,3 +229,4 @@ header.top h1 { margin: 0; }
 form.search { display: flex; gap: 8px; flex: 1 1 280px; max-width: 480px; }
 form.search input { flex: 1; min-width: 0; }
 .small-print { font-size: 0.85rem; opacity: 0.75; }
+.company { color: var(--muted); font-weight: 400; font-size: 0.85em; }

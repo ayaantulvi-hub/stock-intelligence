@@ -74,6 +74,12 @@ def feeds(engine: Engine) -> list[dict]:
     return output
 
 
+def names(engine: Engine) -> dict[str, str]:
+    """Company name for every ticker, as SEC EDGAR lists it, so lists can show both."""
+    with engine.connect() as conn:
+        return dict(conn.execute(text("SELECT ticker, name FROM securities")).all())
+
+
 def search(engine: Engine, query: str) -> list[dict]:
     with engine.connect() as conn:
         return _rows(

@@ -64,6 +64,9 @@ jobs:
       - name: Are today's decisions due?
         id: due
         run: uv run --no-dev python -m stockintel.forecast due >> "$GITHUB_OUTPUT"
+      - name: Latest closes for every stock
+        # One request per 100 stocks, so all of them have yesterday's close before the decisions.
+        run: uv run --no-dev python -m stockintel.ingest alpaca-closes
       - name: Prices
         if: github.event_name == 'schedule' && github.event.schedule != '50 10 * * 2-6' || inputs.prices
         run: uv run --no-dev python -m stockintel.ingest prices --limit 45

@@ -464,3 +464,52 @@ def test_owned_stocks_get_prices_first(stocks):
     provider = FixturePrices()
     run_prices(stocks, provider, START, 1, NOW)
     assert [call[0] for call in provider.calls] == ["BBB"]
+
+
+class FixtureAlpaca:
+    """TEST FIXTURE: daily bars as Alpaca's consolidated feed would return them."""
+
+    def __init__(self, closes):
+        self.closes, self.calls = closes, []
+
+    def minute_bars(self, symbols, start, end, timeframe, adjustment, feed):
+        import pandas as pd
+
+        self.calls.append((symbols, timeframe, adjustment, feed))
+        frames = {}
+        for symbol in symbols:
+            if symbol in self.closes:
+                when = pd.Timestamp("2026-07-07 00:00", tz="America/New_York")
+                close = self.closes[symbol]
+                frames[symbol] = pd.DataFrame(
+                    {
+                        "time": [when],
+                        "open": [close],
+                        "high": [close],
+                        "low": [close],
+                        "close": [close],
+                        "volume": [5000.0],
+                    }
+                )
+        return frames, Provenance("Alpaca (SIP)", "https://fixture.test/bars", NOW, "end_of_day")
+
+
+def test_alpaca_fills_only_missing_latest_closes_and_skips_split_like_moves(stocks):
+    from stockintel.ingest import run_alpaca_closes
+
+    early = SESSIONS[:-1]
+    provider = FixturePrices({"AAA": [bar(d) for d in early], "BBB": [bar(d) for d in early]})
+    run_prices(stocks, provider, START, 45, NOW)
+    alpaca = FixtureAlpaca({"AAA": 103.0, "BBB": 30.0})  # BBB fell 70%: maybe a split.
+    assert run_alpaca_closes(stocks, alpaca, NOW) == "partial"
+    assert alpaca.calls[0][1:] == ("1Day", "raw", "sip")
+    latest = queries.stock(stocks, "AAA")["bars"][0]
+    assert (latest["market_date"], latest["close"], latest["source"]) == (
+        date(2026, 7, 7),
+        103.0,
+        "Alpaca (SIP)",
+    )
+    assert queries.stock(stocks, "BBB")["bars"][0]["market_date"] == date(2026, 7, 6)
+    # Nothing is missing any more for AAA, so a second run asks only for BBB.
+    run_alpaca_closes(stocks, alpaca, NOW)
+    assert alpaca.calls[-1][0] == ("BBB",)

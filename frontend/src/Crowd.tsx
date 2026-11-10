@@ -1,3 +1,4 @@
+import { Tick } from "./Names";
 import { useEffect, useState } from "react";
 
 function useJson<T>(url: string) {
@@ -40,7 +41,7 @@ function TradeRows({ trades }: { trades: Trade[] }) {
           {trades.map((t, i) => (
             <tr key={`${t.url}-${i}`} className={t.action === "Buy" ? "row-buy" : t.action.includes("ale") ? "row-sell" : ""}>
               <td>
-                <b>{t.ticker}</b>
+                <b><Tick t={t.ticker} /></b>
                 {t.owned ? " (you own this)" : ""}
                 {t.asset.includes("[OP]") ? " options" : ""}
               </td>

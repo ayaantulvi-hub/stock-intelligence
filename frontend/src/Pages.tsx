@@ -1,3 +1,4 @@
+import { Tick } from "./Names";
 import { leanRow } from "./leanRow";
 import { useEffect, useState, type FormEvent } from "react";
 import { IdeasPanel } from "./ForecastPanel";
@@ -125,7 +126,7 @@ export function Screener({ onOpen }: { onOpen: (ticker: string) => void }) {
               <tr key={row.ticker} className={leanRow(row.lean)}>
                 <td>
                   <button className="link" onClick={() => onOpen(row.ticker)}>
-                    {row.ticker}
+                    <Tick t={row.ticker} />
                   </button>
                 </td>
                 <td>{row.last_close.toFixed(2)}</td>
@@ -241,7 +242,7 @@ function ChangeRows({ rows, onOpen }: { rows: Change[]; onOpen?: (ticker: string
             >
               <td>
                 <button className="link" onClick={() => onOpen?.(row.ticker)}>
-                  {row.ticker}
+                  <Tick t={row.ticker} />
                 </button>
               </td>
               <td>{row.topic}</td>
@@ -595,7 +596,7 @@ export function HoldingsToday({ onOpen }: { onOpen?: (ticker: string) => void })
               <tr key={row.ticker} className={leanRow(row.call)}>
                 <td>
                   <button className="link" onClick={() => onOpen?.(row.ticker)}>
-                    {row.ticker}
+                    <Tick t={row.ticker} />
                   </button>
                 </td>
                 <td><b>{row.call}</b></td>
@@ -657,7 +658,7 @@ export function PortfolioPage() {
           <tbody>
             {data.holdings.map((row) => (
               <tr key={row.ticker}>
-                <td>{row.ticker}</td>
+                <td><Tick t={row.ticker} /></td>
                 <td>{row.sector}</td>
                 <td>{money(row.worth)}</td>
                 <td>{money(row.profit)}</td>
@@ -735,7 +736,7 @@ export function JournalPage() {
           <tbody>
             {data?.map((row) => (
               <tr key={row.created_at}>
-                <td>{row.ticker}</td>
+                <td><Tick t={row.ticker} /></td>
                 <td>{row.decision}</td>
                 <td>{row.price.toFixed(2)}</td>
                 <td>{row.change_percent.toFixed(1)}%</td>
@@ -815,7 +816,7 @@ function WhyWrong() {
             <ul>
               {data.recent.map((row) => (
                 <li key={`${row.ticker}${row.target_session}`}>
-                  {row.target_session} {row.ticker} {row.change_percent.toFixed(1)}%: {row.reason}
+                  {row.target_session} <Tick t={row.ticker} /> {row.change_percent.toFixed(1)}%: {row.reason}
                 </li>
               ))}
             </ul>
@@ -918,7 +919,7 @@ export function ReliabilityPage() {
               <ul>
                 {check.problems.map((row) => (
                   <li key={`${row.ticker}${row.detail}`}>
-                    {row.ticker}: {row.detail}
+                    <Tick t={row.ticker} />: {row.detail}
                   </li>
                 ))}
               </ul>

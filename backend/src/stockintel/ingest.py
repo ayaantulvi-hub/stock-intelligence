@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 import pandas as pd
 from sqlalchemy import Engine, text
@@ -1009,6 +1009,75 @@ def run_congress(engine: Engine, provider, now: datetime, limit: int) -> str:
     return run.finish()
 
 
+SPLIT_SUSPECT = 0.4  # A one-day move this big may be a split; leave that day to Tiingo.
+
+
+def run_alpaca_closes(engine: Engine, provider, now: datetime) -> str:
+    """Fill the latest session's close for every stock still missing it, from Alpaca's
+    consolidated feed in a few requests. Tiingo, limited to about 45 stocks an hour, adds its own
+    bar later with dividend and split details; readers use the newest bar for a day, and both are
+    kept. A day that looks like a split is skipped and left to Tiingo."""
+    run = Run(engine, "alpaca closes")
+    day = latest_expected_session(now)
+    query = """SELECT s.ticker, s.id, last.close AS previous FROM securities s
+               JOIN LATERAL (SELECT market_date, close / split_factor AS close FROM price_bars
+                 WHERE security_id = s.id ORDER BY market_date DESC, id DESC LIMIT 1) last ON true
+               WHERE last.market_date < :day AND last.market_date >= :day - 10"""
+    with engine.connect() as conn:
+        missing = {r.ticker: r for r in conn.execute(text(query), {"day": day})}
+    run.attempted = len(missing)
+    if not missing:
+        return run.finish()
+    start = datetime.combine(day, time(0), tzinfo=UTC)
+    names = {t.replace("-", "."): t for t in missing}
+    symbols = list(names)
+    for i in range(0, len(symbols), 100):
+        chunk = tuple(symbols[i : i + 100])
+        try:
+            frames, provenance = provider.minute_bars(
+                chunk, start, start + timedelta(days=1), "1Day", adjustment="raw", feed="sip"
+            )
+        except FeedError as exc:
+            run.errors.append(str(exc))
+            continue
+        with engine.begin() as conn:
+            fetch_id = add_fetch(conn, provenance)
+            for symbol, frame in frames.items():
+                ticker = names.get(symbol)
+                same = frame[frame["time"].dt.date == day] if ticker else frame.iloc[0:0]
+                if same.empty:
+                    continue
+                bar = same.iloc[-1]
+                previous = missing[ticker].previous
+                if previous and abs(bar["close"] / previous - 1) > SPLIT_SUSPECT:
+                    run.errors.append(
+                        f"{ticker}: {bar['close']:.2f} after {previous:.2f}, left to Tiingo"
+                    )
+                    continue
+                conn.execute(
+                    text(
+                        """INSERT INTO price_bars (fetch_id, security_id, market_date,
+                             market_timestamp, open, high, low, close, volume, div_cash,
+                             split_factor)
+                           VALUES (:f, :s, :d, :ts, :o, :h, :l, :c, :v, 0, 1)"""
+                    ),
+                    {
+                        "f": fetch_id,
+                        "s": missing[ticker].id,
+                        "d": day,
+                        "ts": session_close(day),
+                        "o": float(bar["open"]),
+                        "h": float(bar["high"]),
+                        "l": float(bar["low"]),
+                        "c": float(bar["close"]),
+                        "v": float(bar["volume"]),
+                    },
+                )
+                run.ok += 1
+                run.added += 1
+    return run.finish()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1030,6 +1099,7 @@ def main() -> None:
             "releases",
             "short",
             "congress",
+            "alpaca-closes",
         ],
     )
     parser.add_argument("--limit", type=int, default=45, help="stocks or documents per run")
@@ -1074,6 +1144,10 @@ def main() -> None:
             status = run_releases(engine, FredProvider(settings.fred_api_key))
         elif args.feed == "short":
             status = run_short_interest(engine, FinraProvider(), now)
+        elif args.feed == "alpaca-closes":
+            from stockintel.day_trading import provider as alpaca
+
+            status = run_alpaca_closes(engine, alpaca(), now)
         elif args.feed == "congress":
             status = run_congress(engine, HouseProvider(), now, args.limit)
         elif args.feed == "filings":
