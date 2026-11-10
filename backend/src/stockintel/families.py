@@ -42,7 +42,6 @@ FAMILIES = {
         "rate_tilt",
         "oil_tilt",
         "dollar_tilt",
-        "cpi_tilt",
     ],
 }
 MEMBERS = [factor for members in FAMILIES.values() for factor in members]

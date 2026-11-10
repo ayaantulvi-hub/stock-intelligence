@@ -26,6 +26,7 @@ class Factor:
 
 
 LIVE = "live"
+NO_EDGE = "Tested: no reliable edge, so not used"
 NEEDS_FUNDAMENTALS = "Needs SEC company facts (free, Milestone 6)"
 NEEDS_FORM_4 = "Needs SEC Form 4 parsing (free)"
 NEEDS_OPTIONS = "Needs a paid options feed"
@@ -375,8 +376,9 @@ REGISTER = [
         "Inflation report, through this stock's past reactions",
         "Economy exposure",
         "Hong, Liu, Pan & Tian (2024), stocks react differently to core CPI surprises on the "
-        "day; no source shows the effect lasting after it, so it stays unproven until tested",
-        LIVE,
+        "day; no source shows the effect lasting after it, and our test on 10 Nov 2026 found none "
+        "(t = -0.69 over 111 dates)",
+        NO_EDGE,
     ),
     Factor("implied_move", "Options-implied move", "Options", "Options market", NEEDS_OPTIONS),
     Factor(
