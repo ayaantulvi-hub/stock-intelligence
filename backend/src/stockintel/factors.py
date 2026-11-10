@@ -370,6 +370,14 @@ REGISTER = [
         "Its past moves with the dollar, times the dollar's last month",
         LIVE,
     ),
+    Factor(
+        "cpi_tilt",
+        "Inflation report, through this stock's past reactions",
+        "Economy exposure",
+        "How it moved against other stocks on past CPI days, times the 2-year yield's move on "
+        "the latest one",
+        LIVE,
+    ),
     Factor("implied_move", "Options-implied move", "Options", "Options market", NEEDS_OPTIONS),
     Factor(
         "variance_premium",
@@ -439,6 +447,7 @@ HIGH_MEANS = {
     "policy_beta": "Has tended to rise more than most stocks when policy uncertainty rises",
     "fund_buying": "More tracked big investors added to it than cut it",
     "insider_cluster": "More different insiders bought recently than at most stocks",
+    "cpi_tilt": "Has tended to beat other stocks on days like the latest inflation report",
 }
 
 

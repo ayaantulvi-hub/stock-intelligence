@@ -152,6 +152,54 @@ def sensitivity(
     return (together / spread.where(spread > 0)).shift(lag).to_numpy()
 
 
+CPI_EVENTS = 36  # About three years of monthly inflation reports.
+CPI_MIN_EVENTS = 12
+CPI_DAYS_ACTIVE = 30  # A report's surprise counts until the next one, about a month later.
+
+
+def cpi_columns(two_year: pd.Series, release_days: list) -> pd.DataFrame:
+    """The inflation-report surprise, measured by the market itself.
+
+    Economists' forecasts aren't free from an official source, so the surprise is the 2-year
+    Treasury yield's move on the report day: it rises when inflation came in hotter than
+    expected, because the Fed is then expected to keep rates higher.
+    cpi_move: that move on report days only, to measure each stock's past reactions.
+    cpi_shock: the latest report's move, from the day after it is published, for a month.
+    """
+    yields = two_year.dropna().sort_index()
+    moves = yields.diff()
+    days = pd.DatetimeIndex(pd.to_datetime(sorted(release_days)))
+    on_days = moves[moves.index.isin(days)]
+    out = pd.DataFrame(index=yields.index)
+    out["cpi_move"] = on_days.reindex(out.index)
+    # FRED publishes each day's yield the next day, like the other daily readings here.
+    known = on_days.shift(1, freq="D")
+    every_day = pd.date_range(yields.index.min(), yields.index.max() + pd.Timedelta(days=1))
+    shock = known.reindex(every_day).ffill(limit=CPI_DAYS_ACTIVE).fillna(0.0)
+    return out.reindex(out.index.union(every_day)).assign(cpi_shock=shock)
+
+
+def event_sensitivity(excess: pd.Series, dates: pd.Series, events: pd.Series | None) -> np.ndarray:
+    """How a stock has moved against the average stock on past report days, per unit of
+    surprise. Each date uses only reports from before it, and needs at least a year of them."""
+    if events is None:
+        return np.full(len(excess), np.nan)
+    index = pd.DatetimeIndex(dates)
+    stock = pd.Series(excess.to_numpy(), index=index)
+    move = events.reindex(index)
+    seen = move.notna() & stock.notna()
+    if not seen.any():
+        return np.full(len(excess), np.nan)
+    x, y = move[seen], stock[seen]
+    together = (x * y).rolling(CPI_EVENTS, min_periods=CPI_MIN_EVENTS).mean() - x.rolling(
+        CPI_EVENTS, min_periods=CPI_MIN_EVENTS
+    ).mean() * y.rolling(CPI_EVENTS, min_periods=CPI_MIN_EVENTS).mean()
+    spread = x.rolling(CPI_EVENTS, min_periods=CPI_MIN_EVENTS).var(ddof=0)
+    beta = together / spread.where(spread > 0)
+    # Known from the day after each report, and kept until the next one.
+    return beta.reindex(index).shift(1).ffill().to_numpy()
+
+
 def build_panel(
     frames: dict[str, pd.DataFrame],
     slope: pd.Series | None,
@@ -191,6 +239,13 @@ def build_panel(
             beta = sensitivity(changes, dates, macro[column], lag)
             move = macro[recent].reindex(pd.DatetimeIndex(dates), method="ffill").to_numpy()
             factors[name] = beta * move
+        if macro is not None and "cpi_move" in macro and "cpi_shock" in macro:
+            excess = changes - market.reindex(dates).to_numpy()
+            beta = event_sensitivity(excess, dates, macro["cpi_move"])
+            shock = macro["cpi_shock"].reindex(pd.DatetimeIndex(dates), method="ffill")
+            factors["cpi_tilt"] = beta * shock.to_numpy()
+        else:
+            factors["cpi_tilt"] = np.nan
         factors["ticker"] = ticker
         factors["eligible"] = (
             True
@@ -508,7 +563,7 @@ def load_macro(engine: Engine) -> pd.DataFrame:
     query = """SELECT DISTINCT ON (series_id, observation_date) series_id, observation_date, value
                FROM economic_observations
                WHERE series_id IN ('VIXCLS', 'BAA10Y', 'DCOILWTICO', 'T10YIE', 'ICSA',
-                 'T10Y3M', 'DFF', 'USEPUINDXD', 'DGS10', 'DTWEXBGS')
+                 'T10Y3M', 'DFF', 'USEPUINDXD', 'DGS10', 'DTWEXBGS', 'DGS2')
                ORDER BY series_id, observation_date, realtime_start DESC"""
     with engine.connect() as conn:
         rows = pd.DataFrame([row._mapping for row in conn.execute(text(query))])
@@ -586,6 +641,22 @@ def load_macro(engine: Engine) -> pd.DataFrame:
     if "USEPUINDXD" in wide:
         weekly = wide["USEPUINDXD"].dropna().rolling(5).mean().pct_change(5)
         macro["policy_change"] = weekly.reindex(macro.index)
+    if "DGS2" in wide:
+        with engine.connect() as conn:
+            reports = [
+                row[0]
+                for row in conn.execute(
+                    text(
+                        """SELECT release_date FROM economic_releases
+                           WHERE name = 'Inflation figures (CPI)'"""
+                    )
+                )
+            ]
+        if reports:
+            cpi = cpi_columns(wide["DGS2"], reports)
+            macro = macro.reindex(macro.index.union(cpi.index))
+            macro["cpi_move"] = cpi["cpi_move"].reindex(macro.index)
+            macro["cpi_shock"] = cpi["cpi_shock"].reindex(macro.index).ffill()
     return macro
 
 

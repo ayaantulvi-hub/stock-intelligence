@@ -336,3 +336,39 @@ def test_insider_cluster_counts_different_buyers_in_90_days():
     )
     days = pd.Series(pd.to_datetime(["2026-01-01", "2026-01-10", "2026-04-03"]))
     assert forecast.insider_buyers(trades, days).tolist() == [0, 2, 1]
+
+
+def test_cpi_surprise_is_known_only_after_the_report_and_fades_after_a_month():
+    from stockintel.forecast import cpi_columns
+
+    days = pd.bdate_range("2026-01-01", "2026-04-30")
+    two_year = pd.Series(4.0, index=days)
+    two_year[pd.Timestamp("2026-02-11") :] += 0.15  # A hot report on 11 Feb lifts the yield.
+    cpi = cpi_columns(two_year, [pd.Timestamp("2026-02-11").date()])
+    assert cpi.loc["2026-02-11", "cpi_move"] == pytest.approx(0.15)
+    assert cpi.loc["2026-02-11", "cpi_shock"] == 0  # Not published until the next day.
+    assert cpi.loc["2026-02-12", "cpi_shock"] == pytest.approx(0.15)
+    assert cpi.loc["2026-03-20", "cpi_shock"] == 0  # Over a month later.
+    assert cpi["cpi_move"].notna().sum() == 1
+
+
+def test_cpi_sensitivity_uses_only_earlier_reports():
+    from stockintel.forecast import CPI_MIN_EVENTS, event_sensitivity
+
+    dates = pd.Series(pd.bdate_range("2020-01-01", periods=600))
+    report_days = dates.iloc[10::21].reset_index(drop=True)
+    rng = np.random.default_rng(1)
+    moves = pd.Series(rng.normal(0, 0.1, len(report_days)), index=pd.DatetimeIndex(report_days))
+    excess = pd.Series(0.0, index=range(len(dates)))
+    position = {day: i for i, day in enumerate(dates)}
+    for day, move in moves.items():
+        excess[position[day]] = -0.2 * move  # Falls against other stocks on hot reports.
+    beta = event_sensitivity(excess, dates, moves)
+    first_ready = position[report_days[CPI_MIN_EVENTS - 1]]
+    assert np.isnan(beta[first_ready])  # The 12th report itself isn't used until the next day.
+    assert beta[first_ready + 1] == pytest.approx(-0.2)
+    # Planted look-ahead: a big reaction on the latest report must not change that day's value.
+    planted = excess.copy()
+    last = position[report_days.iloc[-1]]
+    planted[last] = 5.0
+    assert event_sensitivity(planted, dates, moves)[last] == pytest.approx(beta[last])
