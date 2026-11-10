@@ -11,6 +11,7 @@ type Replay = {
   close_low: number;
   close_high: number;
   verdict: string;
+  notes?: string[];
   history?: { sessions: number; triggered: number; target: number; stop: number; avg_r: number | null };
 } | null;
 type Setup = {
@@ -117,13 +118,16 @@ export function ReplayBox({ replay }: { replay?: Replay }) {
         Average {replay.avg_r.toFixed(2)} times the risk. 9 in 10 replays closed between {replay.close_low.toFixed(2)} and {replay.close_high.toFixed(2)}.
       </p>
       <p><b>{replay.verdict}</b></p>
+      {replay.notes?.map((note) => (
+        <p key={note}>{note}</p>
+      ))}
       {replay.history && (
         <p>
           The same rule on those {replay.history.sessions} real days: it triggered {replay.history.triggered} times, hit the target {replay.history.target}, the stop {replay.history.stop}
           {replay.history.avg_r === null ? "." : `, averaging ${replay.history.avg_r.toFixed(2)} times the risk after costs.`}
         </p>
       )}
-      <small>A simulation from the stock's own recent bars, not a forecast. Method from the free day-trader-skill (MIT).</small>
+      <small>A simulation from the stock's own recent bars, not a forecast. The day-trader-skill Time Machine's method (MIT), on Alpaca prices instead of Yahoo.</small>
     </div>
   );
 }

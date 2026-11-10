@@ -5,14 +5,16 @@ copyright Jake Schincariol), using Alpaca bars instead of Yahoo. Same method:
 
 1. The pool: full past sessions (78 five-minute bars, 9:30 to 16:00 New York time). Each bar
    becomes four ratios to the bar before it: open, high, low and close over the previous close.
-2. One replay starts at the entry price and scales past bars to the current price. Changed
-   from the original, which drew every bar on its own: here it draws runs of 6 bars (30
-   minutes) in a row from one past day, from the same time of day plus or minus 2 bars. Real
-   prices run in streaks, and drawing bars one at a time breaks them, pushing every answer
-   towards a coin flip. The stop is checked before the target, so a bar touching both counts
-   as the stop.
+2. One replay starts at the entry price. For each remaining bar it draws a past bar from the
+   same time of day (plus or minus 2 bars) and scales it to the current price, each bar on its
+   own, exactly as the original does. The stop is checked before the target, so a bar touching
+   both counts as the stop.
 3. The verdict compares how often the target came first, among replays that hit one side,
    with the share needed to break even: 1 in (1 + R).
+
+Differences from the original, which can't be removed here: prices come from Alpaca's IEX feed
+instead of Yahoo, and numpy's random numbers replace Python's, so the same seed gives different
+draws from the same method. The fan chart and sample paths aren't drawn.
 
 It is a simulation built from the stock's own recent bars, not a prediction.
 """
@@ -27,7 +29,7 @@ MIN_SESSIONS = 20
 REPLAYS = 10_000
 SEED = 19
 WINDOW = 2
-BLOCK = 6  # Bars drawn in a row from one past day.
+BLOCK = 1  # As the original: every bar drawn on its own. Above 1 draws runs from one day.
 COIN_FLIP = 0.05
 STRONG = 0.15
 
@@ -84,7 +86,9 @@ def simulate(
         price = close
     move = (price - entry) if long else (entry - price)
     r = np.where(outcome == 1, r_target, np.where(outcome == -1, -1.0, move / risk))
+    green = (outcome == 1) | ((outcome == 0) & (move > 0))
     return {
+        "p_green": float(green.mean()),
         "replays": replays,
         "p_target": float((outcome == 1).mean()),
         "p_stop": float((outcome == -1).mean()),
@@ -94,6 +98,28 @@ def simulate(
         "close_low": float(np.percentile(price, 5)),
         "close_high": float(np.percentile(price, 95)),
     }
+
+
+MANY_NEITHER = 0.40
+
+
+def verdict_notes(mc: dict) -> list[str]:
+    """The original's lines under the verdict, so nothing reads as one-sided."""
+    notes = []
+    hit = mc["p_target"] + mc["p_stop"]
+    if mc["p_neither"] > MANY_NEITHER and hit > 0:
+        notes.append(
+            f"{mc['p_neither']:.1%} of the replays hit neither by the close; the closing price "
+            "decides those."
+        )
+    if hit > 0:
+        gap = mc["p_target"] / hit - 1 / (1 + mc["r_at_target"])
+        if abs(gap) >= COIN_FLIP and mc["avg_r"] != 0 and (mc["avg_r"] > 0) != (gap > 0):
+            notes.append(
+                f"Average R is {mc['avg_r']:+.3f} all the same: the replays that hit neither "
+                "pull it the other way."
+            )
+    return notes
 
 
 def verdict(mc: dict) -> str:
@@ -144,6 +170,7 @@ def run(
     mc = simulate(pool(days), entry, stop, target, after, last, long)
     mc["sessions"] = len(days)
     mc["verdict"] = verdict(mc)
+    mc["notes"] = verdict_notes(mc)
     if history is not None:
         mc["history"] = history(days, last)
     return mc

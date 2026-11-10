@@ -329,7 +329,7 @@ export function HoldReplay({ ticker }: { ticker: string }) {
           What really happened: over the last two years, holding it for {r.days} trading days ended up {pc(r.record.p_gain)} of the time ({r.record.holds} holds), with a middle result of {signedPct(r.record.median)}.
         </p>
       )}
-      <small>A simulation from the stock's own past, not a forecast. Method adapted from the free day-trader-skill (MIT).</small>
+      <small>A simulation from the stock's own past, not a forecast. This month-long version is the site's own: the day-trader-skill Time Machine only covers the rest of one trading day.</small>
     </section>
   );
 }

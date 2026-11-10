@@ -87,8 +87,8 @@ def test_runs_of_bars_keep_streaks_that_single_bars_break():
     up = [session(f"2026-10-{d:02d}", 100 * 1.003 ** np.arange(78)) for d in range(1, 13)]
     down = [session(f"2026-10-{d:02d}", 100 * 0.997 ** np.arange(78)) for d in range(13, 25)]
     ratios = timemachine.pool([d.iloc[:, 1:5].to_numpy() for d in up + down])
-    runs = timemachine.simulate(ratios, 100, 50, 200, 10, 76, long=True, replays=3000)
-    single = timemachine.simulate(ratios, 100, 50, 200, 10, 76, long=True, replays=3000, block=1)
+    runs = timemachine.simulate(ratios, 100, 50, 200, 10, 76, long=True, replays=3000, block=6)
+    single = timemachine.simulate(ratios, 100, 50, 200, 10, 76, long=True, replays=3000)
     assert runs["close_high"] - runs["close_low"] > 2 * (single["close_high"] - single["close_low"])
 
 
@@ -129,3 +129,14 @@ def test_replays_repeat_with_the_same_seed():
     frame = daily(100 + np.cumsum(np.random.default_rng(3).normal(0, 1, 400)))
     first = timemachine.hold(frame, stop=None)
     assert first == timemachine.hold(frame, stop=None)
+
+
+def test_default_matches_the_original_one_bar_at_a_time():
+    assert timemachine.BLOCK == 1
+
+
+def test_original_notes_when_many_replays_hit_neither():
+    mc = {"p_target": 0.2, "p_stop": 0.1, "p_neither": 0.7, "r_at_target": 1.0, "avg_r": -0.05}
+    notes = timemachine.verdict_notes(mc)
+    assert notes[0].startswith("70.0% of the replays hit neither")
+    assert "Average R is -0.050 all the same" in notes[1]
