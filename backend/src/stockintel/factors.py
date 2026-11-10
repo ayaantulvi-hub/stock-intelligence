@@ -374,8 +374,8 @@ REGISTER = [
         "cpi_tilt",
         "Inflation report, through this stock's past reactions",
         "Economy exposure",
-        "How it moved against other stocks on past CPI days, times the 2-year yield's move on "
-        "the latest one",
+        "Hong, Liu, Pan & Tian (2024), stocks react differently to core CPI surprises on the "
+        "day; no source shows the effect lasting after it, so it stays unproven until tested",
         LIVE,
     ),
     Factor("implied_move", "Options-implied move", "Options", "Options market", NEEDS_OPTIONS),
