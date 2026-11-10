@@ -329,3 +329,12 @@ needs at least 30 tested cases that beat the baseline.
   always apply.
 - Election factors removed: too few elections to test, and elections reach decisions through
   the news.
+
+## Public repository (10 November 2026)
+
+- Made public so GitHub Actions minutes are free and unlimited. Data, holdings and keys stay
+  private: the database is on Neon, keys are in GitHub Secrets, and the site needs a password.
+- Because job logs and issues are public, nothing prints holdings. Alert issues only give a
+  count; the details are on the site's Alerts page. Workflows don't run on pull requests.
+- GitHub turns off scheduled workflows in a public repository after 60 days without changes.
+  The daily decisions are also started by cron-job.org, which isn't affected.

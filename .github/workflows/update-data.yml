@@ -136,7 +136,13 @@ jobs:
         if: ${{ !cancelled() && steps.alerts.outputs.found == 'yes' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "Stock alerts $(date -u +%F)" --body-file alerts.txt
+        # The repository is public, so the issue says only how many alerts there are. The details
+        # name your holdings, so they stay on the password-protected site's Alerts page.
+        run: |
+          count=$(grep -c '^- ' alerts.txt || true)
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "Stock alerts $(date -u +%F)" \
+            --body "$count new alerts. Details are on the site's Alerts page."
+          rm -f alerts.txt
       - name: Report
         if: always()
         run: uv run --no-dev python -m stockintel.report

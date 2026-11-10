@@ -78,11 +78,10 @@ def main() -> None:
     engine = get_engine()
     apply(engine, json.loads(os.environ["HOLDINGS"]))
     record_sales(engine, json.loads(os.environ.get("SALES") or "[]"))
-    query = """SELECT s.ticker, p.shares, p.buy_price, p.stop_price, p.sell_by
-               FROM positions p JOIN securities s ON s.id = p.security_id ORDER BY s.ticker"""
+    # Job logs are public, so only the count is printed, never the holdings themselves.
     with engine.connect() as conn:
-        for row in conn.execute(text(query)):
-            print(row.ticker, row.shares, row.buy_price, row.stop_price, row.sell_by)
+        count = conn.execute(text("SELECT count(*) FROM positions")).scalar()
+    print(f"Saved {count} holdings.")
 
 
 if __name__ == "__main__":

@@ -21,4 +21,3 @@ jobs:
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
       - run: uv run --no-dev python -m stockintel.lists ${{ inputs.count }}
-      - run: uv run --no-dev python -m stockintel.plan
