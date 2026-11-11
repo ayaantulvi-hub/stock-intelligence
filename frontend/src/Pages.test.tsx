@@ -15,7 +15,8 @@ function respond(body: unknown, status = 200) {
 test("empty portfolio explains what to do", async () => {
   respond({ worth: 0, cost: 0, profit: 0, risks: [], sectors: [], holdings: [] });
   render(<PortfolioPage />);
-  expect(await screen.findByText(/tap "I own this"/)).toBeTruthy();
+  expect(await screen.findByText("No holdings yet.")).toBeTruthy();
+  expect(screen.getByLabelText("Ticker to add")).toBeTruthy();
 });
 
 test("reliability says too early and shows missing scores as Not verified", async () => {

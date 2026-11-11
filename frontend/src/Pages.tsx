@@ -2,6 +2,7 @@ import { Tick } from "./Names";
 import { leanRow } from "./leanRow";
 import { useEffect, useState, type FormEvent } from "react";
 import { IdeasPanel } from "./ForecastPanel";
+import PositionPanel from "./PositionPanel";
 
 const NOT_VERIFIED = "Not verified";
 
@@ -610,17 +611,67 @@ export function HoldingsToday({ onOpen }: { onOpen?: (ticker: string) => void })
   );
 }
 
+/** Lets you add, change or remove a holding without opening the stock's page. */
+function EditHoldings({ tickers, onChange }: { tickers: string[]; onChange: () => void }) {
+  const [ticker, setTicker] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+  const pick = (event: FormEvent) => {
+    event.preventDefault();
+    const clean = ticker.trim().toUpperCase();
+    if (clean) setOpen(clean);
+  };
+  return (
+    <div className="edit-holdings">
+      <h3>Change your holdings</h3>
+      <p>
+        Pick a holding to edit or remove, or type a ticker to add one.{" "}
+        {tickers.map((t) => (
+          <button key={t} onClick={() => setOpen(t)} aria-pressed={open === t}>
+            {t}
+          </button>
+        ))}
+      </p>
+      <form onSubmit={pick} className="search">
+        <input
+          value={ticker}
+          onChange={(event) => setTicker(event.target.value)}
+          placeholder="Ticker to add, e.g. NVDA"
+          aria-label="Ticker to add"
+        />
+        <button type="submit">Open</button>
+      </form>
+      {open && (
+        <div>
+          <h4>
+            <Tick t={open} />
+          </h4>
+          <PositionPanel key={open} ticker={open} onChange={onChange} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PortfolioPage() {
-  const { data, failed } = useData<Portfolio>("/api/portfolio");
+  const [version, setVersion] = useState(0);
+  const { data, failed } = useData<Portfolio>(`/api/portfolio?v=${version}`);
+  const reload = () => setVersion((v) => v + 1);
   if (failed) return <Failed />;
   if (!data) return <p>Loading…</p>;
+  const editor = (
+    <EditHoldings tickers={data.holdings.map((row) => row.ticker)} onChange={reload} />
+  );
   if (data.holdings.length === 0) {
-    return <p>No holdings yet. Open a stock and tap "I own this".</p>;
+    return (
+      <section>
+        <p>No holdings yet.</p>
+        {editor}
+      </section>
+    );
   }
   return (
     <section>
       <h2>My portfolio</h2>
-      <HoldingsToday />
       <div className="glance">
         <div>
           <small>Worth</small>
@@ -668,6 +719,7 @@ export function PortfolioPage() {
           </tbody>
         </table>
       </div>
+      {editor}
     </section>
   );
 }
