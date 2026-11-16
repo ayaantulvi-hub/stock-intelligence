@@ -20,9 +20,17 @@ def test_tomorrow_once_today_has_passed():
     assert next_decision(at(2026, 11, 5, 11, 0)) == at(2026, 11, 6, 10, 50)
 
 
-def test_friday_evening_goes_to_saturday_and_saturday_evening_to_tuesday():
-    assert next_decision(at(2026, 11, 6, 20, 0)) == at(2026, 11, 7, 10, 50)
-    assert next_decision(at(2026, 11, 7, 20, 0)) == at(2026, 11, 10, 10, 50)
+def test_friday_evening_goes_to_monday_and_skips_holidays():
+    assert next_decision(at(2026, 11, 6, 20, 0)) == at(2026, 11, 9, 10, 50)
+    assert next_decision(at(2026, 11, 7, 20, 0)) == at(2026, 11, 9, 10, 50)
+    # Thanksgiving, 26 Nov 2026: Wednesday evening goes to Friday.
+    assert next_decision(at(2026, 11, 25, 20, 0)) == at(2026, 11, 27, 10, 50)
+
+
+def test_mondays_decisions_are_made_on_monday_not_saturday(engine):
+    assert decisions_due(engine, at(2026, 11, 14, 11, 0)) is False
+    assert decisions_due(engine, at(2026, 11, 16, 10, 20)) is False
+    assert decisions_due(engine, at(2026, 11, 16, 11, 0)) is True
 
 
 def test_a_missed_run_is_picked_up_until_the_market_opens(engine):

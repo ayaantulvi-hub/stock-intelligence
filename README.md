@@ -14,7 +14,7 @@ This is not financial advice. See [docs/decisions.md](docs/decisions.md).
 | Part | Where | Cost |
 |---|---|---|
 | Hourly data updates | GitHub Actions `update-data.yml`, started by cron-job.org | Free: the repository is public, so minutes are unlimited |
-| Daily decisions | The first update after 10:50 UTC (2:50pm Dubai) on US trading days | Free |
+| Daily decisions | The first update after 10:50 UTC (2:50pm Dubai) on each US trading day, Monday included | Free |
 | Weekly backtest and day-trading test | `backtest.yml` and `day-trading-test.yml`, Saturdays | Free |
 | Database | Neon free plan | Free up to 1 GB storage, 100 compute hours and 5 GB transfer a month |
 | Dashboard | Render free web service, `render.yaml` and `Dockerfile` | Free; sleeps when unused, so the first load takes about a minute |

@@ -786,10 +786,11 @@ def current_champion(engine: Engine) -> dict:
 
 
 def decisions_due(engine: Engine, now: datetime) -> bool:
-    """True from decision time until the market opens, if no forecasts exist for that session."""
+    """True from decision time on a trading day until that day's open, if no forecasts exist for
+    it yet. Monday's are made on Monday, so they include the weekend's news."""
     expected = latest_expected_session(now)
     target = next_session(expected)
-    start = datetime.combine(expected + timedelta(days=1), DECISION_TIME, tzinfo=UTC)
+    start = datetime.combine(target, DECISION_TIME, tzinfo=UTC)
     if not start <= now < session_open(target):
         return False
     query = "SELECT 1 FROM forecasts WHERE target_session = :target LIMIT 1"

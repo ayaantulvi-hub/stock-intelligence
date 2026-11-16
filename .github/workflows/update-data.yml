@@ -7,7 +7,7 @@ name: Update data
 # The limit that matters now is Neon's free 100 compute hours and 5 GB a month, not GitHub minutes.
 on:
   schedule:
-    - cron: "20 11 * * 2-6"
+    - cron: "20 11 * * 1-5"
   workflow_dispatch:
     inputs:
       prices:
