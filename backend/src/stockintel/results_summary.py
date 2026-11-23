@@ -38,6 +38,8 @@ QUERIES = {
     "day_trading": """SELECT DISTINCT ON (strategy) strategy, source, data_from, data_to, trades, mean_r,
         win_rate, t_stat, baseline_mean_r, verdict, run_at::date FROM day_trade_tests
         ORDER BY strategy, run_at DESC""",
+    "quant": """SELECT DISTINCT ON (study, variant) study, variant, verdict, period, metrics
+        FROM quant_results ORDER BY study, variant, run_at DESC""",
     "ledger": """SELECT min(created_at)::date AS first_forecast, max(target_session) AS latest,
         count(*) AS forecasts, count(DISTINCT target_session) AS sessions FROM forecasts""",
     "scores": """SELECT count(*) AS scored, avg(in_range::int) AS in_range_share FROM forecast_scores""",

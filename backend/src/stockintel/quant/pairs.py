@@ -35,6 +35,7 @@ TRADING = 126
 TOP = 20
 OPEN_AT = 2.0
 COINT_P = 0.05
+TRADE_LOG: list[dict] = []  # Openings and days open per chosen pair, from the last run.
 
 
 @dataclass
@@ -119,9 +120,16 @@ def positions(gap: pd.Series) -> pd.Series:
 
 
 def period_weights(
-    method: str, prices: pd.DataFrame, mask: pd.DataFrame, groups: dict[str, str], form_start: int
+    method: str,
+    prices: pd.DataFrame,
+    mask: pd.DataFrame,
+    groups: dict[str, str],
+    form_start: int,
+    trades: list | None = None,
 ) -> tuple[pd.DataFrame, list[Pair]]:
-    """Weights for one trading window, decided only from data up to each day."""
+    """Weights for one trading window, decided only from data up to each day. If a list is
+    given as `trades`, it is filled with each chosen pair's openings and days open."""
+    trades = trades if trades is not None else []
     form = prices.iloc[form_start : form_start + FORMATION]
     trade = prices.iloc[form_start + FORMATION : form_start + FORMATION + TRADING]
     names = _complete(form, mask.iloc[form_start + FORMATION - 1])
@@ -135,6 +143,8 @@ def period_weights(
     start_prices = form.iloc[-1]
     for pair in chosen:
         state = positions(_gap(pair, method, trade, start_prices))
+        opens = int(((state != 0) & (state.shift(1, fill_value=0) != state)).sum())
+        trades.append({"opens": opens, "days_open": int((state != 0).sum())})
         if method == "distance":
             share_a, share_b = 1.0, 1.0
         else:
@@ -151,10 +161,13 @@ def strategy_weights(
     """Back-to-back 6-month trading windows, each formed on the 12 months before it. Weights
     are shifted one extra day for the paper's 'wait one day' rule."""
     parts, counts = [], []
+    TRADE_LOG.clear()
     for start in range(0, len(prices) - FORMATION - 20, TRADING):
-        weights, chosen = period_weights(method, prices, mask, groups, start)
+        trades: list = []
+        weights, chosen = period_weights(method, prices, mask, groups, start, trades)
         parts.append(weights)
         counts.append(len(chosen))
+        TRADE_LOG.extend(trades)
     all_weights = pd.concat(parts).sort_index()
     all_weights = all_weights[~all_weights.index.duplicated()]
     return all_weights.shift(1).fillna(0.0), counts

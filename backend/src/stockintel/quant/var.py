@@ -103,11 +103,23 @@ def backtest(returns: pd.Series, var: pd.Series) -> dict:
             "Rejected: too many breaches" if x / n > 1 - LEVEL else "Rejected: too few breaches"
         )
     elif not math.isnan(p_ind) and p_ind < 0.05:
-        verdict = "Rejected: breaches bunch together"
+        # Christoffersen's test is two-sided: breaches can follow each other too often
+        # (bunching) or too rarely (the model over-reacts after each one).
+        after = hits[1:][hits[:-1]].mean() if hits[:-1].any() else 0.0
+        verdict = (
+            "Rejected: breaches bunch together"
+            if after > x / n
+            else "Rejected: breaches avoid each other"
+        )
     else:
         verdict = "Not rejected"
     worst = both.loc[hits, "r"] + both.loc[hits, "var"]
+    after_breach = hits[1:][hits[:-1]]
+    by_year = pd.Series(hits, index=both.index).groupby(both.index.year).mean()
     return {
+        "back_to_back_breaches": int((hits[1:] & hits[:-1]).sum()),
+        "breach_rate_after_a_breach": float(after_breach.mean()) if len(after_breach) else None,
+        "breach_rate_by_year": {str(y): float(v) for y, v in by_year.items()},
         "verdict": verdict,
         "days": n,
         "breaches": x,

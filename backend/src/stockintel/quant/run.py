@@ -18,6 +18,7 @@ from stockintel.quant import engine as bt
 from stockintel.quant import pairs, panic, studies, var, vol
 from stockintel.quant.data import industries, panels, risk_free
 from stockintel.quant.evaluate import judge
+from stockintel.quant.metrics import summary
 
 
 def _clean(value):
@@ -110,6 +111,25 @@ def pairs_trading(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
         result["average_pairs"] = float(sum(counts) / len(counts)) if counts else 0.0
         result["market_correlation"] = float(strategy.corr(market.reindex(strategy.index)))
         result["gross_annual_return"] = float(result_run.gross.reindex(strategy.index).mean() * 252)
+        log = pairs.TRADE_LOG
+        opened = [t for t in log if t["opens"]]
+        result["pairs_chosen"] = len(log)
+        result["share_of_pairs_that_traded"] = len(opened) / len(log) if log else None
+        result["trades"] = sum(t["opens"] for t in log)
+        result["average_days_open_per_trade"] = sum(t["days_open"] for t in log) / max(
+            1, sum(t["opens"] for t in log)
+        )
+        net = strategy
+        result["net_sharpe_by_period"] = {
+            "2011-2015": summary(net[net.index.year <= 2015])["sharpe"],
+            "2016-2020": summary(net[(net.index.year >= 2016) & (net.index.year <= 2020)])[
+                "sharpe"
+            ],
+            "2021-2026": summary(net[net.index.year >= 2021])["sharpe"],
+        }
+        result["cost_drag_annual"] = float(
+            (result_run.gross - result_run.net).reindex(strategy.index).mean() * 252
+        )
         settings = {
             "formation_days": pairs.FORMATION,
             "trading_days": pairs.TRADING,

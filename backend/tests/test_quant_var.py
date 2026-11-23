@@ -59,3 +59,12 @@ def test_value_at_risk_uses_only_earlier_days():
     changed.iloc[700:] = -0.5
     after = var.forecasts(changed, "historical")
     pd.testing.assert_series_equal(before.iloc[:701], after.iloc[:701])
+
+
+def test_verdict_names_the_direction_of_dependence():
+    days = pd.bdate_range("2010-01-01", periods=2000)
+    returns = pd.Series(0.0, index=days)
+    var_level = pd.Series(0.01, index=days)
+    bunched = returns.copy()
+    bunched.iloc[100:200] = -0.02  # 100 breaches in a row: 5% of days, all together.
+    assert var.backtest(bunched, var_level)["verdict"] == "Rejected: breaches bunch together"
