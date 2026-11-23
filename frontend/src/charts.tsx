@@ -8,7 +8,7 @@ const W = 720;
 const H = 240;
 const PAD = { top: 14, right: 132, bottom: 26, left: 48 };
 
-type Series = { name: string; values: (number | null)[]; role: "s1" | "s2" };
+type Series = { name: string; values: (number | null)[]; role: "s1" | "s2" | "s3" };
 
 function ticks(min: number, max: number, count = 4): number[] {
   const span = max - min || 1;

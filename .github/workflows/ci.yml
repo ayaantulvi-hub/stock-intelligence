@@ -65,4 +65,4 @@ jobs:
           sleep 8
           test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/api/health)" = 200
           test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/)" = 401
-          curl -sf -u owner:ci-only localhost:8000/ | grep -q "Stock Intelligence"
+          curl -sf -u owner:ci-only localhost:8000/ | grep -q "Quant Lab"
