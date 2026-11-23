@@ -10,6 +10,10 @@ model never saw, after trading costs, against a simple baseline, and the result 
 whether it passed or failed. Most ideas failed, and the app says "No reliable edge" when they
 do. It never places trades and is not financial advice.
 
+**Quant lab:** five classic quant studies built from first principles: a backtest engine,
+volatility targeting, pairs trading, Monte Carlo Value at Risk and a market panic detector.
+Methods and results are in [docs/QUANT.md](docs/QUANT.md).
+
 **See it:** [screenshots and a walkthrough](docs/DEMO.md). They use synthetic data, so no
 real prices or holdings are shown.
 
