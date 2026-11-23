@@ -15,7 +15,7 @@ from sqlalchemy.engine import Engine
 
 from stockintel.db import get_engine
 from stockintel.quant import engine as bt
-from stockintel.quant import pairs, studies, vol
+from stockintel.quant import pairs, studies, var, vol
 from stockintel.quant.data import industries, panels, risk_free
 from stockintel.quant.evaluate import judge
 
@@ -30,7 +30,11 @@ def _clean(value):
 
 def store(engine: Engine, study: str, variant: str, result: dict, settings: dict) -> None:
     clean = _clean(result)
-    period = f"{clean['strategy']['start']} to {clean['strategy']['end']}"
+    period = (
+        f"{clean['strategy']['start']} to {clean['strategy']['end']}"
+        if "strategy" in clean
+        else f"{clean['start']} to {clean['end']}"
+    )
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -47,12 +51,17 @@ def store(engine: Engine, study: str, variant: str, result: dict, settings: dict
                 "s": json.dumps(settings),
             },
         )
-    s, b = clean["strategy"], clean["baseline"]
-    print(
-        f"QUANT {study}/{variant}: {clean['verdict']} | t={clean['choice_t']} hold-out "
-        f"gain={clean['holdout_gain_daily']} | Sharpe {s['sharpe']} vs {b['sharpe']} | "
-        f"max drawdown {s['max_drawdown']} vs {b['max_drawdown']} | {period}"
-    )
+    if "strategy" in clean:
+        s, b = clean["strategy"], clean["baseline"]
+        detail = (
+            f"t={clean['choice_t']} hold-out gain={clean['holdout_gain_daily']} | Sharpe "
+            f"{s['sharpe']} vs {b['sharpe']} | max drawdown {s['max_drawdown']} vs {b['max_drawdown']}"
+        )
+    else:
+        detail = ", ".join(
+            f"{k}={v}" for k, v in clean.items() if k not in {"verdict", "start", "end"}
+        )
+    print(f"QUANT {study}/{variant}: {clean['verdict']} | {detail} | {period}")
 
 
 def ma_crossover(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
@@ -115,10 +124,27 @@ def pairs_trading(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
         store(engine, "pairs_trading", method, result, settings)
 
 
+def value_at_risk(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    returns = prices.pct_change(fill_method=None)
+    portfolio = bt.run(studies.equal_weight(mask), returns).net
+    portfolio = portfolio[portfolio.index > portfolio.index.min()]
+    for method in ("historical", "normal", "ewma"):
+        result = var.backtest(portfolio, var.forecasts(portfolio, method))
+        settings = {
+            "level": var.LEVEL,
+            "simulations": var.SIMULATIONS,
+            "window_days": var.WINDOW,
+            "ewma_decay": var.EWMA_DECAY,
+            "portfolio": "all tradeable stocks, equal weight",
+        }
+        store(engine, "value_at_risk", method, result, settings)
+
+
 STUDIES = {
     "ma_crossover": ma_crossover,
     "vol_targeting": vol_targeting,
     "pairs_trading": pairs_trading,
+    "value_at_risk": value_at_risk,
 }
 MIN_STOCKS = 50
 
