@@ -31,7 +31,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
+      - name: US market history since 1926 (French library, updated monthly)
+        run: uv run --no-dev python -m stockintel.ingest market-history
       - name: Quant lab studies
+        if: ${{ !cancelled() }}
         run: uv run --no-dev python -m stockintel.quant.run
       - name: Summary of stored results
         run: uv run --no-dev python -m stockintel.results_summary

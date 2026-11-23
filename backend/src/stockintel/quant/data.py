@@ -59,3 +59,18 @@ def industries(engine: Engine) -> dict[str, str]:
     with engine.connect() as conn:
         rows = conn.execute(text("SELECT ticker, sic FROM securities WHERE sic IS NOT NULL")).all()
     return {ticker: str(sic).zfill(4)[:2] for ticker, sic in rows}
+
+
+def market_history(engine: Engine) -> pd.DataFrame:
+    """Daily US market excess return (mkt_rf) and risk-free return (rf) since 1926, latest
+    stored version of each day. Empty if the feed hasn't run."""
+    query = """SELECT DISTINCT ON (series, market_date) series, market_date, value
+               FROM factor_returns ORDER BY series, market_date, id DESC"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query)).all()
+    if not rows:
+        return pd.DataFrame(columns=["mkt_rf", "rf"])
+    frame = pd.DataFrame(rows, columns=["series", "day", "value"])
+    wide = frame.pivot(index="day", columns="series", values="value")
+    wide.index = pd.to_datetime(wide.index)
+    return wide.sort_index()[["mkt_rf", "rf"]].dropna()

@@ -30,6 +30,7 @@ from stockintel.providers.base import (
     RateLimited,
 )
 from stockintel.providers.fred import FredProvider
+from stockintel.providers.french import FrenchProvider
 from stockintel.providers.sec import SecProvider
 from stockintel.providers.tiingo import TiingoProvider
 from stockintel.validation import bar_problem, find_issues
@@ -326,6 +327,44 @@ def run_history(engine: Engine, provider, now: datetime) -> str:
     return run.finish()
 
 
+def run_market_history(engine: Engine, provider) -> str:
+    """Daily US market excess return and risk-free return since 1926 (French library). Only
+    new days and changed values are stored, so a revision keeps the earlier value."""
+    run = Run(engine, "market history")
+    run.attempted = 1
+    try:
+        rows, provenance = provider.daily_market()
+    except FeedError as exc:
+        return run.finish(str(exc))
+    with engine.begin() as conn:
+        current = {
+            (r.series, r.market_date): r.value
+            for r in conn.execute(
+                text(
+                    """SELECT DISTINCT ON (series, market_date) series, market_date, value
+                       FROM factor_returns ORDER BY series, market_date, id DESC"""
+                )
+            )
+        }
+        new = [
+            {"series": series, "day": day, "value": value}
+            for day, market, rf in rows
+            for series, value in (("mkt_rf", market), ("rf", rf))
+            if current.get((series, day)) != value
+        ]
+        if new:
+            fetch_id = add_fetch(conn, provenance)
+            conn.execute(
+                text(
+                    """INSERT INTO factor_returns (fetch_id, series, market_date, value)
+                       VALUES (:fetch_id, :series, :day, :value)"""
+                ),
+                [{**row, "fetch_id": fetch_id} for row in new],
+            )
+    run.ok, run.added = 1, len(new)
+    return run.finish()
+
+
 def run_economic(engine: Engine, provider: EconomicProvider) -> str:
     run = Run(engine, "economic")
     for series_id in ECONOMIC_SERIES:
@@ -451,7 +490,8 @@ def run_alpaca_closes(engine: Engine, provider, now: datetime) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "feed", choices=["universe", "prices", "alpaca-closes", "history", "economic"]
+        "feed",
+        choices=["universe", "prices", "alpaca-closes", "history", "economic", "market-history"],
     )
     parser.add_argument("--limit", type=int, default=45, help="stocks per run")
     args = parser.parse_args()
@@ -478,6 +518,8 @@ def main() -> None:
         elif args.feed == "alpaca-closes":
             alpaca = AlpacaProvider(settings.alpaca_api_key_id, settings.alpaca_api_secret_key)
             status = run_alpaca_closes(engine, alpaca, now)
+        elif args.feed == "market-history":
+            status = run_market_history(engine, FrenchProvider())
         else:
             status = run_economic(engine, FredProvider(settings.fred_api_key))
     except FeedError as exc:  # For example, a missing key.

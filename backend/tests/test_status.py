@@ -16,7 +16,7 @@ def test_status_healthy_after_real_heartbeat(engine):
     record_heartbeat(engine)
     result = get_status(engine, stale_after_seconds=180)
     assert result["healthy"] is True
-    assert result["migrations"]["current"] == result["migrations"]["expected"] == "0031"
+    assert result["migrations"]["current"] == result["migrations"]["expected"] == "0032"
     assert result["worker"]["state"] == "ok"
 
 
@@ -96,5 +96,6 @@ def test_official_sources_outrank_licensed_ones(engine):
         "Federal Register": 1,
         "FINRA": 1,
         "Alpaca (SIP)": 2,
+        "Kenneth R. French Data Library": 2,
         "House Clerk": 1,
     }

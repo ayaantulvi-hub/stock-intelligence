@@ -53,7 +53,7 @@ def engine(migrated, database_url):
                    closed_trades, day_trade_tests, economic_releases,
                    short_interest, congress_trades, congress_reports, override_tests,
                    family_tests, rank_calibration, market_checks,
-                   factor_weights RESTART IDENTITY CASCADE"""
+                   factor_weights, factor_returns, quant_results RESTART IDENTITY CASCADE"""
             )
         )
     yield engine

@@ -16,7 +16,7 @@ from sqlalchemy.engine import Engine
 from stockintel.db import get_engine
 from stockintel.quant import engine as bt
 from stockintel.quant import pairs, panic, studies, var, vol
-from stockintel.quant.data import industries, panels, risk_free
+from stockintel.quant.data import industries, market_history, panels, risk_free
 from stockintel.quant.evaluate import judge
 from stockintel.quant.metrics import summary
 
@@ -225,12 +225,59 @@ def panic_detector(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> 
     store(engine, "panic_detector", "absorption ratio shift", result, settings)
 
 
+CENTURY_VERSIONS = (
+    ("variance", "variance-managed (Moreira-Muir)"),
+    ("volatility", "volatility target"),
+    ("conditional", "conditional (Bongaerts et al.)"),
+    ("ewma", "daily EWMA (Harvey et al.)"),
+)
+
+
+def market_century(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    """The same volatility rules and the same 50/200 trend rule, run on the whole US market's
+    daily excess return since 1926 instead of 2010. Only the data is longer: code, settings,
+    costs and the pass rule are unchanged, so a small edge has a fair chance to show."""
+    history = market_history(engine)
+    if len(history) < 252 * 50:
+        raise SystemExit("Not verified: market history has not been loaded")
+    excess = history["mkt_rf"]
+    for kind, label in CENTURY_VERSIONS:
+        strategy, held = vol.managed(excess, kind)
+        baseline = excess.reindex(strategy.index)
+        result = judge(strategy, baseline, by="alpha")
+        result["average_exposure"] = float(held.mean())
+        result["max_exposure"] = float(held.max())
+        result["series"] = growth_series(strategy, baseline)
+        settings = {
+            "data": "US market excess return, French library, daily",
+            "max_leverage": vol.MAX_LEVERAGE,
+            "rebalance": "daily" if kind == "ewma" else "monthly",
+            "cost_bps": bt.COST_BPS,
+        }
+        store(engine, "market_century", label, result, settings)
+    level = (1 + excess + history["rf"]).cumprod()
+    on = studies.trend_on(level)
+    strategy = studies.trend_returns(on, excess)
+    baseline = excess.reindex(strategy.index)
+    result = judge(strategy, baseline)
+    result["share_of_days_invested"] = float(on.shift(1).reindex(strategy.index).mean())
+    result["series"] = growth_series(strategy, baseline)
+    settings = {
+        "data": "US market, French library, daily",
+        "fast": 50,
+        "slow": 200,
+        "cost_bps": bt.COST_BPS,
+    }
+    store(engine, "market_century", "trend 50/200", result, settings)
+
+
 STUDIES = {
     "ma_crossover": ma_crossover,
     "vol_targeting": vol_targeting,
     "pairs_trading": pairs_trading,
     "value_at_risk": value_at_risk,
     "panic_detector": panic_detector,
+    "market_century": market_century,
 }
 MIN_STOCKS = 50
 

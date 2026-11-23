@@ -10,6 +10,7 @@ FEEDS = {
     "universe": "SEC EDGAR",
     "history": "SEC EDGAR (public float)",
     "economic": "FRED (Federal Reserve Bank of St. Louis)",
+    "market history": "Kenneth R. French Data Library",
 }
 
 
