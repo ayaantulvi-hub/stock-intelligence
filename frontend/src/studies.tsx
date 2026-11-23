@@ -90,6 +90,25 @@ export const STUDIES: StudyInfo[] = [
     sources: [["Lo (2002), Sharpe ratio errors", "https://ideas.repec.org/a/taf/ufajxx/v58y2002i4p36-52.html"]],
   },
   {
+    key: "momentum",
+    code: "MOM",
+    title: "Momentum",
+    tagline: "Buy last year's winners, sell last year's losers. Does the trend carry on?",
+    tags: ["Rank · return months t-12 to t-2", "Test · walk-forward, after costs"],
+    sources: [
+      ["Fama-French momentum factor definition", "https://mba.tuck.dartmouth.edu/pages/faculty/Ken.French/Data_Library/det_mom_factor.html"],
+      ["McLean & Pontiff (2016)", "https://rpc.cfainstitute.org/research/cfa-digest/2016/06/does-academic-research-destroy-stock-return-predictability-digest-summary"],
+    ],
+  },
+  {
+    key: "low_volatility",
+    code: "LOWV",
+    title: "Low volatility",
+    tagline: "The calmest stocks: less risk, but do they give up any return?",
+    tags: ["Rank · 3 years of weekly volatility", "Test · alpha, Newey-West"],
+    sources: [["Blitz & van Vliet (2007)", "https://core.ac.uk/download/18510017.pdf"]],
+  },
+  {
     key: "panic_detector",
     code: "PANIC",
     title: "Panic detector",
@@ -118,6 +137,8 @@ export const NAMES: Record<string, string> = {
   "conditional (Bongaerts et al.)": "Conditional",
   "daily EWMA (Harvey et al.)": "Daily EWMA",
   "trend 50/200": "Trend 50/200",
+  "12-1 long-short": "Momentum 12-1",
+  "calmest 10%": "Calmest 10%",
   "absorption ratio shift": "Absorption ratio",
 };
 
@@ -322,6 +343,55 @@ export function view(key: string, rows: Result[]): View | null {
         ? "With a century of data, a version passed."
         : "Evidence grew with more data, but nothing reached the bar.",
       note: `best alpha t = ${fixed(bestT?.metrics.choice_t)}`,
+    };
+  }
+  if (key === "momentum") {
+    const r = rows[0];
+    const g = r?.metrics.series as Growth | undefined;
+    return {
+      tiles: [
+        { value: `${fixed(strategy(r)?.sharpe)} ± ${fixed(strategy(r)?.sharpe_se)}`, label: "Sharpe ratio, after costs", tone: "blue" },
+        { value: `${pct(r?.metrics.gross_annual_return)} → ${pct(averageNet(r))}`, label: "average a year, before → after costs", tone: "orange" },
+        { value: pct(strategy(r)?.max_drawdown), label: "worst fall", tone: "red" },
+      ],
+      chart: g ? <LineChart title="Growth of $1 committed, after costs" months={g.months} series={[{ name: "Momentum", values: g.strategy, role: "s1" }]} format={money} baseline={1} /> : null,
+      caption: `top 30% minus bottom 30% · equal weight · monthly · ${r?.period ?? NOT_VERIFIED}`,
+      finding: anyPass(rows) ? "Winners kept winning, after costs." : "Winners didn't reliably keep winning after costs.",
+      note: `t = ${fixed(r?.metrics.choice_t)} · needs 3`,
+    };
+  }
+  if (key === "low_volatility") {
+    const r = rows[0];
+    const g = r?.metrics.series as Growth | undefined;
+    return {
+      tiles: [
+        { value: `${fixed(strategy(r)?.sharpe)} vs ${fixed(baseline(r)?.sharpe)}`, label: "Sharpe ratio, calmest 10% vs all stocks", tone: "blue" },
+        {
+          value: `${pct(strategy(r)?.max_drawdown)} vs ${pct(baseline(r)?.max_drawdown)}`,
+          label: "worst fall, calmest 10% vs all stocks",
+          tone: shallower(r) ? "green" : "red",
+        },
+        { value: `t = ${fixed(r?.metrics.choice_t)}`, label: "alpha test score (needs 3)", tone: "amber" },
+      ],
+      chart: g ? (
+        <LineChart
+          title="Growth of $1 above the Fed funds rate, after costs"
+          months={g.months}
+          series={[
+            { name: "Calmest 10%", values: g.strategy, role: "s1" },
+            { name: "All stocks", values: g.baseline, role: "s2" },
+          ]}
+          format={money}
+          baseline={1}
+        />
+      ) : null,
+      caption: `calmest 10% by 156 weekly returns · equal weight · monthly · ${r?.period ?? NOT_VERIFIED}`,
+      finding: anyPass(rows)
+        ? "Calm stocks earned more for their risk."
+        : shallower(r)
+          ? "Smaller falls, but no extra return for the risk."
+          : "No extra return for the risk.",
+      note: `alpha t = ${fixed(r?.metrics.choice_t)}`,
     };
   }
   if (key === "ma_crossover") {

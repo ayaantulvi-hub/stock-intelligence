@@ -159,3 +159,61 @@ def test_daily_ewma_targeting_cuts_exposure_soon_after_volatility_jumps():
     calm_to_wild = excess.index[(np.arange(len(excess)) // 63) % 5 == 4][0:63]
     late = calm_to_wild[-20:]  # The last month of a wild spell, once the estimate has caught up.
     assert held.reindex(late).mean() < 0.6
+
+
+def _panel(seed: int = 21, days: int = 1300, stocks: int = 40):
+    """TEST FIXTURE: invented stocks with different trends and different volatility."""
+    rng = np.random.default_rng(seed)
+    dates = pd.bdate_range("2015-01-01", periods=days)
+    drift = np.linspace(-0.001, 0.001, stocks)
+    vol = np.linspace(0.005, 0.03, stocks)
+    r = pd.DataFrame(
+        rng.normal(0, 1, (days, stocks)) * vol + drift,
+        index=dates,
+        columns=[f"S{i:02d}" for i in range(stocks)],
+    )
+    return r
+
+
+@pytest.mark.parametrize("rule", ["momentum", "low_volatility"])
+def test_new_stock_rules_use_only_the_past(rule):
+    returns = _panel()
+
+    def make(r):
+        prices = (1 + r).cumprod()
+        return getattr(studies, rule)(prices, pd.DataFrame(True, index=r.index, columns=r.columns))
+
+    assert engine.look_ahead_check(make, returns, cut=900) is True
+
+
+def test_momentum_buys_last_years_winners_and_ignores_the_latest_month():
+    shape = _panel()  # Calm stocks, so each one's trend, not noise, decides the ranking.
+    rng = np.random.default_rng(5)
+    noise = rng.normal(0, 0.002, shape.shape)
+    returns = pd.DataFrame(
+        noise + np.linspace(-0.001, 0.001, 40), index=shape.index, columns=shape.columns
+    )
+    jump = returns.index.get_loc(pd.Timestamp("2018-05-01"))
+    returns.iloc[jump : jump + 15, 0] = 0.05  # The worst stock soars in May only.
+    prices = (1 + returns).cumprod()
+    mask = pd.DataFrame(True, index=prices.index, columns=prices.columns)
+    w = studies.momentum(prices, mask)
+    end_of_may = w.loc["2018-05"].index[-1]
+    held = w.loc[end_of_may]
+    assert held.gt(0).sum() == held.lt(0).sum() == 12  # 30% of 40 each side.
+    assert held.sum() == pytest.approx(0.0) and held[held > 0].sum() == pytest.approx(1.0)
+    assert held["S39"] > 0 and held["S01"] < 0  # Strongest trend long, weakest short.
+    assert held["S00"] <= 0  # May's jump is skipped, so it isn't bought.
+
+
+def test_low_volatility_holds_the_calmest_tenth_and_trades_monthly():
+    prices = (1 + _panel()).cumprod()
+    mask = pd.DataFrame(True, index=prices.index, columns=prices.columns)
+    w = studies.low_volatility(prices, mask)
+    live = w[w.sum(axis=1) > 0]
+    assert live.index.min() >= prices.index[0] + pd.Timedelta(weeks=156)  # 156 weeks first.
+    assert set(live.iloc[-1][live.iloc[-1] > 0].index) == {"S00", "S01", "S02", "S03"}
+    assert live.sum(axis=1).round(9).eq(1.0).all()
+    changes = live.diff().abs().sum(axis=1)
+    month_ends = set(prices.index.to_series().groupby(prices.index.to_period("M")).max())
+    assert set(changes[changes > 0].index) <= month_ends

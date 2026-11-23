@@ -43,3 +43,58 @@ def trend_returns(on: pd.Series, excess: pd.Series, cost_bps: float = COST_BPS) 
     cost = held.diff().abs().fillna(0) * cost_bps / 10_000
     out = held * excess - cost
     return out[held.notna() & excess.notna()]
+
+
+def _month_end_closes(prices: pd.DataFrame) -> pd.DataFrame:
+    """Each month's last close, indexed by the real last trading day of that month."""
+    last_day = prices.index.to_series().groupby(prices.index.to_period("M")).max()
+    return prices.loc[last_day.values]
+
+
+def _monthly_to_daily(formation: pd.DataFrame, index: pd.DatetimeIndex) -> pd.DataFrame:
+    """Weights set at a month's last close, held through the next month's days."""
+    return formation.reindex(index).ffill().fillna(0.0)
+
+
+def momentum(
+    prices: pd.DataFrame, mask: pd.DataFrame, top: float = 0.3, skip: int = 1, months: int = 12
+) -> pd.DataFrame:
+    """Long the 30% of stocks with the best return over months t-12 to t-2, short the worst
+    30%, equal weight each side (Fama-French momentum breakpoints; their size split and value
+    weights are left out: every stock here is large, and daily company sizes aren't stored).
+    Decided at each month's last close, held through the next month."""
+    closes = _month_end_closes(prices)
+    past = closes.shift(skip) / closes.shift(months) - 1
+    eligible = mask.reindex(closes.index, fill_value=False) & past.notna()
+    rows = []
+    for day in closes.index:
+        score = past.loc[day][eligible.loc[day]]
+        row = pd.Series(0.0, index=prices.columns)
+        if len(score) >= 10:
+            low, high = score.quantile(top), score.quantile(1 - top)
+            winners, losers = score[score >= high].index, score[score <= low].index
+            row[winners] = 1.0 / len(winners)
+            row[losers] = -1.0 / len(losers)
+        rows.append(row)
+    return _monthly_to_daily(pd.DataFrame(rows, index=closes.index), prices.index)
+
+
+def low_volatility(prices: pd.DataFrame, mask: pd.DataFrame, share: float = 0.1) -> pd.DataFrame:
+    """Hold the calmest 10% of stocks, equal weight, ranked on the volatility of the past 3
+    years (156 weeks) of weekly returns; rebalanced at each month's last close (Blitz & van
+    Vliet, 2007). The rest of the money is fully invested in those stocks: no cash."""
+    weekly = prices.resample("W-FRI").last().pct_change(fill_method=None)
+    vol = weekly.rolling(156, min_periods=156).std()
+    closes = _month_end_closes(prices)
+    # The latest weekly reading known at each month-end close.
+    known = vol.reindex(vol.index.union(closes.index)).ffill().reindex(closes.index)
+    eligible = mask.reindex(closes.index, fill_value=False) & known.notna()
+    rows = []
+    for day in closes.index:
+        score = known.loc[day][eligible.loc[day]]
+        row = pd.Series(0.0, index=prices.columns)
+        if len(score) >= 20:
+            calm = score.nsmallest(max(1, round(len(score) * share))).index
+            row[calm] = 1.0 / len(calm)
+        rows.append(row)
+    return _monthly_to_daily(pd.DataFrame(rows, index=closes.index), prices.index)

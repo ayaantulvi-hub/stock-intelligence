@@ -93,6 +93,59 @@ def ma_crossover(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> No
     store(engine, "ma_crossover", "50/200", result, settings)
 
 
+def momentum(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    """Long-short, so it needs no money of its own: judged against doing nothing, like pairs."""
+    returns = prices.pct_change(fill_method=None)
+    weights = studies.momentum(prices, mask)
+    first = weights.index[weights.abs().sum(axis=1) > 0].min()
+    result_run = bt.run(weights, returns)
+    strategy = result_run.net[result_run.net.index > first]
+    zero = pd.Series(0.0, index=strategy.index)
+    result = judge(strategy, zero)
+    result["gross_annual_return"] = float(result_run.gross.reindex(strategy.index).mean() * 252)
+    result["cost_drag_annual"] = float(
+        (result_run.gross - result_run.net).reindex(strategy.index).mean() * 252
+    )
+    market = bt.run(studies.equal_weight(mask), returns).net
+    result["market_correlation"] = float(strategy.corr(market.reindex(strategy.index)))
+    result["series"] = growth_series(strategy, zero)
+    settings = {
+        "ranking": "return months t-12 to t-2",
+        "sides": "top and bottom 30%",
+        "weights": "equal",
+        "rebalance": "monthly",
+        "cost_bps": bt.COST_BPS,
+        "borrow_bps_a_year": bt.BORROW_BPS_A_YEAR,
+    }
+    store(engine, "momentum", "12-1 long-short", result, settings)
+
+
+def low_volatility(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    """Judged by alpha against the whole equal-weight market in returns above the Fed funds
+    rate, as Blitz and van Vliet judge it, because it deliberately takes less risk."""
+    returns = prices.pct_change(fill_method=None)
+    weights = studies.low_volatility(prices, mask)
+    first = weights.index[weights.abs().sum(axis=1) > 0].min()
+    rf_all = risk_free(engine, returns.index)
+    calm = bt.run(weights, returns).net
+    market = bt.run(studies.equal_weight(mask), returns).net
+    strategy = (calm - rf_all)[calm.index > first].dropna()
+    baseline = (market - rf_all).reindex(strategy.index)
+    result = judge(strategy, baseline, by="alpha")
+    turnover = weights.diff().abs().sum(axis=1)
+    result["annual_turnover"] = float(turnover[turnover.index > first].mean() * 252)
+    result["series"] = growth_series(strategy, baseline)
+    settings = {
+        "ranking": "volatility of 156 weekly returns",
+        "hold": "calmest 10%",
+        "weights": "equal",
+        "rebalance": "monthly",
+        "cost_bps": bt.COST_BPS,
+        "returns": "excess over DFF",
+    }
+    store(engine, "low_volatility", "calmest 10%", result, settings)
+
+
 def vol_targeting(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
     returns = prices.pct_change(fill_method=None)
     market = bt.run(studies.equal_weight(mask), returns).net
@@ -278,6 +331,8 @@ STUDIES = {
     "value_at_risk": value_at_risk,
     "panic_detector": panic_detector,
     "market_century": market_century,
+    "momentum": momentum,
+    "low_volatility": low_volatility,
 }
 MIN_STOCKS = 50
 

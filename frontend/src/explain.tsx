@@ -390,6 +390,105 @@ function century(rows: Result[]): Both {
   };
 }
 
+function momentumStudy(rows: Result[]): Both {
+  const r = rows[0];
+  return {
+    plain: (
+      <>
+        <p>
+          Momentum is one of the most studied ideas in finance: the stocks that rose most over the past year may keep
+          rising for a while, and the worst may keep falling. Each month we buy the top 30% of our stocks by last year's
+          return and sell the bottom 30%. The most recent month is left out, as in the standard definition.
+        </p>
+        <p>
+          Before costs it made {pct(m(r, "gross_annual_return"))} a year on average; after trading and borrowing costs,{" "}
+          {pct(averageNet(r))}. To pass it needed a score of 3; it got {fixed(m(r, "choice_t"))}. At its worst it was down{" "}
+          {pct(s(r)?.max_drawdown)}.
+        </p>
+      </>
+    ),
+    quant: (
+      <>
+        <p>
+          Signal: Pₘ₋₂ / Pₘ₋₁₃ − 1 at each month-end close (returns over months t−12 to t−2, the Fama-French definition).
+          Long the top 30%, short the bottom 30% of eligible stocks, equal weight each side, held through the next month.
+          Self-financing, so judged against zero: Newey-West t on mean daily return, choice years, then the hold-out.
+          Differences from the Fama-French factor: no size split, since every stock here is large, and equal rather than
+          value weights, since daily company sizes aren't stored.
+        </p>
+        <Table
+          head={["Sharpe ± SE", "Gross / yr", "Costs / yr", "Net avg / yr", "Max drawdown", "Correlation with market", "t (choice)", "t (hold-out)"]}
+          rows={[
+            [
+              `${fixed(s(r)?.sharpe)} ± ${fixed(s(r)?.sharpe_se)}`,
+              pct(m(r, "gross_annual_return")),
+              pct(m(r, "cost_drag_annual")),
+              pct(averageNet(r)),
+              pct(s(r)?.max_drawdown),
+              fixed(m(r, "market_correlation")),
+              fixed(m(r, "choice_t")),
+              fixed(m(r, "holdout_t")),
+            ],
+          ]}
+        />
+        <p>
+          Reading: momentum is one of the best-known published patterns, and McLean and Pontiff find that published
+          patterns earn much less after publication. This test covers large US stocks only.
+        </p>
+      </>
+    ),
+  };
+}
+
+function lowVolatility(rows: Result[]): Both {
+  const r = rows[0];
+  return {
+    plain: (
+      <>
+        <p>
+          Finance theory says more risk should earn more return. Blitz and van Vliet found that, in practice, the calmest
+          stocks earned somewhat less than the market but with much less risk, so they did better for each unit of risk.
+          Each month we hold the calmest tenth of our stocks, measured over the past three years.
+        </p>
+        <p>
+          Return for each unit of risk: {fixed(s(r)?.sharpe)} for the calm stocks against {fixed(b(r)?.sharpe)} for all
+          stocks. Worst fall: {pct(s(r)?.max_drawdown)} against {pct(b(r)?.max_drawdown)}. The test asks whether they earned
+          more than their lower risk would predict; it needed a score of 3 and got {fixed(m(r, "choice_t"))}.
+        </p>
+      </>
+    ),
+    quant: (
+      <>
+        <p>
+          Rank on the standard deviation of the past 156 weekly returns, known at each month-end close; hold the lowest 10%,
+          equal weight, through the next month (Blitz & van Vliet, 2007). Returns are above the Fed funds rate. Test:
+          regress on the equal-weight market, fᶜ = α + β·fᵐ + ε, Newey-West t on α; then the hold-out. The paper ignores
+          costs; here every change pays 10 bp.
+        </p>
+        <Table
+          head={["", "Sharpe ± SE", "Volatility", "Max drawdown", "α t (choice)", "t (hold-out)", "Turnover / yr"]}
+          rows={[
+            [
+              "Calmest 10%",
+              `${fixed(s(r)?.sharpe)} ± ${fixed(s(r)?.sharpe_se)}`,
+              pct(s(r)?.annual_volatility),
+              pct(s(r)?.max_drawdown),
+              fixed(m(r, "choice_t")),
+              fixed(m(r, "holdout_t")),
+              `${fixed(m(r, "annual_turnover"))}×`,
+            ],
+            ["All stocks", `${fixed(b(r)?.sharpe)} ± ${fixed(b(r)?.sharpe_se)}`, pct(b(r)?.annual_volatility), pct(b(r)?.max_drawdown), "—", "—", "—"],
+          ]}
+        />
+        <p>
+          Reading: α measures return beyond what the portfolio's lower market exposure (β) predicts. A lower Sharpe ratio
+          can still come with positive α when β is low, and a higher one with none.
+        </p>
+      </>
+    ),
+  };
+}
+
 function trend(rows: Result[]): Both {
   const r = rows[0];
   return {
@@ -503,6 +602,8 @@ export function explain(key: string, rows: Result[]): Both | null {
   if (key === "vol_targeting") return volTargeting(rows);
   if (key === "ma_crossover") return trend(rows);
   if (key === "market_century") return century(rows);
+  if (key === "momentum") return momentumStudy(rows);
+  if (key === "low_volatility") return lowVolatility(rows);
   if (key === "panic_detector") return panic(rows);
   return null;
 }
