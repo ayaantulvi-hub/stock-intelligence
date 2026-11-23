@@ -10,6 +10,9 @@ model never saw, after trading costs, against a simple baseline, and the result 
 whether it passed or failed. Most ideas failed, and the app says "No reliable edge" when they
 do. It never places trades and is not financial advice.
 
+**See it:** [screenshots and a walkthrough](docs/DEMO.md). They use synthetic data, so no
+real prices or holdings are shown.
+
 ## Contents
 
 - [Architecture](#architecture)

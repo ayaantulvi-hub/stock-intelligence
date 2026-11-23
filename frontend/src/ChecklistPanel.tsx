@@ -1,4 +1,3 @@
-import { Tick } from "./Names";
 import { useEffect, useState } from "react";
 
 
@@ -201,7 +200,7 @@ export function TodaysOrders({ onOpen }: { onOpen: (ticker: string) => void }) {
               <tr key={row.ticker}>
                 <td>
                   <button className="link" onClick={() => onOpen(row.ticker)}>
-                    <Tick t={row.ticker} />
+                    {row.ticker}
                   </button>{" "}
                   {row.name}
                 </td>
