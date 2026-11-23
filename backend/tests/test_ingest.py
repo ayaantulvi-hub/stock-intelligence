@@ -463,6 +463,7 @@ def test_alpaca_fills_only_missing_latest_closes_and_skips_split_like_moves(stoc
         "Alpaca (SIP)",
     )
     assert _latest(stocks, "BBB")["market_date"] == date(2026, 7, 6)
-    # Nothing is missing any more for AAA, so a second run asks only for BBB.
-    run_alpaca_closes(stocks, alpaca, NOW)
+    # Nothing is missing any more for AAA, so a second run asks only for BBB. A likely split
+    # handed to Tiingo is not a failure, so the run is partial, not an error that stops the job.
+    assert run_alpaca_closes(stocks, alpaca, NOW) == "partial"
     assert alpaca.calls[-1][0] == ("BBB",)

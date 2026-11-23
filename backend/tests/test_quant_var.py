@@ -68,3 +68,22 @@ def test_verdict_names_the_direction_of_dependence():
     bunched = returns.copy()
     bunched.iloc[100:200] = -0.02  # 100 breaches in a row: 5% of days, all together.
     assert var.backtest(bunched, var_level)["verdict"] == "Rejected: breaches bunch together"
+
+
+def test_conditional_coverage_is_the_sum_of_the_two_separate_tests():
+    # Christoffersen (1998): LR_cc = LR_pof + LR_ind, when the rate test uses the same
+    # day-to-day transitions as the independence test.
+    rng = np.random.default_rng(3)
+    hits = rng.random(2000) < 0.06
+    later = hits[1:]
+    lr_pof = chi2.isf(var.kupiec(int(later.sum()), len(later)), 1)
+    lr_ind = chi2.isf(var.christoffersen(hits), 1)
+    lr_cc = chi2.isf(var.conditional_coverage(hits), 2)
+    assert lr_cc == pytest.approx(lr_pof + lr_ind, rel=1e-6)
+
+
+def test_conditional_coverage_rejects_bunched_breaches():
+    hits = np.zeros(1000, dtype=bool)
+    for start in range(0, 1000, 100):
+        hits[start : start + 5] = True  # 5% of days, always in runs of five.
+    assert var.conditional_coverage(hits) < 0.001

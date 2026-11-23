@@ -91,10 +91,12 @@ function valueAtRisk(rows: Result[]): Both {
         <p>
           <strong>Kupiec POF:</strong> likelihood ratio of the hit rate x/n against p = 0.05, χ²(1). It tests the count
           only. <strong>Christoffersen independence:</strong> fits a two-state Markov chain to Iₜ and tests π₀₁ = π₁₁,
-          χ²(1). It rejects in either direction, so it catches both clustering and breaches that avoid each other.
+          χ²(1). It rejects in either direction, so it catches both clustering and breaches that avoid each other. <strong>Joint
+          (conditional coverage):</strong> both at once, χ²(2). It is reported for reference; the verdict uses the two separate
+          tests, as set before the results were seen.
         </p>
         <Table
-          head={["Model", "Hit rate", "Kupiec p", "Christoffersen p", "P(hit | hit)", "Extra loss on a hit"]}
+          head={["Model", "Hit rate", "Kupiec p", "Christoffersen p", "Joint p", "P(hit | hit)", "Extra loss on a hit"]}
           rows={models
             .filter(([, r]) => r)
             .map(([n, r]) => [
@@ -102,6 +104,7 @@ function valueAtRisk(rows: Result[]): Both {
               pct(m(r, "breach_rate"), 2),
               fixed(m(r, "kupiec_p"), 3),
               fixed(m(r, "christoffersen_p"), 3),
+              num(m(r, "conditional_coverage_p")) ? fixed(m(r, "conditional_coverage_p"), 3) : "Not run yet",
               pct(m(r, "breach_rate_after_a_breach"), 1),
               pct(m(r, "average_excess_loss_on_breach"), 2),
             ])}

@@ -92,6 +92,29 @@ def christoffersen(hits: np.ndarray) -> float:
     return float(1 - chi2.cdf(-2 * (restricted - free), 1))
 
 
+def conditional_coverage(hits: np.ndarray, p: float = 1 - LEVEL) -> float:
+    """p-value of Christoffersen's (1998) joint test of the breach rate and independence
+    (chi-square, 2 df): a two-state Markov chain of breaches against breaches that are
+    independent with probability p. Reported alongside the two separate tests; the verdict rule
+    is unchanged."""
+    h = hits.astype(int)
+    prev, cur = h[:-1], h[1:]
+    n00 = int(((prev == 0) & (cur == 0)).sum())
+    n01 = int(((prev == 0) & (cur == 1)).sum())
+    n10 = int(((prev == 1) & (cur == 0)).sum())
+    n11 = int(((prev == 1) & (cur == 1)).sum())
+    if n00 + n01 == 0 or n10 + n11 == 0:
+        return float("nan")
+
+    def ll(prob: float, k0: int, k1: int) -> float:
+        return (k0 * math.log(1 - prob) if k0 else 0.0) + (k1 * math.log(prob) if k1 else 0.0)
+
+    pi0, pi1 = n01 / (n00 + n01), n11 / (n10 + n11)
+    restricted = ll(p, n00 + n10, n01 + n11)
+    free = ll(pi0, n00, n01) + ll(pi1, n10, n11)
+    return float(1 - chi2.cdf(-2 * (restricted - free), 2))
+
+
 def backtest(returns: pd.Series, var: pd.Series) -> dict:
     both = pd.concat([returns, var], axis=1, keys=["r", "var"]).dropna()
     hits = (both["r"] < -both["var"]).to_numpy()
@@ -127,6 +150,7 @@ def backtest(returns: pd.Series, var: pd.Series) -> dict:
         "expected_rate": 1 - LEVEL,
         "kupiec_p": p_freq,
         "christoffersen_p": p_ind,
+        "conditional_coverage_p": conditional_coverage(hits),
         "average_var": float(both["var"].mean()),
         "average_excess_loss_on_breach": float(-worst.mean()) if x else 0.0,
         "start": both.index.min().date().isoformat(),

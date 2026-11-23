@@ -387,6 +387,9 @@ def run_alpaca_closes(engine: Engine, provider, now: datetime) -> str:
                     run.errors.append(
                         f"{ticker}: {bar['close']:.2f} after {previous:.2f}, left to Tiingo"
                     )
+                    # Handing a likely split to Tiingo is the intended outcome, not a failed
+                    # fetch, so it must not turn the run into an error on its own.
+                    run.attempted -= 1
                     continue
                 conn.execute(
                     text(
