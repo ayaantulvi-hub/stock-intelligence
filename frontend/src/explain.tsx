@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { PASSING, type Result, type Summary } from "./api";
 import { fixed, num, pct } from "./format";
+import { averageNet } from "./studies";
 
 /** Two readings of every study: plain English for anyone, and the full method for a quant.
  * Every number comes from the stored result. Sentences that depend on a result are picked by
@@ -130,8 +131,8 @@ function pairsTrading(rows: Result[]): Both {
           pairs, then traded them.
         </p>
         <p>
-          Before costs, the cointegration method made {pct(m(coint, "gross_annual_return"))} a year. Trading fees and the fee to
-          borrow shares took {pct(m(coint, "cost_drag_annual"))}, leaving {pct(s(coint)?.annual_return)}. To pass it
+          Before costs, the cointegration method made {pct(m(coint, "gross_annual_return"))} a year on average. Trading fees and
+          the fee to borrow shares took {pct(m(coint, "cost_drag_annual"))}, leaving {pct(averageNet(coint))}. To pass it
           needed a score of 3; it got {fixed(m(coint, "choice_t"))}.
         </p>
         <p>
@@ -160,7 +161,7 @@ function pairsTrading(rows: Result[]): Both {
           years; the last two calendar years are held out and must be positive.
         </p>
         <Table
-          head={["Method", "Sharpe ± SE", "Gross / yr", "Net / yr", "Max drawdown", "t (choice)", "t (hold-out)", "Trades"]}
+          head={["Method", "Sharpe ± SE", "Gross avg / yr", "Costs / yr", "Net avg / yr", "Net compound / yr", "Max drawdown", "t (choice)", "t (hold-out)", "Trades"]}
           rows={[
             ["Cointegration", coint],
             ["Distance", dist],
@@ -172,6 +173,8 @@ function pairsTrading(rows: Result[]): Both {
                 n as string,
                 `${fixed(s(x)?.sharpe)} ± ${fixed(s(x)?.sharpe_se)}`,
                 pct(m(x, "gross_annual_return")),
+                pct(m(x, "cost_drag_annual")),
+                pct(averageNet(x)),
                 pct(s(x)?.annual_return),
                 pct(s(x)?.max_drawdown),
                 fixed(m(x, "choice_t")),

@@ -33,19 +33,12 @@ export default function Code({ file, code }: { file: string; code: string }) {
   const [open, setOpen] = useState(false);
   const lines = useMemo(() => code.split("\n"), [code]);
   const shown = open ? lines : lines.slice(0, 18);
-  const name = file.split("/").pop();
   return (
-    <figure className="code panel">
+    <figure className="code">
       <figcaption>
-        <span className="dots" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
         <a href={`https://github.com/ayaantulvi-hub/stock-intelligence/blob/main/${file}`} target="_blank" rel="noreferrer">
-          {name}
+          {file}
         </a>
-        <span className="muted"> · the code that ran</span>
       </figcaption>
       <pre>
         <code>

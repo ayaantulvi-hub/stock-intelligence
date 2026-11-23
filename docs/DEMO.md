@@ -5,8 +5,9 @@ licensed prices. These screenshots come from a local copy running on **synthetic
 by [`demo/`](../demo): 40 invented companies with random prices. The red banner marks every
 image.
 
-- [Full page, desktop](screenshots/quant-lab-desktop.png)
-- [Opening screen, phone](screenshots/quant-lab-phone.png)
+- [Overview](screenshots/quant-lab-overview.png)
+- [A study: pairs trading](screenshots/quant-lab-pairs.png)
+- [Value at Risk, with the quant detail open](screenshots/quant-lab-var-quant.png)
 
 On random data there is nothing real to find, so every trading study reports "No reliable
 edge". The two simple Value at Risk models pass here, because random data has none of the
@@ -14,16 +15,19 @@ waves of volatility that real markets do. On real prices those two models are re
 
 ## What the page shows
 
-- **The score.** "N tests. K passed." is counted from the stored verdicts, not typed in.
-- **A switch at the top: Plain English or Quant detail.** Every study has both. Plain English
-  says what the idea is and what happened, in everyday words. Quant detail gives the formulas,
-  the test statistics in a table, and how to read them. Both take every number from the
-  stored results, and any sentence that depends on a result is chosen by the verdict.
-- **Each study:** the question, a chart with a hover readout and a table view, three key
-  figures, every verdict, and the actual function from the repository that produced it. A
-  test fails if a code panel ever stops matching the real file.
-- **What the statistics actually said:** one line per study, passed or failed.
-- **Data:** how many stocks and price rows the results rest on, each feed's last run, and the
+It is laid out like a market terminal, for a desktop screen: a status bar on top, a list of
+screens on the left (keys 0 to 6 switch between them), and one screen at a time, with every
+piece of information in its own labelled panel.
+
+- **Overview.** "N tests. K passed." is counted from the stored verdicts. Below it: every test
+  in one table with the statistic that decided it, and one line per study on what it found.
+- **Each study.** The question; three key figures; a chart with a hover readout and a table
+  view; every verdict with its deciding statistic; an explanation with a switch between
+  **Plain English** and **Quant detail**; the actual function from the repository; and the
+  papers it follows. Every number comes from the stored results, and any sentence that
+  depends on a result is chosen by the verdict. A test fails if a code panel ever stops
+  matching the real file.
+- **Data.** How many stocks and price rows the results rest on, each feed's last run, and the
   limits.
 
 ## Walkthrough script (60–90 seconds)
@@ -53,6 +57,7 @@ choosing the best-looking stretch after seeing the results is exactly the mistak
 this to avoid."
 
 **1:05 – 1:20. How it's built.**
-"Under each chart: the settings, the period and the papers it follows. Data comes from the
+"Every study has a plain-English explanation, a switch to the full quant detail, and the
+exact code that produced the result. Data comes from the
 SEC, the Federal Reserve and licensed price feeds, updated every hour. There are automatic
 tests, including one that plants future data to prove the backtest can't cheat."

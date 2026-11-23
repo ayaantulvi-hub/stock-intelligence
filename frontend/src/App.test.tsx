@@ -48,58 +48,56 @@ function mockApi(overrides: Record<string, Response> = {}) {
   });
 }
 
-describe("Quant Lab page", () => {
+describe("Quant Lab terminal", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    window.location.hash = "";
   });
 
-  it("counts tests and passes from the stored verdicts", async () => {
+  const open = async (hash = "") => {
+    window.location.hash = hash;
     mockApi();
     render(<App />);
-    const heading = await screen.findByRole("heading", { level: 1 });
-    expect(heading.textContent).toBe("2 tests.1 passed.");
-    expect(screen.getAllByText(/EWMA: Not rejected/).length).toBeGreaterThan(0);
-    expect(document.querySelector(".hero .caption")?.textContent).toContain("2010 to 2026");
+    return screen.findAllByRole("heading", { level: 1 });
+  };
+
+  it("counts tests and passes from the stored verdicts", async () => {
+    const [heading] = await open();
+    expect(heading.textContent).toBe("2 tests. 1 passed.");
+    expect(document.querySelector(".hero .meta")?.textContent).toBe("2010–2026");
+    expect(screen.getAllByText("Not rejected").length).toBeGreaterThan(0);
   });
 
   it("marks studies that haven't run instead of inventing results", async () => {
-    mockApi();
-    render(<App />);
-    await screen.findByRole("heading", { level: 1 });
-    const notRun = [...document.querySelectorAll("section.project p.not-run")].filter((p) =>
-      p.textContent?.includes("hasn't run yet"),
-    );
-    expect(notRun.map((p) => p.closest("section")?.id)).toEqual(["pairs_trading", "vol_targeting", "panic_detector"]);
+    await open();
+    const notRun = [...document.querySelectorAll(".side a")].filter((a) => a.querySelector('[aria-label="not run"]'));
+    expect(notRun.map((a) => a.getAttribute("href"))).toEqual(["#pairs_trading", "#vol_targeting", "#panic_detector"]);
+    cleanup();
+    await open("#pairs_trading");
+    expect(screen.getByText(/this study hasn't run yet/)).toBeTruthy();
   });
 
   it("shows the real repository code, not a rewrite", async () => {
-    mockApi();
-    render(<App />);
-    await screen.findByRole("heading", { level: 1 });
-    const panel = document.querySelector("#ma_crossover figure.code");
+    await open("#ma_crossover");
+    const panel = document.querySelector("figure.code");
     expect(panel?.textContent).toContain("def ma_crossover");
     expect(panel?.querySelector("a")?.getAttribute("href")).toContain("backend/src/stockintel/quant/studies.py");
   });
 
-  it("builds the scorecard from verdicts", async () => {
-    mockApi();
-    render(<App />);
-    await screen.findByRole("heading", { level: 1 });
-    const rows = [...document.querySelectorAll("#summary li")];
-    expect(rows.map((r) => r.className)).toEqual(["pass", "none", "none", "fail", "none"]);
-    expect(rows[3].textContent).toContain("didn't beat holding everything");
+  it("builds the findings from verdicts", async () => {
+    await open();
+    const marks = [...document.querySelectorAll(".findings li .mark")].map((m) => m.getAttribute("aria-label"));
+    expect(marks).toEqual(["passed", "not run", "not run", "failed", "not run"]);
+    expect(document.querySelector(".findings")?.textContent).toContain("didn't beat holding everything");
   });
 
-  it("switches every study between plain English and quant detail", async () => {
-    mockApi();
-    render(<App />);
-    await screen.findByRole("heading", { level: 1 });
-    const box = () => document.querySelector("#value_at_risk .explain");
+  it("switches the explanation between plain English and quant detail", async () => {
+    await open("#value_at_risk");
+    const box = () => document.querySelector(".explain .body");
     expect(box()?.textContent).toContain("how much could we lose");
     screen.getByRole("radio", { name: "Quant detail" }).click();
-    await screen.findAllByText("Quant detail", { selector: ".explain-label" });
-    expect(box()?.textContent).toContain("Christoffersen independence");
+    await screen.findByText(/Christoffersen independence/);
     expect(box()?.querySelector("table")?.textContent).toContain("0.063");
   });
 

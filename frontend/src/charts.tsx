@@ -162,7 +162,7 @@ export function LineChart({
             </text>
           ))}
           {series.map((s, k) => (
-            <path key={s.name} d={paths[k]} className={`series ${s.role}`} />
+            <path key={s.name} d={paths[k]} className={`series ${s.role}`} pathLength={1} />
           ))}
           {series.map((s) =>
             num(s.values[last]) ? (

@@ -6,15 +6,17 @@ const BANNER = `const b=document.createElement('div');b.textContent='SYNTHETIC D
 (async () => {
   const browser = await chromium.launch();
   const shots = [
-    ['quant-lab-desktop.png', { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 }, true],
-    ['quant-lab-phone.png', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 }, false],
+    ['quant-lab-overview.png', '#overview'],
+    ['quant-lab-pairs.png', '#pairs_trading'],
+    ['quant-lab-var-quant.png', '#value_at_risk', 'Quant detail'],
   ];
-  for (const [file, options, full] of shots) {
-    const page = await browser.newPage(options);
-    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(800);
+  for (const [file, hash, button] of shots) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+    await page.goto(`http://localhost:5173/${hash}`, { waitUntil: 'networkidle' });
+    if (button) await page.getByRole('radio', { name: button }).click();
+    await page.waitForTimeout(1800);
     await page.evaluate(BANNER);
-    await page.screenshot({ path: `${OUT}/${file}`, fullPage: full });
+    await page.screenshot({ path: `${OUT}/${file}`, fullPage: true });
     await page.close();
   }
   await browser.close();
