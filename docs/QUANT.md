@@ -119,7 +119,7 @@ its one-year average.
   account.
 - **Daily closing prices only:** no intraday entries or exits.
 - **Simplified pairs trading:** weights are rebalanced daily instead of holding each leg's
-  shares, and one window is traded at a time instead of overlapping windows as in the paper.
+  shares, and one window is traded at a time.
 - **One panic signal:** a single set of choices (63 days, top fifth, 1 standard deviation).
   Searching over many settings would only find a lucky one.
 - **Data terms:** prices come from Tiingo, whose free terms don't allow redistribution, so

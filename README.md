@@ -12,7 +12,8 @@ do. It never places trades and is not financial advice.
 
 **Quant lab:** five classic quant studies built from first principles: a backtest engine,
 volatility targeting, pairs trading, Monte Carlo Value at Risk and a market panic detector.
-Methods and results are in [docs/QUANT.md](docs/QUANT.md).
+Methods and results are in [docs/QUANT.md](docs/QUANT.md). Two findings are written up as
+research notes in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 **See it:** [screenshots and a walkthrough](docs/DEMO.md). They use synthetic data, so no
 real prices or holdings are shown.
