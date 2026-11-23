@@ -1,18 +1,19 @@
 name: Run one step
-# Runs a single light step on demand, to check it without the full hourly job.
+# Runs a single light step on demand, to check it without the full jobs. Output is summary
+# figures only, so it is safe in this public log.
 on:
   workflow_dispatch:
     inputs:
       step:
         description: Which step
         type: choice
-        options: [releases, short, congress, cross-check, overrides, economic, sizes, retention-dry, retention, decision-tests, recent-news, tm-eval, alpaca-closes, missing-decisions, picks-check, results-summary, inspect-nvda]
+        options: [results-summary, economic, alpaca-closes, retention-dry, retention]
 permissions:
   contents: read
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
@@ -26,39 +27,11 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
-      - if: inputs.step == 'congress'
-        run: sudo apt-get install -y -qq poppler-utils
-      - if: inputs.step == 'releases' || inputs.step == 'short' || inputs.step == 'economic'
+      - if: inputs.step == 'results-summary'
+        run: uv run --no-dev python -m stockintel.results_summary
+      - if: inputs.step == 'economic' || inputs.step == 'alpaca-closes'
         run: uv run --no-dev python -m stockintel.ingest ${{ inputs.step }}
-      - if: inputs.step == 'congress'
-        run: uv run --no-dev python -m stockintel.ingest congress --limit 100
-      - if: inputs.step == 'cross-check'
-        run: uv run --no-dev python -m stockintel.conflicts
-      - if: inputs.step == 'overrides'
-        run: uv run --no-dev python -m stockintel.overrides
-      - if: inputs.step == 'sizes'
-        run: uv run --no-dev python -m stockintel.sizes
       - if: inputs.step == 'retention-dry'
         run: uv run --no-dev python -m stockintel.retention --dry
       - if: inputs.step == 'retention'
         run: uv run --no-dev python -m stockintel.retention
-      - if: inputs.step == 'retention' || inputs.step == 'retention-dry'
-        run: uv run --no-dev python -m stockintel.sizes
-      - if: inputs.step == 'decision-tests'
-        run: uv run --no-dev python -c "from stockintel import extras; from stockintel.db import get_engine; import json; print(json.dumps(extras.decision_tests(get_engine()), default=str))"
-      - if: inputs.step == 'recent-news'
-        run: uv run --no-dev python -c "from sqlalchemy import text; from stockintel.db import get_engine; c=get_engine().connect(); [print('NEWS', r) for r in c.execute(text(\"SELECT judged_at::date, size, effect, tickers, left(title, 110), left(why, 140) FROM news_judgments WHERE title ILIKE '%nvidia%' OR title ILIKE '%huang%' ORDER BY judged_at DESC LIMIT 15\"))]; [print('WARN', r) for r in c.execute(text(\"SELECT day, subject, left(title, 100) FROM news_warnings WHERE day >= current_date - 3 ORDER BY day DESC LIMIT 30\"))]"
-      - if: inputs.step == 'alpaca-closes'
-        run: uv run --no-dev python -m stockintel.ingest alpaca-closes
-      - if: inputs.step == 'missing-decisions'
-        run: uv run --no-dev python -m stockintel.missing_decisions
-      - if: inputs.step == 'picks-check'
-        run: uv run --no-dev python -m stockintel.picks_check
-      - if: inputs.step == 'results-summary'
-        run: uv run --no-dev python -m stockintel.results_summary
-      - if: inputs.step == 'tm-eval'
-        run: uv run --no-dev python -m stockintel.tm_eval 10 24
-      - if: inputs.step == 'inspect-nvda'
-        run: uv run --no-dev python -m stockintel.inspect_stock NVDA
-      - if: always()
-        run: uv run --no-dev python -m stockintel.report

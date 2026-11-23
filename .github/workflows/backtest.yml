@@ -1,11 +1,8 @@
-name: Backtest
+name: Quant studies
+# Weekly: rerun every quant lab study on the latest prices and store the results, then remove
+# repeated price rows and old logs.
 on:
   workflow_dispatch:
-    inputs:
-      quant_only:
-        description: "Run only the quant lab studies"
-        type: boolean
-        default: false
   schedule:
     - cron: "40 12 * * 6"
 permissions:
@@ -14,7 +11,7 @@ concurrency:
   group: update-data
   cancel-in-progress: false
 jobs:
-  backtest:
+  studies:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -34,24 +31,11 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
-      - if: ${{ !inputs.quant_only }}
-        run: uv run --no-dev python -m stockintel.backtest
-      - if: ${{ !inputs.quant_only }}
-        run: uv run --no-dev python -m stockintel.forecast evaluate
-      - if: ${{ !inputs.quant_only }}
-        run: uv run --no-dev python -m stockintel.compare
-      - if: ${{ !inputs.quant_only }}
-        run: uv run --no-dev python -m stockintel.regime
-      - if: ${{ !inputs.quant_only }}
-        run: uv run --no-dev python -m stockintel.stops
-      - if: ${{ !inputs.quant_only }}
-        run: uv run --no-dev python -m stockintel.candles
-      - if: ${{ !inputs.quant_only }}
-        run: uv run --no-dev python -m stockintel.overrides
       - name: Quant lab studies
         run: uv run --no-dev python -m stockintel.quant.run
-      # Weekly: delete what no longer feeds decisions, then give the space back.
-      - if: ${{ !inputs.quant_only }}
+      - name: Summary of stored results
+        run: uv run --no-dev python -m stockintel.results_summary
+      - name: Remove repeats and old logs
         run: uv run --no-dev python -m stockintel.retention
       # Saved even after a failure, so the next job doesn't download everything again.
       - uses: actions/cache/save@v4

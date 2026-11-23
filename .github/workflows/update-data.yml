@@ -1,42 +1,26 @@
 name: Update data
 # Started every hour by cron-job.org, because GitHub's own schedule skipped most runs. Each run:
 # - fills every stock's latest close from Alpaca, then 45 more Tiingo stocks (its hourly limit);
-# - refreshes market prices and news, and lets the AI read the news;
-# - does the daily work (filings, economic data, decisions) on the first run after it is due.
-# The one GitHub schedule left is a backup for the daily decisions if cron-job.org fails.
-# The limit that matters now is Neon's free 100 compute hours and 5 GB a month, not GitHub minutes.
+# - adds new yearly company sizes from SEC filings and the Fed funds rate from FRED.
+# The one GitHub schedule left is a backup if cron-job.org fails.
+# The limit that matters is Neon's free 100 compute hours and 5 GB a month, not GitHub minutes.
 on:
   schedule:
     - cron: "20 11 * * 1-5"
   workflow_dispatch:
-    inputs:
-      prices:
-        description: Update prices
-        type: boolean
-        default: true
-      forecasts:
-        description: Write forecasts (only works before the US market opens)
-        type: boolean
-        default: false
-      filings_and_economic:
-        description: Also update filings and economic data
-        type: boolean
-        default: false
 permissions:
   contents: read
-  issues: write
 concurrency:
   group: update-data
   cancel-in-progress: false
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       STOCKINTEL_CACHE: .dbcopy
       TIINGO_API_TOKEN: ${{ secrets.TIINGO_API_TOKEN }}
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
       ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
       ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
@@ -55,96 +39,20 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
-      - run: uv run --no-dev python -m stockintel.ingest universe
-      # Any run can do the daily work, so one missed trigger can't lose a day's decisions.
-      - name: Are today's decisions due?
-        id: due
-        run: uv run --no-dev python -m stockintel.forecast due >> "$GITHUB_OUTPUT"
+      - name: Stock list
+        run: uv run --no-dev python -m stockintel.ingest universe
       - name: Latest closes for every stock
-        # One request per 100 stocks, so all of them have yesterday's close before the decisions.
+        if: ${{ !cancelled() }}
         run: uv run --no-dev python -m stockintel.ingest alpaca-closes
       - name: Prices
-        if: github.event_name == 'schedule' || inputs.prices
+        if: ${{ !cancelled() }}
         run: uv run --no-dev python -m stockintel.ingest prices --limit 45
-      - name: Filings
-        # Runs even if prices failed: one feed's failure must not stop the others.
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest filings
-      - name: Company facts
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest facts
-      - name: Insider trades
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest insiders --limit 2500
       - name: Past company sizes
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
+        if: ${{ !cancelled() }}
         run: uv run --no-dev python -m stockintel.ingest history
-      - name: Government policy actions
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest policy
-      - name: Market prices
+      - name: Fed funds rate
         if: ${{ !cancelled() }}
-        run: uv run --no-dev python -m stockintel.ingest markets
-      - name: News
-        if: ${{ !cancelled() }}
-        run: uv run --no-dev python -m stockintel.ingest news
-      - name: AI reads the news
-        if: ${{ !cancelled() }}
-        run: uv run --no-dev python -m stockintel.ingest judge
-      - name: Big investors
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest funds
-      - name: Fed dates
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest fed
-      - name: Economic data
-        # Runs even if prices failed: one feed's failure must not stop the others.
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
         run: uv run --no-dev python -m stockintel.ingest economic
-      - name: Economic release dates
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest releases
-      - name: Short interest
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest short
-      - name: Install the PDF reader for Congress reports
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: sudo apt-get install -y -qq poppler-utils
-      - name: Congress trades
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.ingest congress --limit 100
-      - name: Cross-check sources
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.conflicts
-      - name: Forecasts
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.forecasts) }}
-        run: uv run --no-dev python -m stockintel.forecast daily
-      - name: Expert review
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.forecasts || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.experts
-      - name: Check company figures
-        if: ${{ !cancelled() && (steps.due.outputs.daily == 'yes' || inputs.filings_and_economic) }}
-        run: uv run --no-dev python -m stockintel.audit
-      - name: Alerts
-        id: alerts
-        if: ${{ !cancelled() }}
-        run: |
-          uv run --no-dev python -m stockintel.monitor > alerts.txt
-          if [ -s alerts.txt ]; then echo "found=yes" >> "$GITHUB_OUTPUT"; fi
-      - name: Send alerts
-        if: ${{ !cancelled() && steps.alerts.outputs.found == 'yes' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        # The repository is public, so the issue says only how many alerts there are. The details
-        # name your holdings, so they stay on the password-protected site's Alerts page.
-        run: |
-          count=$(grep -c '^- ' alerts.txt || true)
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "Stock alerts $(date -u +%F)" \
-            --body "$count new alerts. Details are on the site's Alerts page."
-          rm -f alerts.txt
-      - name: Report
-        if: always()
-        run: uv run --no-dev python -m stockintel.report
       # Saved even after a failure, so the next job doesn't download everything again.
       - uses: actions/cache/save@v4
         if: ${{ always() }}

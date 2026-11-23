@@ -29,6 +29,24 @@ def _clean(value):
     return value
 
 
+def monthly_growth(returns: pd.Series) -> list[float]:
+    """Growth of $1 at each month end: a small, derived series for the private dashboard."""
+    wealth = (1 + returns.fillna(0)).cumprod()
+    return [round(float(v), 5) for v in wealth.resample("ME").last()]
+
+
+def months(index: pd.Index) -> list[str]:
+    return [d.strftime("%Y-%m") for d in pd.Series(1, index=index).resample("ME").last().index]
+
+
+def growth_series(strategy: pd.Series, baseline: pd.Series) -> dict:
+    return {
+        "months": months(strategy.index),
+        "strategy": monthly_growth(strategy),
+        "baseline": monthly_growth(baseline.reindex(strategy.index)),
+    }
+
+
 def store(engine: Engine, study: str, variant: str, result: dict, settings: dict) -> None:
     clean = _clean(result)
     period = (
@@ -60,7 +78,7 @@ def store(engine: Engine, study: str, variant: str, result: dict, settings: dict
         )
     else:
         detail = ", ".join(
-            f"{k}={v}" for k, v in clean.items() if k not in {"verdict", "start", "end"}
+            f"{k}={v}" for k, v in clean.items() if k not in {"verdict", "start", "end", "series"}
         )
     print(f"QUANT {study}/{variant}: {clean['verdict']} | {detail} | {period}")
 
@@ -70,7 +88,9 @@ def ma_crossover(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> No
     baseline = bt.run(studies.equal_weight(mask), returns)
     strategy = bt.run(studies.ma_crossover(prices, mask), returns)
     settings = {"fast": 50, "slow": 200, "cost_bps": bt.COST_BPS, "stocks": int(mask.any().sum())}
-    store(engine, "ma_crossover", "50/200", judge(strategy.net, baseline.net), settings)
+    result = judge(strategy.net, baseline.net)
+    result["series"] = growth_series(strategy.net, baseline.net)
+    store(engine, "ma_crossover", "50/200", result, settings)
 
 
 def vol_targeting(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
@@ -87,6 +107,7 @@ def vol_targeting(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
         result = judge(strategy, baseline, by="alpha")
         result["average_exposure"] = float(held.mean())
         result["max_exposure"] = float(held.max())
+        result["series"] = growth_series(strategy, baseline)
         settings = {
             "window_days": vol.WINDOW,
             "max_leverage": vol.MAX_LEVERAGE,
@@ -127,6 +148,7 @@ def pairs_trading(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
             ],
             "2021-2026": summary(net[net.index.year >= 2021])["sharpe"],
         }
+        result["series"] = growth_series(strategy, zero)
         result["cost_drag_annual"] = float(
             (result_run.gross - result_run.net).reindex(strategy.index).mean() * 252
         )
@@ -149,7 +171,16 @@ def value_at_risk(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
     portfolio = bt.run(studies.equal_weight(mask), returns).net
     portfolio = portfolio[portfolio.index > portfolio.index.min()]
     for method in ("historical", "normal", "ewma"):
-        result = var.backtest(portfolio, var.forecasts(portfolio, method))
+        forecast = var.forecasts(portfolio, method)
+        result = var.backtest(portfolio, forecast)
+        both = pd.concat([portfolio, forecast], axis=1, keys=["r", "var"]).dropna()
+        hit = (both["r"] < -both["var"]).astype(int)
+        monthly = pd.DataFrame({"hits": hit, "var": both["var"]}).resample("ME")
+        result["series"] = {
+            "months": [d.strftime("%Y-%m") for d in monthly.sum().index],
+            "breaches": [int(v) for v in monthly.sum()["hits"]],
+            "average_var": [round(float(v), 5) for v in monthly.mean()["var"]],
+        }
         settings = {
             "level": var.LEVEL,
             "simulations": var.SIMULATIONS,
@@ -169,6 +200,15 @@ def panic_detector(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> 
     result["average_correlation_max"] = float(read["average_correlation"].max())
     result["average_correlation_max_date"] = read["average_correlation"].idxmax().date().isoformat()
     result["top_eigenvalue_share_median"] = float(read["top_eigenvalue_share"].median())
+    signal = panic.shift_signal(read["absorption_ratio"])
+    monthly = read.resample("ME").mean()
+    result["series"] = {
+        "months": [d.strftime("%Y-%m") for d in monthly.index],
+        "average_correlation": [round(float(v), 4) for v in monthly["average_correlation"]],
+        "absorption_ratio": [round(float(v), 4) for v in monthly["absorption_ratio"]],
+        "warning_share": [round(float(v), 3) for v in signal.astype(float).resample("ME").mean()],
+        "market": monthly_growth(market.reindex(read.index)),
+    }
     settings = {
         "window_days": panic.WINDOW,
         "eigenvectors": "top fifth of stocks",

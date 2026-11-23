@@ -1,20 +1,12 @@
-"""Delete data that no longer feeds any decision, and repeats that add nothing.
+"""Delete repeats and logs that add nothing.
 
-Kept on purpose: price history and company figures (the model trains and tests on them), the
-forecast ledger (it can never be edited), policy, fund, insider and economic history, and
-anything a test still needs.
+Kept on purpose: price history (every study tests on it), the old forecast ledger and other
+tables from the earlier app (kept untouched as an archive), and quant results.
 
 Deleted:
 - Exact repeats of a price bar (same stock, day and values). Changed values are kept: they are
   the record of corrections.
-- Company figures repeated in a later report with the same value, form and period. The code
-  reads figures "as first reported", so the repeat is never used. Restated values are kept.
-- News headlines after 14 days. The page shows 7 and the warnings use 2. Each day's warnings
-  are kept separately, so whether they helped can still be tested.
-- AI news readings after 14 days, live quotes after 2 days, job logs after 30 days, status
-  pings after 7 days, data problems after 30 days.
-- The long explanation inside expert reviews after 7 days. Whether a stock was blocked is kept,
-  because the caution-rule test needs it.
+- Job logs after 30 days, status pings after 7 days, data problems after 30 days.
 
 Run: python -m stockintel.retention [--dry]
 """
@@ -30,21 +22,6 @@ STEPS = {
           AND p.open = q.open AND p.high = q.high AND p.low = q.low AND p.close = q.close
           AND p.volume = q.volume AND p.div_cash = q.div_cash
           AND p.split_factor = q.split_factor""",
-    "Company figures repeated in later reports": """
-        DELETE FROM company_facts f USING company_facts g
-        WHERE f.security_id = g.security_id AND f.tag = g.tag AND f.unit = g.unit
-          AND f.form = g.form AND f.period_end = g.period_end
-          AND f.period_start IS NOT DISTINCT FROM g.period_start AND f.value = g.value
-          AND (g.filed < f.filed OR (g.filed = f.filed AND g.id < f.id))""",
-    "News headlines over 14 days old": (
-        "DELETE FROM news_articles WHERE seen_at < now() - interval '14 days'"
-    ),
-    "AI news readings over 14 days old": (
-        "DELETE FROM news_judgments WHERE judged_at < now() - interval '14 days'"
-    ),
-    "Live quotes over 2 days old": (
-        "DELETE FROM market_quotes WHERE quoted_at < now() - interval '2 days'"
-    ),
     "Job logs over 30 days old": (
         "DELETE FROM feed_runs WHERE started_at < now() - interval '30 days'"
     ),
@@ -54,16 +31,12 @@ STEPS = {
     "Data problems over 30 days old": (
         "DELETE FROM validation_issues WHERE detected_at < now() - interval '30 days'"
     ),
-    "Expert review explanations over 7 days old": """
-        UPDATE expert_reviews SET detail = '{}'::jsonb
-        WHERE review_date < current_date - 7 AND detail <> '{}'::jsonb""",
 }
-SHRINK = ("price_bars", "company_facts", "expert_reviews", "news_articles")
+SHRINK = ("price_bars",)
 # These tables refuse edits and deletes. Removing an exact repeat loses no information, so the
 # guard is lifted for that one delete, inside the same transaction, and put straight back.
 GUARDED = {
     "Repeated price bars": "price_bars",
-    "Company figures repeated in later reports": "company_facts",
 }
 
 

@@ -1,149 +1,81 @@
-// Every API response here is a labelled test fixture, stubbed in place of fetch.
-import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
-});
+// TEST FIXTURES: stored-result shapes with invented figures, not real results.
+const growth = { months: ["2024-01", "2024-02", "2024-03"], strategy: [1, 1.02, 1.01], baseline: [1, 1.01, 1.03] };
+const results = [
+  {
+    study: "ma_crossover",
+    variant: "50/200",
+    run_at: "2026-11-23T10:00:00Z",
+    period: "2010-04-01 to 2026-11-20",
+    verdict: "No reliable edge",
+    metrics: {
+      choice_t: -3.5,
+      strategy: { sharpe: 0.9, sharpe_se: 0.25, max_drawdown: -0.29, annual_return: 0.1 },
+      baseline: { sharpe: 1.02, max_drawdown: -0.39 },
+      series: growth,
+    },
+    settings: { fast: 50, slow: 200 },
+  },
+  {
+    study: "value_at_risk",
+    variant: "ewma",
+    run_at: "2026-11-23T10:00:00Z",
+    period: "2012-03-27 to 2026-11-20",
+    verdict: "Not rejected",
+    metrics: {
+      breach_rate: 0.054,
+      breach_rate_after_a_breach: 0.085,
+      kupiec_p: 0.24,
+      christoffersen_p: 0.063,
+      series: { months: ["2024-01", "2024-02"], breaches: [1, 0], average_var: [0.015, 0.016] },
+    },
+    settings: { level: 0.95 },
+  },
+];
 
-function stub(routes: Record<string, [number, unknown]>) {
-  const empty: Record<string, [number, unknown]> = {
-    "/api/ideas": [200, { target_session: null, edge: false, buy: [], sell: [], top: [], bottom: [] }],
-    "/api/track-record": [200, { scored: 0, written: 0, brier: null, evaluations: [] }],
-    "/api/model-comparison": [200, null],
-    "/api/screener": [200, []],
-    "/api/market-mood": [200, { mood: "Not verified", vix: null, credit_spread: null, above_200: null, stocks_measured: 0, next_fed: null }],
-  };
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (url: string) => {
-      const [status, body] = { ...empty, ...routes }[url.split("?")[0]];
-      return { status, json: async () => body };
-    }),
-  );
+function mockApi(overrides: Record<string, Response> = {}) {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (overrides[url]) return overrides[url];
+    if (url === "/api/quant") return new Response(JSON.stringify(results));
+    if (url === "/api/feeds") return new Response(JSON.stringify([]));
+    if (url === "/api/coverage")
+      return new Response(JSON.stringify({ stocks: 480, price_rows: 100, first_day: "2010-01-04", last_day: "2026-11-20" }));
+    return new Response("", { status: 404 });
+  });
 }
 
-test("shows an error rather than a status when the API is unreachable", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("down")));
-  render(<App />);
-  expect(await screen.findByText(/Status is not verified/)).toBeTruthy();
-  expect(screen.queryByText("OK")).toBeNull();
-});
-
-test("shows a failed feed and its message", async () => {
-  stub({
-    "/api/status": [
-      503,
-      {
-        database: { state: "ok" },
-        migrations: { state: "ok" },
-        worker: { state: "stale" },
-      },
-    ],
-    "/api/feeds": [
-      200,
-      [
-        {
-          feed: "prices",
-          source: "Tiingo",
-          status: "error",
-          message: "Tiingo AAPL: HTTP 500",
-          last_run: "2026-07-07T23:20:00Z",
-          records_added: 0,
-        },
-      ],
-    ],
-    "/api/economic": [200, []],
-    "/api/backtest": [200, null],
+describe("Quant Lab page", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
   });
-  render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "How reliable?" }));
-  expect(await screen.findByText("Error")).toBeTruthy();
-  expect(screen.getByText(/Tiingo AAPL: HTTP 500/)).toBeTruthy();
-  expect(screen.getByText("Stale")).toBeTruthy();
-});
 
-test("shows Not verified for a value the source did not publish", async () => {
-  stub({
-    "/api/status": [
-      200,
-      { database: { state: "ok" }, migrations: { state: "ok" }, worker: { state: "ok" } },
-    ],
-    "/api/feeds": [200, []],
-    "/api/economic": [
-      200,
-      [
-        {
-          series_id: "DGS10",
-          observation_date: "2026-01-01",
-          value: null,
-          source: "FRED",
-          source_url: "https://fixture.test",
-          retrieved_at: "2026-07-07T23:20:00Z",
-          data_status: "end_of_day",
-        },
-      ],
-    ],
-    "/api/backtest": [200, null],
+  it("counts tests and passes from the stored verdicts", async () => {
+    mockApi();
+    render(<App />);
+    const heading = await screen.findByRole("heading", { level: 1 });
+    expect(heading.textContent).toBe("2 tests. 1 passed.");
+    expect(screen.getAllByText("Not rejected").length).toBeGreaterThan(0);
+    expect(screen.getByText(/2010 to 2026/)).toBeTruthy();
   });
-  render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "Data" }));
-  expect((await screen.findAllByText("Not verified")).length).toBeGreaterThan(0);
-});
 
-test("says No reliable edge when a tested signal has none", async () => {
-  stub({
-    "/api/status": [
-      200,
-      { database: { state: "ok" }, migrations: { state: "ok" }, worker: { state: "ok" } },
-    ],
-    "/api/feeds": [200, []],
-    "/api/economic": [200, []],
-    "/api/backtest": [
-      200,
-      {
-        finished_at: "fixture",
-        stocks: 2,
-        first_date: "2020-01-02",
-        last_date: "2026-07-07",
-        cost_bps: 10,
-        note: "Fixture warning about bias.",
-        results: [
-          {
-            signal: "Golden cross",
-            direction: "bullish",
-            horizon: 20,
-            sample_size: 100,
-            win_rate: 0.5,
-            baseline_win_rate: 0.5,
-            avg_return: 0.01,
-            baseline_avg_return: 0.01,
-            oos_sample_size: 0,
-            oos_win_rate: null,
-            oos_baseline_win_rate: 0.5,
-            oos_avg_return: null,
-            oos_baseline_avg_return: 0.01,
-            edge: false,
-          },
-        ],
-      },
-    ],
+  it("marks studies that haven't run instead of inventing results", async () => {
+    mockApi();
+    render(<App />);
+    await screen.findByRole("heading", { level: 1 });
+    const notRun = [...document.querySelectorAll("section.study p.muted")].filter((p) =>
+      p.textContent?.includes("hasn't run yet"),
+    );
+    expect(notRun.map((p) => p.closest("section")?.id)).toEqual(["pairs_trading", "vol_targeting", "panic_detector"]);
   });
-  render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "How reliable?" }));
-  expect(await screen.findByText("No reliable edge")).toBeTruthy();
-  expect(screen.getByText("Fixture warning about bias.")).toBeTruthy();
-});
 
-test("the site has a search bar and five pages", () => {
-  vi.stubGlobal("fetch", vi.fn(async () => ({ status: 200, json: async () => null })));
-  render(<App />);
-  expect(screen.getByLabelText("Search stocks")).toBeTruthy();
-  const names = screen.getAllByRole("button").map((b) => b.textContent);
-  for (const page of ["Long-term", "Trading", "My portfolio", "How reliable?", "Data"]) {
-    expect(names).toContain(page);
-  }
-  expect(names).not.toContain("Today");
+  it("says Not verified when the results fail to load", async () => {
+    mockApi({ "/api/quant": new Response("", { status: 500 }) });
+    render(<App />);
+    expect(await screen.findByText(/Not verified: the results didn't load/)).toBeTruthy();
+  });
 });

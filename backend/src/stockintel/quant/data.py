@@ -9,9 +9,8 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from stockintel.backtest import eligibility, eligible_days
-from stockintel.charts import adjust
 from stockintel.localcache import daily_bars
+from stockintel.prices import adjust, eligibility, eligible_days
 
 
 def panels(engine: Engine, min_days: int = 500) -> tuple[pd.DataFrame, pd.DataFrame]:

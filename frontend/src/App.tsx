@@ -1,549 +1,400 @@
-import { useEffect, useState, type FormEvent } from "react";
-import QuantLab from "./QuantLab";
-import ChartPanel from "./ChartPanel";
-import Glossary from "./Glossary";
-import LongTermPanel from "./LongTermPanel";
-import { TodaysOrders } from "./ChecklistPanel";
-import { DayTradingPage } from "./DayTrading";
-import { CongressTrades, SourceChecks } from "./Crowd";
-import { DecisionTests, MarketCheck } from "./Checks";
-import { AlertsPage, BigPicture, HoldingsToday, JournalPage, MarketMood, MarketStrip, NextDecision, PortfolioPage, ReliabilityPage, Screener, WatchButton, WhatChanged } from "./Pages";
-import { ChartReading, FactorsPanel, ForecastPanel, IdeasPanel, InvestPanel, TradesPanel } from "./ForecastPanel";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  getJson,
+  PASSING,
+  type Breaches,
+  type Coverage,
+  type Feed,
+  type Growth,
+  type Panic,
+  type Result,
+  type Summary,
+} from "./api";
+import { BarStrip, LineChart, TableView } from "./charts";
+import { fixed, NOT_VERIFIED, pct } from "./format";
 
-type Status = {
-  database: { state: string };
-  migrations: { state: string };
-  worker: { state: string };
-};
-type Feed = {
-  feed: string;
-  source: string;
-  status: string;
-  message: string | null;
-  last_run: string | null;
-  records_added: number | null;
-};
-type Listing = { ticker: string; name: string; exchange: string };
-type Provenance = {
-  source: string;
-  source_url: string;
-  retrieved_at: string;
-  data_status: string;
-};
-type Bar = Provenance & {
-  market_date: string;
-  market_timestamp: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-};
-type Filing = Provenance & { form: string; filing_date: string; document_url: string };
-type Stock = {
-  ticker: string;
-  name: string;
-  stale: boolean;
-  latest_expected_session: string;
-  bars: Bar[];
-  filings: Filing[];
-};
-type Backtest = {
-  finished_at: string;
-  stocks: number;
-  first_date: string;
-  last_date: string;
-  cost_bps: number;
-  note: string;
-  results: {
-    signal: string;
-    direction: string;
-    horizon: number;
-    sample_size: number;
-    win_rate: number | null;
-    baseline_win_rate: number | null;
-    avg_return: number | null;
-    baseline_avg_return: number | null;
-    oos_sample_size: number;
-    oos_win_rate: number | null;
-    oos_baseline_win_rate: number | null;
-    oos_avg_return: number | null;
-    oos_baseline_avg_return: number | null;
-    edge: boolean;
-  }[];
-};
-type Economic = Provenance & {
-  series_id: string;
-  observation_date: string;
-  value: number | null;
+type Source = [string, string];
+
+const SOURCES: Record<string, Source[]> = {
+  ma_crossover: [["Lo (2002), the statistics of Sharpe ratios", "https://ideas.repec.org/a/taf/ufajxx/v58y2002i4p36-52.html"]],
+  vol_targeting: [
+    ["Moreira & Muir (2017)", "https://www.nber.org/papers/w22208"],
+    [
+      "DeMiguel et al. (2024)",
+      "https://lbsresearch.london.edu/id/eprint/3716/1/The%20Journal%20of%20Finance%20-%202024%20-%20DeMIGUEL%20-%20A%20Multifactor%20Perspective%20on%20Volatility%E2%80%90Managed%20Portfolios.pdf",
+    ],
+  ],
+  pairs_trading: [
+    ["Gatev, Goetzmann & Rouwenhorst (2006)", "https://econpapers.repec.org/RePEc:oup:rfinst:v:19:y:2006:i:3:p:797-827"],
+    ["Do & Faff (2010)", "https://ideas.repec.org/a/taf/ufajxx/v66y2010i4p83-95.html"],
+  ],
+  value_at_risk: [
+    ["Kupiec (1995) and Christoffersen (1998) tests", "https://it.mathworks.com/help/risk/overview-of-var-backtesting.html"],
+    ["RiskMetrics decay of 0.94", "https://metricgate.com/docs/ewma-volatility-riskmetrics/"],
+  ],
+  panic_detector: [
+    [
+      "Kritzman et al., absorption ratio (summary)",
+      "https://www.liverpool.ac.uk/media/livacuk/schoolofmanagement/research/economics/Application,Absorption,Ratio.pdf",
+    ],
+  ],
 };
 
-const LABELS: Record<string, string> = {
-  ok: "OK",
-  error: "Error",
-  partial: "Partly failed",
-  running: "Running",
-  stale: "Stale",
-  never_run: "Never run",
-  not_verified: "Not verified",
+const STUDIES: { key: string; name: string; question: string }[] = [
+  { key: "value_at_risk", name: "Value at Risk", question: "When a model says 95% of days will lose less than this, does reality agree?" },
+  { key: "pairs_trading", name: "Pairs trading", question: "When two related stocks drift apart, does betting on them closing the gap pay after costs?" },
+  { key: "vol_targeting", name: "Volatility targeting", question: "Does holding less when markets are jumpy improve returns for the risk taken?" },
+  { key: "ma_crossover", name: "Trend following", question: "Does owning a stock only while its 50-day average is above its 200-day average beat holding everything?" },
+  { key: "panic_detector", name: "Panic detector", question: "When stocks start moving as one, does the market do worse over the next month?" },
+];
+
+const money = (v: number) => `$${v.toFixed(2)}`;
+
+const VARIANT_NAMES: Record<string, string> = {
+  historical: "Historical bootstrap",
+  normal: "Normal curve",
+  ewma: "EWMA normal (recent days weigh more)",
+  distance: "Distance method",
+  cointegration: "Cointegration method",
+  "50/200": "50/200-day crossover",
+  "variance-managed (Moreira-Muir)": "Variance-managed (Moreira-Muir)",
+  "volatility target": "Volatility target",
+  "absorption ratio shift": "Absorption-ratio warning",
 };
-const NOT_VERIFIED = "Not verified";
 
-const label = (state: string) => LABELS[state] ?? NOT_VERIFIED;
-const when = (value: string | null) => (value ? new Date(value).toLocaleString() : NOT_VERIFIED);
-
-async function getJson<T>(url: string, allowed: number[] = [200]): Promise<T> {
-  const response = await fetch(url);
-  if (!allowed.includes(response.status)) throw new Error(String(response.status));
-  return response.json();
+function useLoad<T>(url: string): { data: T | null; failed: boolean } {
+  const [state, setState] = useState<{ data: T | null; failed: boolean }>({ data: null, failed: false });
+  useEffect(() => {
+    let alive = true;
+    getJson<T>(url)
+      .then((data) => alive && setState({ data, failed: false }))
+      .catch(() => alive && setState({ data: null, failed: true }));
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  return state;
 }
 
-const pct = (value: number | null) =>
-  value === null ? NOT_VERIFIED : `${(value * 100).toFixed(1)}%`;
-
-function BacktestView({ backtest }: { backtest: Backtest }) {
+function Verdict({ text }: { text: string }) {
+  const pass = PASSING.has(text);
   return (
-    <details className="fold">
-      <summary>Do the chart signals work?</summary>
+    <span className={`verdict ${pass ? "pass" : "fail"}`}>
+      <span aria-hidden="true">{pass ? "✓" : "–"}</span> {text}
+    </span>
+  );
+}
+
+function Facts({ items }: { items: [string, ReactNode][] }) {
+  return (
+    <dl className="facts">
+      {items.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Method({ result }: { result: Result }) {
+  const sources = SOURCES[result.study] ?? [];
+  return (
+    <details className="method">
+      <summary>How this was tested</summary>
       <p>
-        Tested on {backtest.stocks} stocks, {backtest.first_date} to {backtest.last_date}, after{" "}
-        {backtest.cost_bps / 100}% trading costs. Each year is judged only on earlier years.
+        Period {result.period}. Last run {new Date(result.run_at).toLocaleDateString("en-GB")}.
       </p>
-      <p className="bad">{backtest.note}</p>
+      <ul className="settings">
+        {Object.entries(result.settings).map(([k, v]) => (
+          <li key={k}>
+            {k.replaceAll("_", " ")}: <strong>{String(v)}</strong>
+          </li>
+        ))}
+      </ul>
+      {sources.length > 0 && (
+        <p>
+          Sources:{" "}
+          {sources.map(([label, url], i) => (
+            <span key={url}>
+              {i > 0 && "; "}
+              <a href={url} target="_blank" rel="noreferrer">
+                {label}
+              </a>
+            </span>
+          ))}
+        </p>
+      )}
+    </details>
+  );
+}
+
+function StrategyVariant({ result, baselineName }: { result: Result; baselineName: string }) {
+  const s = result.metrics.strategy as Summary | undefined;
+  const b = result.metrics.baseline as Summary | undefined;
+  const series = result.metrics.series as Growth | undefined;
+  const flat = b?.sharpe == null;
+  return (
+    <div className="variant">
+      <div className="variant-head">
+        <h3>{VARIANT_NAMES[result.variant] ?? result.variant}</h3>
+        <Verdict text={result.verdict} />
+      </div>
+      <Facts
+        items={[
+          ["Sharpe ratio", <>{fixed(s?.sharpe)} <small>± {fixed(s?.sharpe_se)}</small></>],
+          [flat ? "Benchmark" : `${baselineName} Sharpe`, flat ? "No trade" : fixed(b?.sharpe)],
+          ["Yearly return", pct(s?.annual_return)],
+          ["Worst fall", <>{pct(s?.max_drawdown)} {!flat && <small>vs {pct(b?.max_drawdown)}</small>}</>],
+          ["Test score", <>t = {fixed(result.metrics.choice_t)} <small className="below">needs 3</small></>],
+        ]}
+      />
+      {series && (
+        <LineChart
+          title={`Growth of $1 after costs, ${(VARIANT_NAMES[result.variant] ?? result.variant).toLowerCase()}${flat ? "" : ` against ${baselineName.toLowerCase()}`}`}
+          months={series.months}
+          series={[
+            { name: "Strategy", values: series.strategy, role: "s1" },
+            ...(flat ? [] : [{ name: baselineName, values: series.baseline, role: "s2" as const }]),
+          ]}
+          format={money}
+          baseline={1}
+        />
+      )}
+      <Method result={result} />
+    </div>
+  );
+}
+
+function RiskStudy({ rows }: { rows: Result[] }) {
+  const order = ["historical", "normal", "ewma"];
+  const sorted = [...rows].sort((a, b) => order.indexOf(a.variant) - order.indexOf(b.variant));
+  const all = sorted.map((r) => r.metrics.series as Breaches | undefined);
+  const max = Math.max(1, ...all.flatMap((s) => s?.breaches ?? []));
+  const names = VARIANT_NAMES;
+  return (
+    <>
       <div className="scroll">
-        <table>
+        <table className="compare">
           <thead>
             <tr>
-              <th>Signal</th>
-              <th>Leans</th>
-              <th>Days held</th>
-              <th>Verdict</th>
-              <th>Win rate</th>
-              <th>Baseline</th>
-              <th>Avg return</th>
-              <th>Baseline</th>
-              <th>Tested cases</th>
+              <th scope="col">Simulation</th>
+              <th scope="col">Breach rate</th>
+              <th scope="col">After a breach</th>
+              <th scope="col">Rate test</th>
+              <th scope="col">Bunching test</th>
+              <th scope="col">Verdict</th>
             </tr>
           </thead>
           <tbody>
-            {backtest.results.map((row) => (
-              <tr key={`${row.signal}${row.direction}${row.horizon}`}>
-                <td>{row.signal}</td>
-                <td>{row.direction}</td>
-                <td>{row.horizon}</td>
-                <td className={row.edge ? "ok" : ""}>{row.edge ? "Edge" : "No reliable edge"}</td>
-                <td>{pct(row.oos_win_rate ?? row.win_rate)}</td>
-                <td>{pct(row.oos_baseline_win_rate ?? row.baseline_win_rate)}</td>
-                <td>{pct(row.oos_avg_return ?? row.avg_return)}</td>
-                <td>{pct(row.oos_baseline_avg_return ?? row.baseline_avg_return)}</td>
-                <td>{(row.oos_sample_size || row.sample_size).toLocaleString()}</td>
+            {sorted.map((r) => (
+              <tr key={r.variant}>
+                <th scope="row">{names[r.variant] ?? r.variant}</th>
+                <td>{pct(r.metrics.breach_rate)}</td>
+                <td>{pct(r.metrics.breach_rate_after_a_breach)}</td>
+                <td>p = {fixed(r.metrics.kupiec_p, 3)}</td>
+                <td>p = {fixed(r.metrics.christoffersen_p, 3)}</td>
+                <td>
+                  <Verdict text={r.verdict} />
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </details>
-  );
-}
-
-function State({ state }: { state: string }) {
-  return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
-}
-
-const PAGES = ["Quant lab", "Trading", "Long-term", "My portfolio", "How reliable?", "Data"];
-
-const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
-
-type Live = { price: number; at: string; source: string; status: string } | { error: string };
-
-/** The latest trade beside the official close the decisions use. Refreshed each minute. */
-function LivePrice({ stock }: { stock: Stock }) {
-  const [live, setLive] = useState<Live | null>(null);
-  useEffect(() => {
-    let alive = true;
-    const load = () =>
-      getJson<Live>(`/api/stocks/${encodeURIComponent(stock.ticker)}/live`)
-        .then((value) => alive && setLive(value))
-        .catch(() => alive && setLive({ error: "Not verified: the live price didn't load" }));
-    load();
-    const timer = setInterval(load, 60_000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [stock.ticker]);
-  const close = stock.bars[0];
-  return (
-    <p className="live-price">
-      {close ? (
-        <>
-          Last close <b>{close.close.toFixed(2)}</b> on {close.market_date} ({close.source}). The
-          decision uses this.
-        </>
-      ) : (
-        NOT_VERIFIED
-      )}{" "}
-      {live && "price" in live && (
-        <>
-          Latest trade <b>{live.price.toFixed(2)}</b>
-          {close && ` (${((live.price / close.close - 1) * 100).toFixed(1)}%)`} at{" "}
-          {new Date(live.at).toLocaleTimeString()}, from {live.source}, one exchange.
-        </>
+      <p className="note">
+        Target: 5% of days, and a breach no more likely the day after a breach. Each bar below is one month's
+        breaches, on the same scale, so runs of bad days stand out.
+      </p>
+      {sorted.map((r, k) =>
+        all[k] ? (
+          <BarStrip key={r.variant} title={names[r.variant] ?? r.variant} months={all[k]!.months} values={all[k]!.breaches} max={max} />
+        ) : null,
       )}
-      {live && "error" in live && <span className="bad">{live.error}</span>}
-    </p>
+      {all[0] && (
+        <TableView
+          caption="Value at Risk breaches per month"
+          months={all[0].months}
+          series={sorted.map((r, k) => ({ name: names[r.variant] ?? r.variant, values: all[k]?.breaches ?? [], role: "s1" }))}
+          format={(v) => String(v)}
+        />
+      )}
+      {sorted[0] && <Method result={sorted[0]} />}
+    </>
   );
 }
 
-function StockView({ stock }: { stock: Stock }) {
-  const [tab, setTab] = useState(TABS[0]);
+function PanicStudy({ result }: { result: Result }) {
+  const series = result.metrics.series as Panic | undefined;
+  const choice = result.metrics.choice as Record<string, number> | undefined;
+  const holdout = result.metrics.holdout as Record<string, number> | undefined;
   return (
-    <section>
-      <h2>
-        {stock.ticker} · {stock.name}
-      </h2>
-      <LivePrice stock={stock} />
-      <div className="tabs pages" role="group" aria-label="Stock page">
-        {TABS.map((name) => (
-          <button key={name} aria-pressed={name === tab} onClick={() => setTab(name)}>
-            {name}
-          </button>
-        ))}
+    <div className="variant">
+      <div className="variant-head">
+        <h3>{VARIANT_NAMES[result.variant] ?? result.variant}</h3>
+        <Verdict text={result.verdict} />
       </div>
-      {tab === "Simple view" && <ForecastPanel ticker={stock.ticker} />}
-      {tab === "Chart" && (
-        <>
-          <ChartPanel ticker={stock.ticker} />
-          <ChartReading ticker={stock.ticker} />
-        </>
+      <Facts
+        items={[
+          ["Next month after a warning", pct(choice?.gap_after_shift, 2, true)],
+          ["Test score", <>t = {fixed(choice?.t)} <small className="below">needs −3</small></>],
+          ["Held-back years", pct(holdout?.gap_after_shift, 2, true)],
+          ["Days with a warning", pct(result.metrics.share_of_days_with_shift, 0)],
+          ["Worst months warned", pct(result.metrics.share_of_worst_5pct_months_after_shift, 0)],
+        ]}
+      />
+      {series && (
+        <LineChart
+          title="Average correlation between stocks, by month; shading marks months with warnings"
+          months={series.months}
+          series={[{ name: "Average correlation", values: series.average_correlation, role: "s1" }]}
+          format={(v) => v.toFixed(2)}
+          shade={series.warning_share}
+        />
       )}
-      {tab === "Long-term" && <LongTermPanel ticker={stock.ticker} />}
-      {tab === "All factors" && <FactorsPanel ticker={stock.ticker} />}
-      {tab === "Filings and prices" && <RecordsView stock={stock} />}
-      <Glossary />
-      <WatchButton ticker={stock.ticker} />
+      <Method result={result} />
+    </div>
+  );
+}
+
+function Study({ info, rows }: { info: (typeof STUDIES)[number]; rows: Result[] | undefined }) {
+  return (
+    <section className="study" id={info.key} aria-labelledby={`${info.key}-title`}>
+      <p className="study-name">{info.name}</p>
+      <h2 id={`${info.key}-title`}>{info.question}</h2>
+      {!rows && <p className="muted">{NOT_VERIFIED}: this study hasn't run yet.</p>}
+      {rows && info.key === "value_at_risk" && <RiskStudy rows={rows} />}
+      {rows && info.key === "panic_detector" && rows.map((r) => <PanicStudy key={r.variant} result={r} />)}
+      {rows &&
+        !["value_at_risk", "panic_detector"].includes(info.key) &&
+        rows.map((r) => (
+          <StrategyVariant
+            key={r.variant}
+            result={r}
+            baselineName={info.key === "vol_targeting" ? "Unmanaged" : "Hold all"}
+          />
+        ))}
     </section>
   );
 }
 
-function RecordsView({ stock }: { stock: Stock }) {
+function Ledger({ results }: { results: Result[] }) {
+  const passed = results.filter((r) => PASSING.has(r.verdict)).length;
+  const years = results.map((r) => r.period.match(/\d{4}/g)?.map(Number) ?? []).flat();
+  const span = years.length ? `${Math.min(...years)} to ${Math.max(...years)}` : NOT_VERIFIED;
   return (
-    <section>
-      <h3>Recent prices (raw, not adjusted)</h3>
-      {stock.bars.length === 0 ? (
-        <p>{NOT_VERIFIED}</p>
-      ) : (
+    <header className="hero">
+      <p className="kicker">Quant lab</p>
+      <h1>
+        <span className="line">{results.length} tests.</span>{" "}
+        <span className={passed ? "line pass" : "line"}>{passed} passed.</span>
+      </h1>
+      <p className="lede">
+        Five classic quant ideas, built from first principles and tested on large US stocks, {span}, after
+        trading costs. To pass, an idea needs a t-score of 3 on the earlier years and must still work on two
+        years held back. Most published ideas fail that bar, and this page shows the failures as well as the
+        passes.
+      </p>
+      <ol className="ledger">
+        {STUDIES.flatMap((info) =>
+          results
+            .filter((r) => r.study === info.key)
+            .map((r) => (
+              <li key={`${r.study}-${r.variant}`}>
+                <a href={`#${info.key}`}>
+                  {info.name} <span className="muted">{VARIANT_NAMES[r.variant] ?? r.variant}</span>
+                </a>
+                <Verdict text={r.verdict} />
+              </li>
+            )),
+        )}
+      </ol>
+    </header>
+  );
+}
+
+function DataStatus() {
+  const feeds = useLoad<Feed[]>("/api/feeds");
+  const coverage = useLoad<Coverage>("/api/coverage");
+  return (
+    <section className="study" id="data" aria-labelledby="data-title">
+      <p className="study-name">Data</p>
+      <h2 id="data-title">What the results stand on</h2>
+      {coverage.failed && <p className="muted">{NOT_VERIFIED}: coverage didn't load.</p>}
+      {coverage.data && (
+        <Facts
+          items={[
+            ["Stocks", coverage.data.stocks.toLocaleString()],
+            ["Daily price rows", coverage.data.price_rows.toLocaleString()],
+            ["From", coverage.data.first_day ?? NOT_VERIFIED],
+            ["To", coverage.data.last_day ?? NOT_VERIFIED],
+          ]}
+        />
+      )}
+      {feeds.failed && <p className="muted">{NOT_VERIFIED}: feed status didn't load.</p>}
+      {feeds.data && (
         <div className="scroll">
-          <table>
+          <table className="compare">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Open</th>
-                <th>High</th>
-                <th>Low</th>
-                <th>Close</th>
-                <th>Volume</th>
-                <th>Market time</th>
-                <th>Retrieved</th>
-                <th>Status</th>
-                <th>Source</th>
+                <th scope="col">Feed</th>
+                <th scope="col">Source</th>
+                <th scope="col">Last run</th>
+                <th scope="col">State</th>
               </tr>
             </thead>
             <tbody>
-              {stock.bars.map((bar) => (
-                <tr key={bar.market_date}>
-                  <td>{bar.market_date}</td>
-                  <td>{bar.open.toFixed(2)}</td>
-                  <td>{bar.high.toFixed(2)}</td>
-                  <td>{bar.low.toFixed(2)}</td>
-                  <td>{bar.close.toFixed(2)}</td>
-                  <td>{bar.volume.toLocaleString()}</td>
-                  <td>{when(bar.market_timestamp)}</td>
-                  <td>{when(bar.retrieved_at)}</td>
-                  <td>{bar.data_status}</td>
-                  <td>{bar.source}</td>
+              {feeds.data.map((f) => (
+                <tr key={f.feed}>
+                  <th scope="row">{f.feed}</th>
+                  <td>{f.source}</td>
+                  <td>{f.last_run ? new Date(f.last_run).toLocaleString("en-GB") : "Never"}</td>
+                  <td className={f.status === "ok" ? "" : "warn"}>{f.status === "ok" ? "OK" : `${f.status.replaceAll("_", " ")}${f.message ? `: ${f.message}` : ""}`}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      <h3>Filings</h3>
-      {stock.filings.length === 0 ? (
-        <p>{NOT_VERIFIED}</p>
-      ) : (
-        <ul>
-          {stock.filings.map((filing) => (
-            <li key={filing.document_url}>
-              <a href={filing.document_url} target="_blank" rel="noreferrer">
-                {filing.form}, filed {filing.filing_date}
-              </a>{" "}
-              · {filing.source}, retrieved {when(filing.retrieved_at)}
-            </li>
-          ))}
-        </ul>
-      )}
+      <p className="note">
+        Limits: the stock list is today's companies, so ones that failed are missing and every result is
+        flattered. Costs (0.10% a trade, 0.5% a year to borrow) are assumptions. Prices come from Tiingo and
+        cannot be republished, so this page is private. This product uses the FRED® API but is not endorsed or
+        certified by the Federal Reserve Bank of St. Louis.
+      </p>
     </section>
   );
 }
 
 export default function App() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [economic, setEconomic] = useState<Economic[]>([]);
-  const [backtest, setBacktest] = useState<Backtest | null>(null);
-  const [page, setPage] = useState(PAGES[0]);
-  const [failed, setFailed] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Listing[] | null>(null);
-  const [stock, setStock] = useState<Stock | null>(null);
-  const [stockError, setStockError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        // A 503 still carries a valid status body, which is shown as it is.
-        setStatus(await getJson<Status>("/api/status", [200, 503]));
-        setFeeds(await getJson<Feed[]>("/api/feeds"));
-        setEconomic(await getJson<Economic[]>("/api/economic"));
-        setBacktest(await getJson<Backtest | null>("/api/backtest"));
-        setFailed(false);
-      } catch {
-        setBacktest(null);
-        setStatus(null);
-        setFeeds([]);
-        setEconomic([]);
-        setFailed(true);
-      }
-    };
-    load();
-    const timer = setInterval(load, 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const goHome = () => {
-    setStock(null);
-    setResults(null);
-    setStockError(null);
-    setQuery("");
-  };
-
-  const search = async (event: FormEvent) => {
-    event.preventDefault();
-    setStock(null);
-    setStockError(null);
-    try {
-      setResults(await getJson<Listing[]>(`/api/stocks?q=${encodeURIComponent(query)}`));
-    } catch {
-      setResults(null);
-      setStockError("Search failed. Results are not verified.");
-    }
-  };
-
-  const open = async (ticker: string) => {
-    setStockError(null);
-    try {
-      setStock(await getJson<Stock>(`/api/stocks/${encodeURIComponent(ticker)}`));
-    } catch {
-      setStock(null);
-      setStockError(`Could not load ${ticker}. Data is not verified.`);
-    }
-  };
-
-  const showStock = (ticker: string) => {
-    setResults(null);
-    open(ticker);
-  };
-
+  const { data, failed } = useLoad<Result[]>("/api/quant");
+  const byStudy = new Map<string, Result[]>();
+  data?.forEach((r) => byStudy.set(r.study, [...(byStudy.get(r.study) ?? []), r]));
   return (
-    <main>
-      <header className="top">
-        <h1>Stock Intelligence</h1>
-        <form onSubmit={search} className="search">
-          <input
-            aria-label="Search stocks"
-            placeholder="Search a company or ticker"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <button type="submit">Search</button>
-        </form>
-      </header>
-      <nav className="tabs pages" role="group" aria-label="Pages">
-        {PAGES.map((name) => (
-          <button
-            key={name}
-            aria-pressed={name === page}
-            onClick={() => {
-              setPage(name);
-              goHome();
-            }}
-          >
-            {name}
-          </button>
-        ))}
-      </nav>
-      <p className="small-print">Every call is Buy, Keep, Sell or Leave alone. Not financial advice.</p>
-      {failed && <p className="bad">Cannot reach the API. Status is not verified.</p>}
-      {stockError && <p className="bad">{stockError}</p>}
-      {results?.length === 0 && <p>Not verified: no covered stock matches.</p>}
-      {results && results.length > 0 && !stock && (
-        <ul>
-          {results.map((item) => (
-            <li key={item.ticker}>
-              <button className="link" onClick={() => showStock(item.ticker)}>
-                {item.ticker}
-              </button>{" "}
-              {item.name}
-            </li>
+    <>
+      <nav className="bar" aria-label="Sections">
+        <a className="brand" href="#top">
+          Quant Lab
+        </a>
+        <div className="links">
+          {STUDIES.map((s) => (
+            <a key={s.key} href={`#${s.key}`}>
+              {s.name}
+            </a>
           ))}
-        </ul>
-      )}
-      {stock && (
-        <>
-          <p>
-            <button onClick={goHome}>Back to {page}</button>
-          </p>
-          <StockView stock={stock} />
-        </>
-      )}
-
-      {!stock && page === "Long-term" && (
-        <>
-          <MarketStrip />
-          <section className="orders">
-            <h2>Long-term investing: months to years</h2>
-            <p className="plain">From each company's business and price. Buy the ones marked Buy, sell the ones marked Sell.</p>
-            <InvestPanel onOpen={showStock} />
-          </section>
-        </>
-      )}
-
-      {!stock && page === "Quant lab" && <QuantLab />}
-      {!stock && page === "Trading" && (
-        <>
-          <section className="orders">
-            <h2>Today's top 10: hold about a month</h2>
-            <TodaysOrders onOpen={showStock} />
-          </section>
-          <WhatChanged onOpen={showStock} />
-          <NextDecision />
-          <MarketStrip />
-          <section className="orders">
-            <h2>Short trades: 1 to 5 days</h2>
-            <TradesPanel onOpen={showStock} />
-          </section>
-          <DayTradingPage />
-          <details className="fold">
-            <summary>Every stock, best to worst for the next month</summary>
-            <IdeasPanel onOpen={showStock} />
-            <Screener onOpen={showStock} />
-          </details>
-        </>
-      )}
-
-      {!stock && page === "My portfolio" && (
-        <>
-          <HoldingsToday onOpen={showStock} />
-          <PortfolioPage />
-          <details className="fold">
-            <summary>Journal and weekly review</summary>
-            <JournalPage />
-          </details>
-          <details className="fold">
-            <summary>Alerts</summary>
-            <AlertsPage />
-          </details>
-        </>
-      )}
-
-      {!stock && page === "How reliable?" && (
-        <>
-          <SourceChecks />
-          <DecisionTests />
-          <ReliabilityPage />
-          {backtest && <BacktestView backtest={backtest} />}
-          {status && (
-            <details className="fold">
-              <summary>Is everything running?</summary>
-              <dl>
-                <div>
-                  <dt>Database</dt>
-                  <dd>
-                    <State state={status.database.state} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Database schema</dt>
-                  <dd>
-                    <State state={status.migrations.state} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Scheduled updates</dt>
-                  <dd>
-                    <State state={status.worker.state} />
-                  </dd>
-                </div>
-              </dl>
-            </details>
-          )}
-          {feeds.length > 0 && (
-            <details className="fold">
-              <summary>Data feeds</summary>
-              <dl>
-                {feeds.map((feed) => (
-                  <div key={feed.feed}>
-                    <dt>
-                      {feed.feed} · {feed.source}
-                      <small>
-                        Last run {when(feed.last_run)}
-                        {feed.message ? `: ${feed.message}` : ""}
-                      </small>
-                    </dt>
-                    <dd>
-                      <State state={feed.status} />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </details>
-          )}
-        </>
-      )}
-
-      {!stock && page === "Data" && (
-        <>
-          <MarketCheck />
-          <BigPicture />
-          <MarketMood />
-          <CongressTrades />
-          {economic.length > 0 && (
-            <details className="fold">
-              <summary>Economic data</summary>
-              <dl>
-                {economic.map((row) => (
-                  <div key={row.series_id}>
-                    <dt>
-                      {row.series_id} · {row.observation_date}
-                      <small>
-                        {row.source}, retrieved {when(row.retrieved_at)}
-                      </small>
-                    </dt>
-                    <dd>{row.value ?? NOT_VERIFIED}</dd>
-                  </div>
-                ))}
-              </dl>
-            </details>
-          )}
-        </>
-      )}
-      <p>
-        <small>
-          This product uses the FRED® API but is not endorsed or certified by the Federal Reserve
-          Bank of St. Louis.
-        </small>
-      </p>
-    </main>
+          <a href="#data">Data</a>
+        </div>
+      </nav>
+      <main id="top">
+        {failed && <p className="error">{NOT_VERIFIED}: the results didn't load. Check that the API is running.</p>}
+        {!data && !failed && <p className="muted loading">Loading results…</p>}
+        {data && data.length === 0 && <p className="muted">No study has run yet. Results appear after the weekly run.</p>}
+        {data && data.length > 0 && <Ledger results={data} />}
+        {data && STUDIES.map((info) => <Study key={info.key} info={info} rows={byStudy.get(info.key)} />)}
+        <DataStatus />
+      </main>
+    </>
   );
 }
+

@@ -43,16 +43,12 @@ def test_repeats_go_and_corrections_stay(engine):
         setup_rows(conn)
     dry = retention.run(engine, dry=True)
     assert dry["Repeated price bars"] == 1
-    assert dry["Company figures repeated in later reports"] == 1
     assert count(engine, "SELECT count(*) FROM price_bars") == 3  # A dry run changes nothing.
     retention.run(engine)
     assert count(engine, "SELECT count(*) FROM price_bars") == 2
     assert count(engine, "SELECT array_agg(close ORDER BY id)::text FROM price_bars") == "{10,10.5}"
-    # The first report and the restatement stay; the identical repeat goes.
-    assert (
-        count(engine, "SELECT array_agg(accession_number ORDER BY id)::text FROM company_facts")
-        == "{a1,a3}"
-    )
+    # Company figures are no longer cleaned: that table is an untouched archive now.
+    assert count(engine, "SELECT count(*) FROM company_facts") == 3
 
 
 def test_the_guard_is_back_after_cleaning(engine):
