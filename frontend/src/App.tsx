@@ -263,9 +263,9 @@ function Study({ info, rows, mode, setMode }: {
 function DataScreen({ coverage, feeds, failed }: { coverage: Coverage | null; feeds: Feed[] | null; failed: boolean }) {
   const tiles: [string, string | null | undefined][] = [
     ["Stocks", coverage?.stocks.toLocaleString("en-GB")],
+    ["With an industry code (needed for pairs)", coverage?.with_industry?.toLocaleString("en-GB")],
     ["Daily price rows", coverage?.price_rows.toLocaleString("en-GB")],
-    ["First day", coverage?.first_day],
-    ["Last day", coverage?.last_day],
+    ["Price history", coverage?.first_day && coverage?.last_day ? `${coverage.first_day} to ${coverage.last_day}` : null],
   ];
   return (
     <div className="panels" id="data">

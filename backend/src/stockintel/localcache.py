@@ -14,11 +14,6 @@ from sqlalchemy import Engine, text
 COLUMNS = {
     "price_bars": """id, security_id, market_date, open, high, low, close, volume, div_cash,
                      split_factor""",
-    "company_facts": """id, security_id, tag, unit, period_start, period_end, value,
-                        accession_number, fiscal_period, form, filed, document_url""",
-    "insider_transactions": """id, security_id, filed, code, shares, price, owner,
-                               planned_sale""",
-    "fund_holdings": "id, security_id, fund_cik, period, filed, shares",
 }
 
 
@@ -61,12 +56,4 @@ def daily_bars(engine: Engine) -> dict[int, pd.DataFrame]:
     return {
         security_id: group[columns].sort_values("market_date").reset_index(drop=True)
         for security_id, group in latest.groupby("security_id")
-    }
-
-
-def facts_by_security(engine: Engine) -> dict[int, pd.DataFrame]:
-    facts = load(engine, "company_facts")
-    return {
-        security_id: group.drop(columns=["id", "security_id"]).reset_index(drop=True)
-        for security_id, group in facts.groupby("security_id")
     }

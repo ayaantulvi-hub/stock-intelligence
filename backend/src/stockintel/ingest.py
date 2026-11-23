@@ -129,12 +129,45 @@ def add_issue(conn: Connection, feed: str, kind: str, ticker, day, detail: str) 
     )
 
 
+INDUSTRY_LIMIT = 50  # SEC lookups a run for stocks still missing an industry code.
+
+
+def _fill_industries(engine: Engine, provider: FilingsProvider, run: "Run") -> None:
+    """Add the SEC industry code for stocks that lack one. Pairs trading only pairs stocks in
+    the same industry, so a stock without a code would silently drop out of it."""
+    with engine.connect() as conn:
+        missing = conn.execute(
+            text(
+                """SELECT id, ticker, cik FROM securities WHERE sic IS NULL AND cik IS NOT NULL
+                   ORDER BY universe_rank LIMIT :limit"""
+            ),
+            {"limit": INDUSTRY_LIMIT},
+        ).all()
+    for row in missing:
+        run.attempted += 1
+        try:
+            sic = provider.industry(row.cik)
+        except FeedError as exc:
+            run.errors.append(f"{row.ticker}: {exc}")
+            continue
+        run.ok += 1
+        if sic is None:  # A fact about the company, not a failure. Coverage reports the count.
+            continue
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE securities SET sic = :sic WHERE id = :id"), {"sic": sic, "id": row.id}
+            )
+        run.added += 1
+
+
 def run_universe(engine: Engine, provider: FilingsProvider, size: int) -> str:
-    """Pick the stock list once. It stays fixed, because Tiingo's free plan caps symbols."""
+    """Pick the stock list once. It stays fixed, because Tiingo's free plan caps symbols.
+    Each later run only fills in missing industry codes."""
     run = Run(engine, "universe")
     with engine.connect() as conn:
         existing = conn.execute(text("SELECT count(*) FROM securities")).scalar()
     if existing:
+        _fill_industries(engine, provider, run)
         return run.finish()
     try:
         listings, _ = provider.listings()
@@ -160,6 +193,7 @@ def run_universe(engine: Engine, provider: FilingsProvider, size: int) -> str:
                 {**listing.__dict__, "rank": rank},
             )
     run.attempted = run.ok = run.added = len(chosen)
+    _fill_industries(engine, provider, run)
     return run.finish()
 
 
@@ -226,8 +260,7 @@ def run_prices(
                                            WHERE p.security_id = s.id) AS last_bar
                    FROM securities s
                    WHERE s.last_price_fetch_at IS NULL OR s.last_price_fetch_at < :due
-                   ORDER BY EXISTS (SELECT 1 FROM positions h WHERE h.security_id = s.id) DESC,
-                     s.last_price_fetch_at NULLS FIRST, s.universe_rank LIMIT :limit"""
+                   ORDER BY s.last_price_fetch_at NULLS FIRST, s.universe_rank LIMIT :limit"""
             ),
             {"due": due_before, "limit": limit},
         ).all()

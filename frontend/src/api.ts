@@ -43,6 +43,7 @@ export type Feed = {
 
 export type Coverage = {
   stocks: number;
+  with_industry?: number;
   price_rows: number;
   first_day: string | null;
   last_day: string | null;

@@ -11,7 +11,6 @@ from stockintel import market
 from stockintel.ingest import run_economic, run_prices, run_universe
 from stockintel.providers.base import (
     FeedError,
-    Filing,
     Listing,
     Observation,
     PriceBar,
@@ -54,24 +53,17 @@ def bar(day, close=100.0, **changes):
 class FixtureSec:
     def __init__(self, listings=None, error=None):
         self._listings, self.error = listings, error
+        self.industries = {}  # cik -> SIC code; a missing cik means the SEC lists none.
 
     def listings(self):
         if self.error:
             raise self.error
         return self._listings, provenance("SEC EDGAR")
 
-    def filings(self, cik):
+    def industry(self, cik):
         if self.error:
             raise self.error
-        filing = Filing(
-            "0000000001-26-000001",
-            "10-Q",
-            date(2026, 5, 1),
-            date(2026, 3, 31),
-            None,
-            "https://fixture.test/doc.htm",
-        )
-        return [filing], provenance("SEC EDGAR", "https://fixture.test/submissions")
+        return self.industries.get(cik)
 
 
 class FixturePrices:
@@ -365,24 +357,24 @@ def test_malformed_response_raises():
         TiingoProvider("x", bad).daily_bars("AAA", date(2026, 1, 1), date(2026, 1, 2))
 
 
-def test_sec_parses_listed_forms_only():
-    payload = {
-        "filings": {
-            "recent": {
-                "accessionNumber": ["0000320193-26-000001", "0000320193-26-000002"],
-                "form": ["10-K", "4"],
-                "filingDate": ["2026-01-30", "2026-01-31"],
-                "reportDate": ["2025-12-31", ""],
-                "acceptanceDateTime": ["2026-01-30T16:30:00.000Z", ""],
-                "primaryDocument": ["a.htm", "b.xml"],
-            }
-        }
-    }
-    rows, _ = SecProvider("a@b.test", client(lambda r: httpx.Response(200, json=payload))).filings(
-        320193
-    )
-    assert [row.form for row in rows] == ["10-K"]
-    assert rows[0].document_url.endswith("/320193/000032019326000001/a.htm")
+def test_sec_reads_the_industry_code():
+    payload = {"sic": "3571", "name": "Fixture Inc"}
+    sec = SecProvider("a@b.test", client(lambda r: httpx.Response(200, json=payload)))
+    assert sec.industry(320193) == 3571
+    empty = SecProvider("a@b.test", client(lambda r: httpx.Response(200, json={"sic": ""})))
+    assert empty.industry(320193) is None
+
+
+def test_missing_industry_codes_are_filled_so_pairs_can_use_the_stock(stocks):
+    with stocks.begin() as conn:
+        rows = conn.execute(text("SELECT ticker, cik FROM securities ORDER BY universe_rank")).all()
+    sec = FixtureSec()
+    sec.industries = {rows[0].cik: 3571}
+    assert run_universe(stocks, sec, 2) == "ok"
+    with stocks.connect() as conn:
+        codes = dict(conn.execute(text("SELECT ticker, sic FROM securities")).all())
+    assert codes[rows[0].ticker] == 3571
+    assert codes[rows[1].ticker] is None  # The SEC lists none: left empty, never guessed.
 
 
 def long_bars(count):
@@ -403,20 +395,7 @@ def test_missing_record_raises_not_available():
 
     provider = SecProvider("a@b.test", client(lambda r: httpx.Response(404)))
     with pytest.raises(NotAvailable):
-        provider.company_facts(1)
-
-
-def test_owned_stocks_get_prices_first(stocks):
-    with stocks.begin() as conn:
-        conn.execute(
-            text(
-                """INSERT INTO positions (security_id, shares, buy_price)
-                   SELECT id, 1, 1 FROM securities WHERE ticker = 'BBB'"""
-            )
-        )
-    provider = FixturePrices()
-    run_prices(stocks, provider, START, 1, NOW)
-    assert [call[0] for call in provider.calls] == ["BBB"]
+        provider.industry(1)
 
 
 class FixtureAlpaca:

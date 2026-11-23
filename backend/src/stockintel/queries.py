@@ -50,8 +50,10 @@ def quant_results(engine: Engine) -> list[dict]:
 
 
 def coverage(engine: Engine) -> dict:
-    """How much data the studies stand on: stocks, price rows and the date range."""
+    """How much data the studies stand on: stocks, how many have an industry code (pairs trading
+    needs one), price rows and the date range."""
     query = """SELECT (SELECT count(*) FROM securities) AS stocks,
+                 (SELECT count(*) FROM securities WHERE sic IS NOT NULL) AS with_industry,
                  (SELECT count(*) FROM price_bars) AS price_rows,
                  (SELECT min(market_date) FROM price_bars) AS first_day,
                  (SELECT max(market_date) FROM price_bars) AS last_day"""
