@@ -8,6 +8,7 @@ const BANNER = `const b=document.createElement('div');b.textContent='SYNTHETIC D
   const shots = [
     ['quant-lab-overview.png', '#overview'],
     ['quant-lab-pairs.png', '#pairs_trading'],
+    ['quant-lab-century.png', '#market_century'],
     ['quant-lab-var-quant.png', '#value_at_risk', 'Quant detail'],
   ];
   for (const [file, hash, button] of shots) {

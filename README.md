@@ -2,14 +2,20 @@
 
 [![Tests](https://github.com/ayaantulvi-hub/stock-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/ayaantulvi-hub/stock-intelligence/actions/workflows/ci.yml)
 
-Five classic quantitative-finance ideas, built from first principles in Python and tested
-honestly on daily prices for about 480 large US companies, 2010–2026:
+Classic quantitative-finance ideas, built from first principles in Python and tested the way
+a sceptical reviewer would: on daily prices for 480 large US companies (2010–2026), and on the
+whole US market's daily returns since 1926. On a hand-written backtest engine, the lab runs:
 
-- a hand-written backtest engine;
-- volatility targeting;
-- pairs trading (statistical arbitrage);
-- Monte Carlo Value at Risk;
-- a market panic detector.
+- volatility targeting (four published versions) and a 100-year test of it;
+- pairs trading (statistical arbitrage), momentum and low-volatility stocks;
+- trend following;
+- Monte Carlo Value at Risk (five models, including GARCH and filtered historical simulation);
+- a market panic detector built from eigenvalues of the correlation matrix.
+
+**Headline: 20 tests, 1 passed** (EWMA Value at Risk). The most interesting finding is a near
+miss: with 100 years of data instead of 16, the evidence for volatility targeting more than
+doubles (alpha t-score up to 2.55), but it still falls short of the bar of 3 and fails the
+held-back years.
 
 Every idea faces the same test:
 - it is judged on data it was not designed on;
@@ -35,6 +41,7 @@ flowchart LR
     TII["Tiingo<br/>daily prices"]
     ALP["Alpaca<br/>latest closes"]
     FRED["FRED<br/>Fed funds rate"]
+    KF["French Data Library<br/>US market since 1926"]
   end
   P["Providers<br/>(one per source)"]
   V["Validation<br/>gaps, outliers, stale data"]
@@ -95,6 +102,10 @@ From the stored run of 23 November 2026, with details and sources in
 | Volatility targeting, monthly (two versions) | No reliable edge | Same Sharpe (about 0.91), worst fall cut from −38.8% to about −27% |
 | Volatility targeting, conditional | No reliable edge | Slightly worse than holding over 2015–2026 |
 | Volatility targeting, daily EWMA | No reliable edge | Best version: worst fall −21.8% against −38.8%, but alpha t only 1.12 |
+| Volatility targeting, 100 years (four versions) | No reliable edge | Alpha t 1.53 to 2.55, short of 3; held-back years negative for three of four |
+| Trend following, 100 years | No reliable edge | Higher Sharpe (0.49 vs 0.45) and worst fall −64% vs −85%, but less return |
+| Momentum (months t-12 to t-2) | No reliable edge | Sharpe −0.05 after costs |
+| Low volatility (calmest 10%) | No reliable edge | Sharpe 0.67 vs 0.93, alpha t −0.19 |
 | Pairs trading, distance | No reliable edge | Sharpe −0.11 after costs |
 | Pairs trading, cointegration | No reliable edge | Sharpe 0.22 ± 0.25, and a −43.6% fall |
 | Value at Risk, historical | Rejected | Right number of breaches, but they bunch together |

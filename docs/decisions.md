@@ -371,7 +371,7 @@ needs at least 30 tested cases that beat the baseline.
 - **Improved volatility models:** two Value at Risk models (filtered historical simulation and
   GJR-GARCH with Student-t shocks) and two targeting rules (conditional, and daily EWMA with a
   past-only target). Each uses its paper's settings, fixed before running, and counts as a new
-  test. None passed; the totals are now 13 tests, 1 passed.
+  test. None passed.
 - **Data fixes:** a likely split refused from Alpaca no longer fails the hourly job; missing
   industry codes are filled from the SEC, so no stock silently drops out of pairs trading.
 - **Dependencies:** `arch` is pinned to 8.0.0, because 7.2.0 doesn't work with pandas 3 and
@@ -379,3 +379,18 @@ needs at least 30 tested cases that beat the baseline.
 - **Dashboard:** terminal-style layout, one study per screen, every figure in its own panel,
   with a plain-English and a quant-detail explanation. Every number comes from stored results,
   and result-dependent sentences are chosen by the verdict.
+
+## Longer history and two more studies (23 November 2026)
+
+- **Why:** most failures came from too little data to prove a small edge, not from bugs. At the
+  strength daily EWMA targeting showed on 16 years, t = 3 would need about 100 years.
+- **100-year study:** the same volatility rules and trend rule, unchanged, on daily US market
+  excess returns since 1926 from the Kenneth R. French Data Library (trust rank 2: built from
+  licensed CRSP data). Stored append-only with source and retrieval time; only summaries are
+  published, because the library shows a copyright notice and no licence.
+- **Momentum and low volatility:** published definitions (Fama-French; Blitz & van Vliet),
+  with stated differences (no size split, equal weights, our costs).
+- **Crash protection:** added after the results were seen, so it is descriptive and never
+  counts toward the score.
+- **Not done, on purpose:** lowering the t ≥ 3 bar or changing settings after seeing results.
+- **Totals:** 20 tests, 1 passed.

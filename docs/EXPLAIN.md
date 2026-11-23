@@ -5,14 +5,15 @@ Short answers to learn and then say in your own words. Numbers come from the sto
 [RESEARCH.md](RESEARCH.md) the two written-up findings.
 
 **1. What does it do, in one sentence?**
-It takes five well-known quant ideas, builds each from scratch in Python, and tests them on
-16 years of daily prices for 480 large US companies, after costs, on years they weren't
-designed on, with a t-score of 3 to pass.
+It takes well-known quant ideas, builds each from scratch in Python, and tests them on 16
+years of daily prices for 480 large US companies and on 100 years of US market returns,
+after costs, on years they weren't designed on, with a t-score of 3 to pass.
 
 **2. What did you find?**
-13 tests, 1 passed: the EWMA Value at Risk model. Every trading idea, including trend
-following, pairs trading and four kinds of volatility targeting, showed no reliable edge after
-costs. That is the expected result for well-known, free-data ideas, and the project reports it
+20 tests, 1 passed: the EWMA Value at Risk model. Every trading idea, including trend
+following, pairs trading, momentum, low volatility and volatility targeting, showed no reliable
+edge after costs. The closest miss: on 100 years of data, volatility targeting reached an alpha
+t-score of 2.55. That is the expected result for well-known, free-data ideas, and the project reports it
 rather than hiding it.
 
 **3. What is look-ahead bias, and how do you stop it?**
@@ -78,12 +79,14 @@ pass too, and it didn't (t = 0.31).
 
 **13. Volatility targeting cut the worst fall from −38.8% to −21.8%. Isn't that a success?**
 It's real, but it's close to mechanical: volatility persists, so exposure is already low when
-a sell-off deepens. The question Moreira and Muir ask is whether it earns more for its risk,
+a sell-off deepens. On 16 years the best alpha t-score was 1.12. At that strength you'd need
+about 100 years of data to reach 3, so I reran the same rules on US market returns since
+1926: the t-score rose to 2.55, still short of 3, and the last two years were negative. The question Moreira and Muir ask is whether it earns more for its risk,
 measured by alpha against just holding the market. The best version's alpha t-score was 1.12,
 far from 3. I also used only past data to set the target. Cederburg and colleagues found that,
 done in real time like this, volatility management often harms performance.
 
-**14. 12 of your 13 tests failed. Isn't the project a failure?**
+**14. 19 of your 20 tests failed. Isn't the project a failure?**
 No. The aim was to build a test strict enough to tell real effects from luck, and to show it
 working. A tool that only reports wins isn't evidence of anything. The one pass also shows the test
 isn't simply rejecting everything.
@@ -106,10 +109,10 @@ loss is exceeded but not by how much.
 
 Each claim below is traceable to the stored results.
 
-- Built a quantitative research lab in Python that tests five classic strategies on 16 years
-  of daily prices for 480 US companies, with walk-forward rules, trading costs, Newey-West
-  t-scores and a t ≥ 3 bar set in advance.
-- Found that only 1 of 13 tests passed: an EWMA Value at Risk model. Two standard models got
+- Built a quantitative research lab in Python that tests eight classic strategies on 16 years
+  of daily prices for 480 US companies and 100 years of US market returns, with walk-forward
+  rules, trading costs, Newey-West t-scores and a t ≥ 3 bar set in advance.
+- Found that only 1 of 20 tests passed: an EWMA Value at Risk model. Two standard models got
   the number of bad days right but were rejected because breaches clustered, with a 16.6%
   chance of a breach the day after one, against 5% expected.
 - Engineered automatic data collection from the SEC, the Federal Reserve and licensed price
@@ -118,5 +121,5 @@ Each claim below is traceable to the stored results.
 
 **One line for a personal statement:**
 "I built a lab to test well-known trading strategies the way a sceptical reviewer would, and
-the most useful result was a failure: 12 of 13 tests found no reliable edge, which taught me
+the most useful result was a failure: 19 of 20 tests found no reliable edge, which taught me
 how easily patterns that look real turn out to be luck."

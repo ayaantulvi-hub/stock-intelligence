@@ -1,7 +1,8 @@
 # Quant lab
 
-Five classic quantitative ideas, each built from first principles on daily prices for about
-480 large US stocks (2010–2026), and tested the same way. Results below are from the stored
+Classic quantitative ideas, each built from first principles on daily prices for about 480
+large US stocks (2010–2026), plus a 100-year test on the US market since 1926, all tested the
+same way. Results below are from the stored
 run of 23 November 2026, printed by
 [`quant/run.py`](../backend/src/stockintel/quant/run.py) and shown on the dashboard's Quant
 lab page.
@@ -177,3 +178,52 @@ its one-year average.
   Searching over many settings would only find a lucky one.
 - **Data terms:** prices come from Tiingo, whose free terms don't allow redistribution, so
   only summary statistics are published here.
+
+### 6. 100 years of the US market
+
+On 16 years, a small edge can't reach t = 3: at the strength daily EWMA targeting showed, it
+would need about 100 years. So the four targeting rules and the 50/200 trend rule were rerun,
+unchanged, on the daily US market excess return since July 1926 from the
+[Kenneth R. French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html)
+(value-weighted NYSE, AMEX and NASDAQ firms, minus the one-month T-bill). The library shows a
+copyright notice and no licence, so only summary results are published.
+
+| Version | Alpha t (choice years) | Sharpe | Holding | Worst fall | Holding |
+|---|---|---|---|---|---|
+| Daily EWMA | 2.55 | 0.52 | 0.45 | −69.6% | −84.9% |
+| Volatility target | 2.44 | 0.52 | 0.45 | −74.2% | −84.9% |
+| Variance-managed | 2.24 | 0.50 | 0.45 | −82.7% | −84.9% |
+| Conditional (from 1931) | 1.53 | 0.51 | 0.48 | −57.6% | −67.5% |
+| Trend 50/200 (gain over holding) | −1.24 | 0.49 | 0.45 | −63.7% | −84.9% |
+
+**No reliable edge, but much stronger evidence.** Every targeting rule's t-score at least
+doubled with the longer history, and every one had a higher Sharpe ratio and a smaller worst
+fall than holding. None reached 3, and three of the four lost to holding over 2025–26. Moreira
+and Muir report a positive in-sample market alpha on similar data with a full-sample scale;
+here every scale uses only past data, which Cederburg et al. (2020) found weakens real-time
+results. The honest reading: probably a small real effect, not proven by this test.
+
+### 7. Momentum
+
+Long the 30% of stocks with the best return over months t−12 to t−2, short the worst 30%,
+equal weight, monthly
+([Fama-French definition](https://mba.tuck.dartmouth.edu/pages/faculty/Ken.French/Data_Library/det_mom_factor.html);
+no size split, since every stock here is large, and equal rather than value weights). Judged
+against zero after costs and borrowing: **Sharpe −0.05, t = −0.15, worst fall −47.4%. No
+reliable edge.**
+
+### 8. Low volatility
+
+Hold the calmest 10% by the volatility of 156 weekly returns, equal weight, monthly
+([Blitz & van Vliet, 2007](https://core.ac.uk/download/18510017.pdf)), judged by alpha
+against all stocks above the Fed funds rate: **Sharpe 0.67 against 0.93, worst fall −34.9%
+against −38.8%, alpha t = −0.19. No reliable edge** over 2013–2026, a period in which the
+market as a whole rose strongly.
+
+### Crash protection (added after the results, not part of the score)
+
+For the strategies meant to soften crashes (trend, volatility targeting and low volatility,
+including the 100-year versions), the dashboard shows each one's share of the market's fall in
+its worst 10% of months and its share of the gain in the best 10%, from the stored monthly
+series. It describes; it never changes a verdict, because the measure was chosen after the
+results were seen.

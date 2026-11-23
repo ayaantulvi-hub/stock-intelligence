@@ -7,6 +7,7 @@ image.
 
 - [Overview](screenshots/quant-lab-overview.png)
 - [A study: pairs trading](screenshots/quant-lab-pairs.png)
+- [100 years of the market, on a log scale](screenshots/quant-lab-century.png)
 - [Value at Risk, with the quant detail open](screenshots/quant-lab-var-quant.png)
 
 On random data there is nothing real to find, so every trading study reports "No reliable
@@ -35,12 +36,12 @@ piece of information in its own labelled panel.
 Record it on the demo data, so no licensed prices appear. The times are a guide.
 
 **0:00 – 0:12. The point.**
-"This is my Quant Lab. I took five well-known ideas from quant finance and built each from
+"This is my Quant Lab. I took well-known ideas from quant finance and built each from
 scratch in Python, then tested them the way a sceptical reviewer would: on years they weren't
 designed on, after trading costs, with a t-score of 3 to pass."
 
 **0:12 – 0:25. The score.**
-"The headline is counted from the stored results. On my real data, one of thirteen tests
+"The headline is counted from the stored results. On my real data, one of twenty tests
 passed. Every failure is listed here too, because a tool that only shows wins is not
 evidence of anything."
 
