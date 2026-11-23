@@ -15,8 +15,8 @@ from sqlalchemy.engine import Engine
 
 from stockintel.db import get_engine
 from stockintel.quant import engine as bt
-from stockintel.quant import studies
-from stockintel.quant.data import panels
+from stockintel.quant import studies, vol
+from stockintel.quant.data import panels, risk_free
 from stockintel.quant.evaluate import judge
 
 
@@ -63,7 +63,31 @@ def ma_crossover(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> No
     store(engine, "ma_crossover", "50/200", judge(strategy.net, baseline.net), settings)
 
 
-STUDIES = {"ma_crossover": ma_crossover}
+def vol_targeting(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    returns = prices.pct_change(fill_method=None)
+    market = bt.run(studies.equal_weight(mask), returns).net
+    rf = risk_free(engine, market.index)
+    excess = (market - rf).dropna()
+    for kind, label in (
+        ("variance", "variance-managed (Moreira-Muir)"),
+        ("volatility", "volatility target"),
+    ):
+        strategy, held = vol.managed(excess, kind)
+        baseline = excess.reindex(strategy.index)
+        result = judge(strategy, baseline, by="alpha")
+        result["average_exposure"] = float(held.mean())
+        result["max_exposure"] = float(held.max())
+        settings = {
+            "window_days": vol.WINDOW,
+            "max_leverage": vol.MAX_LEVERAGE,
+            "rebalance": "monthly",
+            "cost_bps": bt.COST_BPS,
+            "returns": "excess over DFF",
+        }
+        store(engine, "vol_targeting", label, result, settings)
+
+
+STUDIES = {"ma_crossover": ma_crossover, "vol_targeting": vol_targeting}
 MIN_STOCKS = 50
 
 

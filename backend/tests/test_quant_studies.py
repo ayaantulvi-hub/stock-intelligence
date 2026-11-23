@@ -62,3 +62,32 @@ def test_hold_out_is_the_last_two_calendar_years():
     dates = pd.bdate_range("2020-01-01", "2026-06-30")
     early, late = evaluate.split(pd.Series(0.0, index=dates))
     assert early.index.max() < pd.Timestamp("2025-01-01") <= late.index.min()
+
+
+def test_volatility_weights_are_monthly_capped_and_use_only_the_past():
+    from stockintel.quant import vol
+
+    rng = np.random.default_rng(2)
+    dates = pd.bdate_range("2010-01-01", "2016-12-31")
+    calm, wild = rng.normal(0, 0.005, len(dates)), rng.normal(0, 0.03, len(dates))
+    excess = pd.Series(np.where(dates.year % 2 == 0, calm, wild), index=dates)
+    w = vol.weights(excess, "variance")
+    assert w.max() <= vol.MAX_LEVERAGE
+    months = w.dropna().groupby(w.dropna().index.to_period("M")).nunique()
+    assert (months == 1).all()  # One decision a month.
+    assert w["2014-06"].mean() > w["2015-06"].mean()  # More exposure in calm years.
+    # Changing everything after a date leaves earlier weights untouched.
+    cut = dates.get_loc(pd.Timestamp("2014-03-03"))
+    changed = excess.copy()
+    changed.iloc[cut + 1 :] *= 5
+    pd.testing.assert_series_equal(
+        w.iloc[: cut + 1], vol.weights(changed, "variance").iloc[: cut + 1]
+    )
+
+
+def test_alpha_verdict_credits_lower_risk_not_just_higher_return():
+    rng = np.random.default_rng(9)
+    dates = pd.bdate_range("2012-01-01", "2026-11-20")
+    base = pd.Series(rng.normal(0.0003, 0.01, len(dates)), index=dates)
+    scaled = 0.5 * base  # Half the risk, half the return: no alpha.
+    assert evaluate.judge(scaled, base, by="alpha")["verdict"] == "No reliable edge"

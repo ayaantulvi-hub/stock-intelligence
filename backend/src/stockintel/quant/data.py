@@ -37,3 +37,19 @@ def panels(engine: Engine, min_days: int = 500) -> tuple[pd.DataFrame, pd.DataFr
         # A size reported for a year is only known from the following April (as in backtest.py).
         mask[ticker] = eligible_days(dates, allowed) & prices[ticker].notna().to_numpy()
     return prices, mask
+
+
+def risk_free(engine: Engine, index: pd.DatetimeIndex) -> pd.Series:
+    """Daily risk-free return from the effective Fed funds rate (FRED DFF), known the next day.
+    Missing days carry the last known rate forward; a gap before the first reading stays NaN."""
+    query = """SELECT DISTINCT ON (observation_date) observation_date, value
+               FROM economic_observations WHERE series_id = 'DFF' AND value IS NOT NULL
+               ORDER BY observation_date, realtime_start DESC"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query)).all()
+    if not rows:
+        return pd.Series(float("nan"), index=index)
+    rate = pd.Series([r[1] for r in rows], index=pd.to_datetime([r[0] for r in rows]))
+    rate = rate.shift(1, freq="D")  # Published the next day.
+    daily = rate.reindex(rate.index.union(index)).ffill().reindex(index)
+    return daily / 100 / 252
