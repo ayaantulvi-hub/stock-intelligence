@@ -1,6 +1,11 @@
 name: Backtest
 on:
   workflow_dispatch:
+    inputs:
+      quant_only:
+        description: "Run only the quant lab studies"
+        type: boolean
+        default: false
   schedule:
     - cron: "40 12 * * 6"
 permissions:
@@ -29,15 +34,25 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --no-dev
       - run: uv run --no-dev alembic upgrade head
-      - run: uv run --no-dev python -m stockintel.backtest
-      - run: uv run --no-dev python -m stockintel.forecast evaluate
-      - run: uv run --no-dev python -m stockintel.compare
-      - run: uv run --no-dev python -m stockintel.regime
-      - run: uv run --no-dev python -m stockintel.stops
-      - run: uv run --no-dev python -m stockintel.candles
-      - run: uv run --no-dev python -m stockintel.overrides
+      - if: ${{ !inputs.quant_only }}
+        run: uv run --no-dev python -m stockintel.backtest
+      - if: ${{ !inputs.quant_only }}
+        run: uv run --no-dev python -m stockintel.forecast evaluate
+      - if: ${{ !inputs.quant_only }}
+        run: uv run --no-dev python -m stockintel.compare
+      - if: ${{ !inputs.quant_only }}
+        run: uv run --no-dev python -m stockintel.regime
+      - if: ${{ !inputs.quant_only }}
+        run: uv run --no-dev python -m stockintel.stops
+      - if: ${{ !inputs.quant_only }}
+        run: uv run --no-dev python -m stockintel.candles
+      - if: ${{ !inputs.quant_only }}
+        run: uv run --no-dev python -m stockintel.overrides
+      - name: Quant lab studies
+        run: uv run --no-dev python -m stockintel.quant.run
       # Weekly: delete what no longer feeds decisions, then give the space back.
-      - run: uv run --no-dev python -m stockintel.retention
+      - if: ${{ !inputs.quant_only }}
+        run: uv run --no-dev python -m stockintel.retention
       # Saved even after a failure, so the next job doesn't download everything again.
       - uses: actions/cache/save@v4
         if: ${{ always() }}
