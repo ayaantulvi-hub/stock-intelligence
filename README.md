@@ -22,6 +22,7 @@ real prices or holdings are shown.
 - [Run it locally](#run-it-locally)
 - [Run the tests](#run-the-tests)
 - [How it runs online](#how-it-runs-online)
+- [Explaining the project](docs/EXPLAIN.md)
 - [Data and licensing](#data-and-licensing)
 
 ## Architecture
