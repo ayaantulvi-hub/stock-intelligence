@@ -35,9 +35,9 @@ QUERIES = {
     "factors": """SELECT factor, spread, t_stat, dates FROM factor_tests
         WHERE tested_at > (SELECT max(tested_at) FROM factor_tests) - interval '1 day'
         ORDER BY abs(t_stat) DESC""",
-    "day_trading": """SELECT DISTINCT ON (source) source, data_from, data_to, trades, mean_r,
+    "day_trading": """SELECT DISTINCT ON (strategy) strategy, source, data_from, data_to, trades, mean_r,
         win_rate, t_stat, baseline_mean_r, verdict, run_at::date FROM day_trade_tests
-        ORDER BY source, run_at DESC""",
+        ORDER BY strategy, run_at DESC""",
     "ledger": """SELECT min(created_at)::date AS first_forecast, max(target_session) AS latest,
         count(*) AS forecasts, count(DISTINCT target_session) AS sessions FROM forecasts""",
     "scores": """SELECT count(*) AS scored, avg(in_range::int) AS in_range_share FROM forecast_scores""",
