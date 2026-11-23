@@ -236,7 +236,6 @@ function volTargeting(rows: Result[]): Both {
     ["Conditional", find(rows, "conditional (Bongaerts et al.)")],
     ["Daily EWMA", find(rows, "daily EWMA (Harvey et al.)")],
   ].filter(([, r]) => r) as [string, Result][];
-  const base = versions[0]?.[1];
   const smaller = versions.filter(([, r]) => lower(b(r)?.max_drawdown, s(r)?.max_drawdown)).map(([n]) => n);
   const best = [...versions].sort(([, x], [, y]) => ((m(y, "choice_t") as number) ?? -Infinity) - ((m(x, "choice_t") as number) ?? -Infinity))[0];
   return {
@@ -253,8 +252,7 @@ function volTargeting(rows: Result[]): Both {
           <li><strong>Daily EWMA:</strong> resize every day, giving the most recent days the most weight, so it reacts within days rather than weeks.</li>
         </ul>
         <p>
-          Just holding the market scored {fixed(b(base)?.sharpe)} for return per unit of risk, with a worst fall of{" "}
-          {pct(b(base)?.max_drawdown)}.{" "}
+          Each is compared with just holding the market over the same years.{" "}
           {smaller.length
             ? `${smaller.join(", ")} cut the worst fall.`
             : "None of them cut the worst fall."}{" "}
@@ -284,23 +282,25 @@ function volTargeting(rows: Result[]): Both {
           Test (Moreira & Muir): regress fᵗᵐ = α + β·f + ε, Newey-West t on α. A higher Sharpe alone isn't the test; α is.
         </p>
         <Table
-          head={["Version", "Sharpe ± SE", "Max drawdown", "α t (choice)", "t (hold-out)", "Avg exposure", "Max exposure"]}
-          rows={versions
-            .map(([n, x]) => [
-              n,
-              `${fixed(s(x)?.sharpe)} ± ${fixed(s(x)?.sharpe_se)}`,
-              pct(s(x)?.max_drawdown),
-              fixed(m(x, "choice_t")),
-              fixed(m(x, "holdout_t")),
-              `${fixed(m(x, "average_exposure"))}×`,
-              `${fixed(m(x, "max_exposure"))}×`,
-            ])
-            .concat(base ? [["Unmanaged", `${fixed(b(base)?.sharpe)} ± ${fixed(b(base)?.sharpe_se)}`, pct(b(base)?.max_drawdown), "—", "—", "1.00×", "1.00×"]] : [])}
+          head={["Version", "From", "Sharpe ± SE", "Holding, same years", "Max drawdown", "Holding, same years", "α t (choice)", "t (hold-out)", "Avg / max exposure"]}
+          rows={versions.map(([n, x]) => [
+            n,
+            x.period.slice(0, 4),
+            `${fixed(s(x)?.sharpe)} ± ${fixed(s(x)?.sharpe_se)}`,
+            fixed(b(x)?.sharpe),
+            pct(s(x)?.max_drawdown),
+            pct(b(x)?.max_drawdown),
+            fixed(m(x, "choice_t")),
+            fixed(m(x, "holdout_t")),
+            `${fixed(m(x, "average_exposure"))}× / ${fixed(m(x, "max_exposure"))}×`,
+          ])}
         />
         <p>
-          Reading: drawdown cuts are close to mechanical, because volatility persists and exposure is already low when a
-          sell-off deepens. α needs more: average returns must not rise in step with variance. Periods differ slightly by
-          version, because each needs its own warm-up.
+          {smaller.length
+            ? "Reading: drawdown cuts are close to mechanical, because volatility persists and exposure is already low when a sell-off deepens. "
+            : "Reading: "}
+          α needs more: average returns must not rise in step with variance. Each version is compared with holding over its
+          own years, because each needs a different warm-up.
         </p>
       </>
     ),

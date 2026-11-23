@@ -37,6 +37,8 @@ export const STUDIES: StudyInfo[] = [
     sources: [
       ["Kupiec (1995), Christoffersen (1998)", "https://it.mathworks.com/help/risk/overview-of-var-backtesting.html"],
       ["RiskMetrics decay 0.94", "https://metricgate.com/docs/ewma-volatility-riskmetrics/"],
+      ["Hull & White (1998)", "https://ideas.repec.org/a/rsk/journ4/2161156.html"],
+      ["Filtered historical simulation review (Bank of England)", "https://www.bankofengland.co.uk/-/media/boe/files/working-paper/2015/filtered-historical-simulation-value-at-risk-models-and-their-competitors.pdf"],
     ],
   },
   {
@@ -55,13 +57,16 @@ export const STUDIES: StudyInfo[] = [
     code: "VOL",
     title: "Volatility targeting",
     tagline: "Hold less when markets are jumpy. Does the risk-adjusted return improve?",
-    tags: ["Stats · realised variance", "Test · alpha, Newey-West"],
+    tags: ["Stats · realised variance, EWMA", "Test · alpha, Newey-West"],
     sources: [
       ["Moreira & Muir (2017)", "https://www.nber.org/papers/w22208"],
       [
         "DeMiguel et al. (2024)",
         "https://lbsresearch.london.edu/id/eprint/3716/1/The%20Journal%20of%20Finance%20-%202024%20-%20DeMIGUEL%20-%20A%20Multifactor%20Perspective%20on%20Volatility%E2%80%90Managed%20Portfolios.pdf",
       ],
+      ["Bongaerts, Kang & van Dijk (2020)", "https://ideas.repec.org/a/taf/ufajxx/v76y2020i4p54-71.html"],
+      ["Harvey et al. (2018)", "https://people.duke.edu/~charvey/Research/Published_Papers/P135_The_impact_of.pdf"],
+      ["Cederburg et al. (2020)", "https://www.lehigh.edu/~xuy219/research/COWY.pdf"],
     ],
   },
   {
@@ -230,19 +235,26 @@ export function view(key: string, rows: Result[]): View | null {
   if (key === "vol_targeting") {
     const managed = VOL_VARIANTS.map((v) => find(rows, v)).filter(Boolean) as Result[];
     const first = managed[0];
-    const bestSharpe = [...managed].sort((x, y) => (strategy(y)?.sharpe ?? -Infinity) - (strategy(x)?.sharpe ?? -Infinity))[0];
-    const shallowest = [...managed].sort((x, y) => (strategy(y)?.max_drawdown ?? -Infinity) - (strategy(x)?.max_drawdown ?? -Infinity))[0];
+    // Versions start on different dates, so each is ranked by its gain over holding the market
+    // during its own years, never by its raw level.
+    const gain = (r: Result, key: "sharpe" | "max_drawdown") => {
+      const a = strategy(r)?.[key];
+      const c = baseline(r)?.[key];
+      return typeof a === "number" && typeof c === "number" ? a - c : -Infinity;
+    };
+    const bestSharpe = [...managed].sort((x, y) => gain(y, "sharpe") - gain(x, "sharpe"))[0];
+    const shallowest = [...managed].sort((x, y) => gain(y, "max_drawdown") - gain(x, "max_drawdown"))[0];
     const bestT = [...managed].sort((x, y) => ((y.metrics.choice_t as number) ?? -Infinity) - ((x.metrics.choice_t as number) ?? -Infinity))[0];
     return {
       tiles: [
         {
           value: `${fixed(strategy(bestSharpe)?.sharpe)} vs ${fixed(baseline(bestSharpe)?.sharpe)}`,
-          label: `best Sharpe ratio: ${bestSharpe ? NAMES[bestSharpe.variant] : NOT_VERIFIED} vs unmanaged`,
+          label: `Sharpe ratio, biggest gain: ${bestSharpe ? NAMES[bestSharpe.variant] : NOT_VERIFIED} vs holding, same years`,
           tone: "blue",
         },
         {
           value: `${pct(strategy(shallowest)?.max_drawdown)} vs ${pct(baseline(shallowest)?.max_drawdown)}`,
-          label: `smallest worst fall: ${shallowest ? NAMES[shallowest.variant] : NOT_VERIFIED} vs unmanaged`,
+          label: `worst fall, biggest cut: ${shallowest ? NAMES[shallowest.variant] : NOT_VERIFIED} vs holding, same years`,
           tone: shallower(shallowest) ? "green" : "red",
         },
         {

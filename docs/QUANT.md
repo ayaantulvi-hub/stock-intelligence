@@ -51,6 +51,30 @@ rate ([Moreira & Muir, 2017](https://www.nber.org/papers/w22208)).
 ([DeMiguel et al., 2024](https://lbsresearch.london.edu/id/eprint/3716/1/The%20Journal%20of%20Finance%20-%202024%20-%20DeMIGUEL%20-%20A%20Multifactor%20Perspective%20on%20Volatility%E2%80%90Managed%20Portfolios.pdf)).
 It did cut the worst fall by about 12 points.
 
+**Two improved versions (added 23 November 2026).** Each follows a published method with its
+settings fixed before running, and each counts as a new test under the same rule:
+
+- **Conditional targeting** ([Bongaerts, Kang & van Dijk, 2020](https://ideas.repec.org/a/taf/ufajxx/v76y2020i4p54-71.html)):
+  resize only when last month's volatility is in the top or bottom fifth of all earlier
+  months; otherwise hold the market. The paper asks for 10 years of history; with 16 years of
+  data, 5 years is used, so this version starts in 2015.
+- **Daily EWMA targeting** ([Harvey et al., 2018](https://people.duke.edu/~charvey/Research/Published_Papers/P135_The_impact_of.pdf)):
+  volatility from daily returns with a 20-day half-life, rebalanced daily. Our change: the
+  paper sets its scale on the whole sample, which uses hindsight; here the target is the
+  average of past volatility only, the real-time standard argued for by
+  [Cederburg et al. (2020)](https://www.lehigh.edu/~xuy219/research/COWY.pdf).
+
+| | Conditional (from 2015) | Holding, same years | Daily EWMA (from 2011) | Holding, same years |
+|---|---|---|---|---|
+| Sharpe ratio | 0.84 | 0.85 | 0.96 | 0.93 |
+| Worst fall | −32.4% | −38.8% | −21.8% | −38.8% |
+| Alpha t-score | 0.39 | — | 1.12 | — |
+
+**Neither passes.** Daily EWMA targeting is the strongest version so far: it cut the worst
+fall from −38.8% to −21.8% with a slightly higher Sharpe ratio, but its alpha t-score is 1.12
+against the bar of 3, and its held-back years were slightly negative. Conditional targeting did
+slightly worse than holding over its years.
+
 ### 3. Pairs trading (statistical arbitrage)
 
 - **Setup:** pairs are chosen on 12 months and traded for 6, with top 20 pairs per window,
@@ -93,6 +117,31 @@ arrive in runs, during turbulent spells. The model that weights recent days more
 tests, and its breaches are smaller (an extra 0.68% loss on a breach day, against 0.96%). The
 bunching test raises false alarms about 6% of the time at this sample size rather than 5%;
 the tests check this.
+
+**Two improved models (added 23 November 2026),** with settings fixed before running:
+
+- **Filtered historical simulation** (after [Hull & White, 1998](https://ideas.repec.org/a/rsk/journ4/2161156.html)):
+  each past day's return is divided by the EWMA volatility for that day and multiplied by
+  today's, then drawn at random. It keeps the real shape of bad days without assuming a bell
+  curve.
+- **GJR-GARCH(1,1) with Student-t shocks** (Glosten, Jagannathan & Runkle, 1993): risk reacts
+  more to falls than to rises, and shocks can be extreme. Fitted by maximum likelihood
+  ([`arch`](https://pypi.org/project/arch/) 8.0.0) on the 500 days before each monthly refit;
+  no fit failed to converge.
+
+| Model | Breach rate | Kupiec p | Christoffersen p | Joint p | Breach after a breach | Verdict |
+|---|---|---|---|---|---|---|
+| Filtered historical | 4.9% | 0.80 | 0.022 | 0.069 | 8.9% | Rejected: breaches bunch together |
+| GJR-GARCH-t | 6.5% | < 0.001 | 0.39 | < 0.001 | 7.9% | Rejected: too many breaches |
+
+**Neither passes, but both improve on what they replace.** Filtered historical simulation keeps
+plain historical simulation's accurate count while halving how often one breach follows
+another (8.9% against 16.6%). It fails the separate bunching test narrowly but passes the
+joint test. GJR-GARCH-t has the best timing of all five models and the smallest losses beyond
+the line, but too many breaches. One mechanical reason: at the 95% level, a fat-tailed
+Student-t with the same variance puts its 5% cut-off nearer zero than a bell curve does
+(about −1.59 against −1.64 standard deviations at 6 degrees of freedom), so its line sits
+slightly too shallow. EWMA remains the only model that passes.
 
 ### 5. Market panic detector
 

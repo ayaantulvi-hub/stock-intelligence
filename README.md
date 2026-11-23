@@ -92,12 +92,16 @@ From the stored run of 23 November 2026, with details and sources in
 | Study | Verdict | In one line |
 |---|---|---|
 | Trend following (50/200-day) | No reliable edge | Lower Sharpe than holding everything (0.90 vs 1.02), but a smaller worst fall |
-| Volatility targeting | No reliable edge | Same Sharpe (about 0.91), worst fall cut from −38.8% to about −27% |
+| Volatility targeting, monthly (two versions) | No reliable edge | Same Sharpe (about 0.91), worst fall cut from −38.8% to about −27% |
+| Volatility targeting, conditional | No reliable edge | Slightly worse than holding over 2015–2026 |
+| Volatility targeting, daily EWMA | No reliable edge | Best version: worst fall −21.8% against −38.8%, but alpha t only 1.12 |
 | Pairs trading, distance | No reliable edge | Sharpe −0.11 after costs |
 | Pairs trading, cointegration | No reliable edge | Sharpe 0.22 ± 0.25, and a −43.6% fall |
 | Value at Risk, historical | Rejected | Right number of breaches, but they bunch together |
 | Value at Risk, normal | Rejected | Same problem |
 | Value at Risk, EWMA | **Not rejected** | Passes both the breach-rate and bunching tests |
+| Value at Risk, filtered historical | Rejected | Halves back-to-back breaches, but narrowly fails the bunching test |
+| Value at Risk, GJR-GARCH-t | Rejected | Best timing, but too many breaches (6.5%) |
 | Panic detector | No reliable edge | Spots crashes as they happen, but doesn't predict the next month |
 
 ## Limitations

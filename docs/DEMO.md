@@ -40,7 +40,7 @@ scratch in Python, then tested them the way a sceptical reviewer would: on years
 designed on, after trading costs, with a t-score of 3 to pass."
 
 **0:12 – 0:25. The score.**
-"The headline is counted from the stored results. On my real data, one of nine tests
+"The headline is counted from the stored results. On my real data, one of thirteen tests
 passed. Every failure is listed here too, because a tool that only shows wins is not
 evidence of anything."
 
