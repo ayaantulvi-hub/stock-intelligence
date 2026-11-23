@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from stockintel.quant import engine, evaluate, studies
 
@@ -113,3 +114,48 @@ def test_quant_results_route_returns_the_latest_run_per_variant(engine):
             )
     rows = queries.quant_results(engine)
     assert len(rows) == 1 and rows[0]["verdict"] == "No reliable edge"
+
+
+def _waves(seed: int = 5) -> pd.Series:
+    """TEST FIXTURE: daily excess returns whose volatility changes every few months."""
+    rng = np.random.default_rng(seed)
+    dates = pd.bdate_range("2008-01-01", "2020-12-31")
+    level = np.array([0.004, 0.01, 0.01, 0.01, 0.03])[(np.arange(len(dates)) // 63) % 5]
+    return pd.Series(rng.normal(0, 1, len(dates)) * level, index=dates)
+
+
+@pytest.mark.parametrize("kind", ["conditional", "ewma"])
+def test_new_volatility_rules_use_only_the_past(kind):
+    from stockintel.quant import vol
+
+    excess = _waves()
+    _, held = vol.managed(excess, kind)
+    assert held.max() <= vol.MAX_LEVERAGE
+    cut = excess.index.get_loc(pd.Timestamp("2016-03-03"))
+    changed = excess.copy()
+    changed.iloc[cut + 1 :] *= -7
+    _, again = vol.managed(changed, kind)
+    # Exposure held up to the day after the cut was decided by the cut's close at the latest.
+    pd.testing.assert_series_equal(
+        held.loc[: excess.index[cut + 1]], again.loc[: excess.index[cut + 1]]
+    )
+
+
+def test_conditional_targeting_leaves_ordinary_months_alone():
+    from stockintel.quant import vol
+
+    held = vol.conditional_held(_waves())
+    by_month = held.dropna().groupby(held.dropna().index.to_period("M")).first()
+    assert (held.dropna().groupby(held.dropna().index.to_period("M")).nunique() == 1).all()
+    assert (by_month == 1.0).mean() > 0.4  # Most months are ordinary and stay fully invested.
+    assert by_month.min() < 0.6 and by_month.max() > 1.4  # Wild months cut, calm months raised.
+
+
+def test_daily_ewma_targeting_cuts_exposure_soon_after_volatility_jumps():
+    from stockintel.quant import vol
+
+    excess = _waves()
+    held = vol.ewma_held(excess).dropna()
+    calm_to_wild = excess.index[(np.arange(len(excess)) // 63) % 5 == 4][0:63]
+    late = calm_to_wild[-20:]  # The last month of a wild spell, once the estimate has caught up.
+    assert held.reindex(late).mean() < 0.6

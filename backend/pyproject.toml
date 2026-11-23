@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.13",
   "apscheduler>=3.10,<4",
+  "arch==8.0.0",
   "exchange-calendars>=4.13.2",
   "fastapi>=0.115",
   "httpx>=0.28.1",

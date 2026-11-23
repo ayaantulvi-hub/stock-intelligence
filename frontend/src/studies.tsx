@@ -91,13 +91,25 @@ export const NAMES: Record<string, string> = {
   historical: "Historical",
   normal: "Normal",
   ewma: "EWMA",
+  "filtered historical": "Filtered historical",
+  "gjr-garch t": "GJR-GARCH-t",
   distance: "Distance",
   cointegration: "Cointegration",
   "50/200": "Crossover",
   "variance-managed (Moreira-Muir)": "Variance-managed",
   "volatility target": "Volatility target",
+  "conditional (Bongaerts et al.)": "Conditional",
+  "daily EWMA (Harvey et al.)": "Daily EWMA",
   "absorption ratio shift": "Absorption ratio",
 };
+
+export const VAR_MODELS = ["historical", "normal", "ewma", "filtered historical", "gjr-garch t"];
+export const VOL_VARIANTS = [
+  "variance-managed (Moreira-Muir)",
+  "volatility target",
+  "conditional (Bongaerts et al.)",
+  "daily EWMA (Harvey et al.)",
+];
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const strategy = (r?: Result) => r?.metrics.strategy as Summary | undefined;
@@ -136,22 +148,32 @@ export function useLoad<T>(url: string): { data: T | null; failed: boolean } {
  * Wording that depends on a result is chosen from the verdict, never typed in as a result. */
 export function view(key: string, rows: Result[]): View | null {
   if (key === "value_at_risk") {
-    const order = ["historical", "normal", "ewma"].map((v) => find(rows, v)).filter(Boolean) as Result[];
-    const ewma = find(rows, "ewma");
-    const hist = find(rows, "historical");
+    const order = VAR_MODELS.map((v) => find(rows, v)).filter(Boolean) as Result[];
     const series = order.map((r) => r.metrics.series as Breaches | undefined);
     const max = Math.max(1, ...series.flatMap((s) => s?.breaches ?? []));
     const passed = order.filter((r) => PASSING.has(r.verdict)).map((r) => NAMES[r.variant]);
     const failed = order.filter((r) => !PASSING.has(r.verdict)).map((r) => NAMES[r.variant]);
+    const byAfter = order
+      .filter((r) => typeof r.metrics.breach_rate_after_a_breach === "number")
+      .sort((x, y) => (x.metrics.breach_rate_after_a_breach as number) - (y.metrics.breach_rate_after_a_breach as number));
+    const calmest = byAfter[0];
+    const worst = byAfter[byAfter.length - 1];
+    const joint = order
+      .filter((r) => typeof r.metrics.conditional_coverage_p === "number")
+      .sort((x, y) => (y.metrics.conditional_coverage_p as number) - (x.metrics.conditional_coverage_p as number))[0];
     return {
       tiles: [
-        { value: pct(ewma?.metrics.breach_rate), label: "EWMA breach rate, target 5%", tone: "blue" },
+        { value: `${passed.length} of ${order.length}`, label: "models passed both tests", tone: passed.length ? "green" : "red" },
         {
-          value: `${pct(hist?.metrics.breach_rate_after_a_breach, 0)} vs ${pct(ewma?.metrics.breach_rate_after_a_breach, 0)}`,
-          label: "chance of a breach the day after one, historical vs EWMA",
+          value: `${pct(worst?.metrics.breach_rate_after_a_breach, 0)} vs ${pct(calmest?.metrics.breach_rate_after_a_breach, 0)}`,
+          label: `breach the day after a breach: ${worst ? NAMES[worst.variant] : NOT_VERIFIED} vs ${calmest ? NAMES[calmest.variant] : NOT_VERIFIED} (5% if independent)`,
           tone: "orange",
         },
-        { value: `p = ${fixed(ewma?.metrics.christoffersen_p, 3)}`, label: "EWMA bunching test, passes above 0.05", tone: "amber" },
+        {
+          value: `p = ${fixed(joint?.metrics.conditional_coverage_p, 3)}`,
+          label: `best joint-test score: ${joint ? NAMES[joint.variant] : NOT_VERIFIED} (passes above 0.05)`,
+          tone: "amber",
+        },
       ],
       chart: (
         <>
@@ -170,14 +192,14 @@ export function view(key: string, rows: Result[]): View | null {
           )}
         </>
       ),
-      caption: `breaches of the 95% one-day VaR per month · equal-weight portfolio · ${ewma?.period ?? NOT_VERIFIED}`,
+      caption: `breaches of the 95% one-day VaR per month · equal-weight portfolio · ${order[0]?.period ?? NOT_VERIFIED}`,
       finding:
         passed.length && failed.length
-          ? `${passed.join(" and ")} passed. ${failed.join(" and ")} failed the timing test.`
+          ? `${passed.join(", ")} passed; ${failed.join(", ")} rejected.`
           : passed.length
             ? "Every model passed both tests."
             : "Every model was rejected.",
-      note: `EWMA ${pct(ewma?.metrics.breach_rate)} · p = ${fixed(ewma?.metrics.christoffersen_p, 3)}`,
+      note: `${passed.length} of ${order.length} passed`,
     };
   }
   if (key === "pairs_trading") {
@@ -206,40 +228,37 @@ export function view(key: string, rows: Result[]): View | null {
     };
   }
   if (key === "vol_targeting") {
-    const managed = find(rows, "variance-managed (Moreira-Muir)");
-    const target = find(rows, "volatility target");
-    const mg = managed?.metrics.series as Growth | undefined;
-    const tg = target?.metrics.series as Growth | undefined;
+    const managed = VOL_VARIANTS.map((v) => find(rows, v)).filter(Boolean) as Result[];
+    const first = managed[0];
+    const bestSharpe = [...managed].sort((x, y) => (strategy(y)?.sharpe ?? -Infinity) - (strategy(x)?.sharpe ?? -Infinity))[0];
+    const shallowest = [...managed].sort((x, y) => (strategy(y)?.max_drawdown ?? -Infinity) - (strategy(x)?.max_drawdown ?? -Infinity))[0];
+    const bestT = [...managed].sort((x, y) => ((y.metrics.choice_t as number) ?? -Infinity) - ((x.metrics.choice_t as number) ?? -Infinity))[0];
     return {
       tiles: [
-        { value: `${fixed(strategy(managed)?.sharpe)} vs ${fixed(baseline(managed)?.sharpe)}`, label: "Sharpe ratio, managed vs unmanaged", tone: "blue" },
         {
-          value: `${pct(strategy(managed)?.max_drawdown)} vs ${pct(baseline(managed)?.max_drawdown)}`,
-          label: "worst fall, managed vs unmanaged",
-          tone: shallower(managed) ? "green" : "red",
+          value: `${fixed(strategy(bestSharpe)?.sharpe)} vs ${fixed(baseline(bestSharpe)?.sharpe)}`,
+          label: `best Sharpe ratio: ${bestSharpe ? NAMES[bestSharpe.variant] : NOT_VERIFIED} vs unmanaged`,
+          tone: "blue",
         },
-        { value: `t = ${fixed(managed?.metrics.choice_t)}`, label: "alpha test score, needs 3", tone: "amber" },
+        {
+          value: `${pct(strategy(shallowest)?.max_drawdown)} vs ${pct(baseline(shallowest)?.max_drawdown)}`,
+          label: `smallest worst fall: ${shallowest ? NAMES[shallowest.variant] : NOT_VERIFIED} vs unmanaged`,
+          tone: shallower(shallowest) ? "green" : "red",
+        },
+        {
+          value: `t = ${fixed(bestT?.metrics.choice_t)}`,
+          label: `best alpha test score: ${bestT ? NAMES[bestT.variant] : NOT_VERIFIED} (needs 3)`,
+          tone: "amber",
+        },
       ],
-      chart: mg ? (
-        <LineChart
-          title="Growth of $1 above the Fed funds rate, after costs"
-          months={mg.months}
-          series={[
-            { name: "Variance-managed", values: mg.strategy, role: "s1" },
-            ...(tg ? [{ name: "Volatility target", values: tg.strategy, role: "s3" as const }] : []),
-            { name: "Unmanaged", values: mg.baseline, role: "s2" },
-          ]}
-          format={money}
-          baseline={1}
-        />
-      ) : null,
-      caption: `monthly rebalance on last month's risk · capped at 2× · ${managed?.period ?? NOT_VERIFIED}`,
+      chart: managed.length ? <VolChart rows={managed} /> : null,
+      caption: `capped at 2× · costs on every change · ${first?.period ?? NOT_VERIFIED}`,
       finding: anyPass(rows)
-        ? "It added risk-adjusted return."
-        : shallower(managed)
+        ? "A version added risk-adjusted return."
+        : shallower(shallowest)
           ? "No extra return, but smaller crashes."
           : "No extra return, and no smaller crashes.",
-      note: `worst fall ${pct(strategy(managed)?.max_drawdown)} vs ${pct(baseline(managed)?.max_drawdown)}`,
+      note: `best alpha t = ${fixed(bestT?.metrics.choice_t)}`,
     };
   }
   if (key === "ma_crossover") {
@@ -313,4 +332,38 @@ export function decidingStat(r: Result): [string, string] {
     return ["t, choice years", fixed(choice?.t)];
   }
   return [r.study === "vol_targeting" ? "alpha t, choice years" : "t, choice years", fixed(r.metrics.choice_t)];
+}
+
+/** Growth of $1 for one managed version, picked with a switch, against the unmanaged market:
+ * two lines at a time stay readable however many versions there are. */
+function VolChart({ rows }: { rows: Result[] }) {
+  const [pick, setPick] = useState(rows[0].variant);
+  const chosen = rows.find((r) => r.variant === pick) ?? rows[0];
+  const g = chosen.metrics.series as Growth | undefined;
+  return (
+    <>
+      <div className="variant-switch" role="radiogroup" aria-label="Version shown">
+        {rows.map((r) => (
+          <button key={r.variant} role="radio" aria-checked={r.variant === chosen.variant} className={r.variant === chosen.variant ? "on" : ""} onClick={() => setPick(r.variant)}>
+            {NAMES[r.variant] ?? r.variant}
+          </button>
+        ))}
+      </div>
+      {g ? (
+        <LineChart
+          key={chosen.variant}
+          title="Growth of $1 above the Fed funds rate, after costs"
+          months={g.months}
+          series={[
+            { name: NAMES[chosen.variant] ?? chosen.variant, values: g.strategy, role: "s1" },
+            { name: "Unmanaged", values: g.baseline, role: "s2" },
+          ]}
+          format={money}
+          baseline={1}
+        />
+      ) : (
+        <p className="muted">{NOT_VERIFIED}: no stored series for this version.</p>
+      )}
+    </>
+  );
 }

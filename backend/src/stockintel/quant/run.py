@@ -101,6 +101,8 @@ def vol_targeting(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
     for kind, label in (
         ("variance", "variance-managed (Moreira-Muir)"),
         ("volatility", "volatility target"),
+        ("conditional", "conditional (Bongaerts et al.)"),
+        ("ewma", "daily EWMA (Harvey et al.)"),
     ):
         strategy, held = vol.managed(excess, kind)
         baseline = excess.reindex(strategy.index)
@@ -111,7 +113,9 @@ def vol_targeting(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
         settings = {
             "window_days": vol.WINDOW,
             "max_leverage": vol.MAX_LEVERAGE,
-            "rebalance": "monthly",
+            "rebalance": "daily" if kind == "ewma" else "monthly",
+            "half_life_days": vol.HALF_LIFE if kind == "ewma" else None,
+            "min_history_months": vol.MIN_HISTORY_MONTHS if kind == "conditional" else None,
             "cost_bps": bt.COST_BPS,
             "returns": "excess over DFF",
         }
@@ -170,9 +174,11 @@ def value_at_risk(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
     returns = prices.pct_change(fill_method=None)
     portfolio = bt.run(studies.equal_weight(mask), returns).net
     portfolio = portfolio[portfolio.index > portfolio.index.min()]
-    for method in ("historical", "normal", "ewma"):
+    for method in ("historical", "normal", "ewma", "filtered historical", "gjr-garch t"):
         forecast = var.forecasts(portfolio, method)
         result = var.backtest(portfolio, forecast)
+        if method == "gjr-garch t":
+            result["fit_failures"] = var.garch_volatility(portfolio.dropna())[1]
         both = pd.concat([portfolio, forecast], axis=1, keys=["r", "var"]).dropna()
         hit = (both["r"] < -both["var"]).astype(int)
         monthly = pd.DataFrame({"hits": hit, "var": both["var"]}).resample("ME")
@@ -186,6 +192,7 @@ def value_at_risk(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
             "simulations": var.SIMULATIONS,
             "window_days": var.WINDOW,
             "ewma_decay": var.EWMA_DECAY,
+            "garch_refit_days": var.GARCH_REFIT,
             "portfolio": "all tradeable stocks, equal weight",
         }
         store(engine, "value_at_risk", method, result, settings)

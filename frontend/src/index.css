@@ -288,3 +288,11 @@ main > .panels > .panel:nth-child(n + 5) { animation-delay: 0.16s; }
   .findings li { grid-template-columns: 22px 1fr; }
   .findings .code-tag, .findings .meta { display: none; }
 }
+
+.variant-switch { display: flex; flex-wrap: wrap; gap: 0; margin: 0 0 12px; border: 1px solid var(--line); border-radius: 3px; width: fit-content; }
+.variant-switch button { border: 0; background: transparent; color: var(--ink-3); cursor: pointer; font: 500 11px/1 var(--mono); padding: 7px 10px; }
+.variant-switch button + button { border-left: 1px solid var(--line); }
+.variant-switch button.on { background: var(--panel-2); color: var(--amber); }
+.variant-switch button:not(.on):hover { color: var(--ink); }
+.plain-list { margin: 0 0 12px; padding-left: 20px; max-width: 72ch; }
+.plain-list li { margin: 0 0 6px; font-size: 16px; line-height: 1.6; }

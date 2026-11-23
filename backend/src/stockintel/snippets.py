@@ -16,9 +16,9 @@ QUANT = Path(__file__).resolve().parent / "quant"
 # Study -> (file, functions to show), in the order they appear.
 CHOSEN = {
     "ma_crossover": ("studies.py", ["ma_crossover"]),
-    "vol_targeting": ("vol.py", ["weights"]),
+    "vol_targeting": ("vol.py", ["conditional_held", "ewma_held"]),
     "pairs_trading": ("pairs.py", ["coint_pairs", "positions"]),
-    "value_at_risk": ("var.py", ["forecasts", "kupiec"]),
+    "value_at_risk": ("var.py", ["garch_volatility", "forecasts"]),
     "panic_detector": ("panic.py", ["readings"]),
 }
 

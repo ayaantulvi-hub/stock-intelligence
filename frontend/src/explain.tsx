@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { PASSING, type Result, type Summary } from "./api";
-import { fixed, num, pct } from "./format";
+import { fixed, NOT_VERIFIED, num, pct } from "./format";
 import { averageNet } from "./studies";
 
 /** Two readings of every study: plain English for anyone, and the full method for a quant.
@@ -16,6 +16,7 @@ const b = (r?: Result) => r?.metrics.baseline as Summary | undefined;
 const pass = (r?: Result) => (r ? PASSING.has(r.verdict) : false);
 const m = (r: Result | undefined, key: string) => r?.metrics[key];
 const lower = (a: unknown, c: unknown) => num(a) && num(c) && a < c;
+const anyPassOf = (list: [string, Result][]) => list.some(([, r]) => pass(r));
 
 function Table({ head, rows }: { head: string[]; rows: (string | ReactNode)[][] }) {
   return (
@@ -47,10 +48,19 @@ function valueAtRisk(rows: Result[]): Both {
     ["Historical", find(rows, "historical")],
     ["Normal", find(rows, "normal")],
     ["EWMA", find(rows, "ewma")],
+    ["Filtered historical", find(rows, "filtered historical")],
+    ["GJR-GARCH-t", find(rows, "gjr-garch t")],
   ] as const;
+  const why: Record<string, string> = {
+    EWMA: " It counts recent days more, so it raises its warning quickly once markets turn rough.",
+    "Filtered historical":
+      " It replays real past days, resized to today's level of calm or storm, so it keeps the real shape of bad days without assuming a bell curve.",
+    "GJR-GARCH-t":
+      " Its risk estimate jumps more after falls than after rises, and it allows for rare, extreme days.",
+  };
   const failed = models.filter(([, r]) => r && !pass(r));
   const passed = models.filter(([, r]) => r && pass(r));
-  const days = m(models[2][1], "days");
+  const days = m(models.find(([, r]) => r)?.[1], "days");
   return {
     plain: (
       <>
@@ -61,7 +71,8 @@ function valueAtRisk(rows: Result[]): Both {
         </p>
         <p>
           Getting the count right isn't enough. If the bad days arrive in bunches, the model is calm exactly when
-          danger is highest.
+          danger is highest. The first three models are the classics. The last two are newer versions built to react to
+          changing risk and to allow for extreme days.
         </p>
         {failed.map(([n, r]) => (
           <p key={n}>
@@ -76,7 +87,7 @@ function valueAtRisk(rows: Result[]): Both {
           <p key={n}>
             The {n} model passed both tests: about the right number of bad days ({pct(m(r, "breach_rate"))}), and no sign
             that one bad day made the next more likely ({pct(m(r, "breach_rate_after_a_breach"), 0)} the day after).
-            {n === "EWMA" ? " It counts recent days more, so it raises its warning quickly once markets turn rough." : ""}
+            {why[n] ?? ""}
           </p>
         ))}
       </>
@@ -87,6 +98,13 @@ function valueAtRisk(rows: Result[]): Both {
           One-day 95% VaR of the equal-weight portfolio, forecast each day from the previous 500 returns with 10,000
           Monte Carlo draws: <em>historical</em> bootstraps the window; <em>normal</em> draws from N(μ̂, σ̂); <em>EWMA</em>{" "}
           draws from N(0, σ̂ₜ) with σ̂²ₜ = 0.94·σ̂²ₜ₋₁ + 0.06·r²ₜ₋₁ (RiskMetrics). The hit sequence is Iₜ = 1{"{"}rₜ &lt; −VaRₜ{"}"}.
+        </p>
+        <p>
+          <strong>Filtered historical</strong> (after Hull & White, 1998): bootstrap the standardised returns zₛ = rₛ / σ̂ₛ
+          from the window, then rescale by today's σ̂ₜ, with σ̂ the same EWMA. <strong>GJR-GARCH-t</strong> (Glosten,
+          Jagannathan & Runkle, 1993): σ²ₜ = ω + (α + γ·1{"{"}εₜ₋₁ &lt; 0{"}"})·ε²ₜ₋₁ + β·σ²ₜ₋₁ with standardised Student-t shocks,
+          fitted by maximum likelihood on the 500 days before each refit (every 21 days) and run forward on real returns in
+          between. Both have no settings chosen from results: 0.94, 500 and 21 were fixed in advance.
         </p>
         <p>
           <strong>Kupiec POF:</strong> likelihood ratio of the hit rate x/n against p = 0.05, χ²(1). It tests the count
@@ -115,7 +133,13 @@ function valueAtRisk(rows: Result[]): Both {
             fixed 500-day window adapts slowly, so after a shock its forecast stays too small for several days running.
           </p>
         )}
-        <p>Each test is run at 5% on three models, with no adjustment for multiple testing.</p>
+        {num(m(find(rows, "gjr-garch t"), "fit_failures")) && (m(find(rows, "gjr-garch t"), "fit_failures") as number) > 0 && (
+          <p>
+            GARCH fits that failed to converge: {String(m(find(rows, "gjr-garch t"), "fit_failures"))}. Each kept the last good
+            parameters.
+          </p>
+        )}
+        <p>Each test is run at 5% on {models.filter(([, r]) => r).length} models, with no adjustment for multiple testing.</p>
       </>
     ),
   };
@@ -206,63 +230,77 @@ function pairsTrading(rows: Result[]): Both {
 }
 
 function volTargeting(rows: Result[]): Both {
-  const vm = find(rows, "variance-managed (Moreira-Muir)");
-  const vt = find(rows, "volatility target");
+  const versions = [
+    ["Variance-managed", find(rows, "variance-managed (Moreira-Muir)")],
+    ["Volatility target", find(rows, "volatility target")],
+    ["Conditional", find(rows, "conditional (Bongaerts et al.)")],
+    ["Daily EWMA", find(rows, "daily EWMA (Harvey et al.)")],
+  ].filter(([, r]) => r) as [string, Result][];
+  const base = versions[0]?.[1];
+  const smaller = versions.filter(([, r]) => lower(b(r)?.max_drawdown, s(r)?.max_drawdown)).map(([n]) => n);
+  const best = [...versions].sort(([, x], [, y]) => ((m(y, "choice_t") as number) ?? -Infinity) - ((m(x, "choice_t") as number) ?? -Infinity))[0];
   return {
     plain: (
       <>
         <p>
-          When markets get stormy, this strategy holds less. When they're calm, it holds more, up to twice its money
-          with borrowing. The idea, from a 2017 paper, is that stormy spells don't pay enough extra to be worth their risk.
+          When markets get stormy, these strategies hold less. When they're calm, they hold more, up to twice the money
+          with borrowing. The idea is that stormy spells don't pay enough extra to be worth their risk.
         </p>
+        <p>We test four ways of doing it:</p>
+        <ul className="plain-list">
+          <li><strong>Variance-managed</strong> and <strong>volatility target:</strong> resize once a month, based on how jumpy last month was.</li>
+          <li><strong>Conditional:</strong> leave things alone in ordinary months, and act only when last month was unusually calm or unusually wild.</li>
+          <li><strong>Daily EWMA:</strong> resize every day, giving the most recent days the most weight, so it reacts within days rather than weeks.</li>
+        </ul>
         <p>
-          Return for each unit of risk: {fixed(s(vm)?.sharpe)} managed vs {fixed(b(vm)?.sharpe)} just holding. Worst
-          fall: {pct(s(vm)?.max_drawdown)} vs {pct(b(vm)?.max_drawdown)}.{" "}
-          {pass(vm) || pass(vt)
-            ? "It also passed the test for extra return."
-            : `To show real extra return it needed a score of 3; it got ${fixed(m(vm, "choice_t"))}. So it softened the crashes without adding return.`}
+          Just holding the market scored {fixed(b(base)?.sharpe)} for return per unit of risk, with a worst fall of{" "}
+          {pct(b(base)?.max_drawdown)}.{" "}
+          {smaller.length
+            ? `${smaller.join(", ")} cut the worst fall.`
+            : "None of them cut the worst fall."}{" "}
+          {anyPassOf(versions)
+            ? "At least one also passed the test for real extra return."
+            : `None passed the test for real extra return: that needs a score of 3, and the best, ${best?.[0] ?? NOT_VERIFIED}, got ${fixed(m(best?.[1], "choice_t"))}.`}
         </p>
       </>
     ),
     quant: (
       <>
         <p>
-          Managed excess return fᵗᵐ = wₜ·fₜ. Variance-managed: wₜ = c / σ̂²ₜ₋₁. Volatility target: wₜ = σ* / σ̂ₜ₋₁. σ̂ is
-          the realised volatility of the previous 21 daily excess returns (annualised), set at each month's first close
-          and capped at 2×. c and σ* come from an expanding average of past risk, so nothing uses future data. Excess
-          returns are over the Fed funds rate (lagged a day), and costs apply to every change in w.
+          Managed excess return fᵗᵐ = wₜ·fₜ, capped at 2×, with costs on every change in w and excess returns over the Fed
+          funds rate (lagged a day). <strong>Variance-managed</strong> (Moreira & Muir, 2017): wₜ = c / σ̂²ₘ₋₁.{" "}
+          <strong>Volatility target:</strong> wₜ = σ* / σ̂ₘ₋₁. Both use the previous month's 21 daily returns, set at the
+          month's first close; c and σ* are expanding averages of past risk.
         </p>
         <p>
-          Test (Moreira & Muir, 2017): regress fᵗᵐ = α + β·f + ε, Newey-West t on α. A higher Sharpe alone isn't the
-          test; α is.
+          <strong>Conditional</strong> (Bongaerts, Kang & van Dijk, 2020): σ̂ₘ₋₁ from last month without its final day; scale
+          to σ* / σ̂ₘ₋₁ only if σ̂ₘ₋₁ is in the top or bottom fifth of all earlier monthly readings, else w = 1. σ* is the
+          volatility of all earlier daily returns. The paper wants 10 years of history; with 16 years of data we use 5,
+          fixed in advance. <strong>Daily EWMA</strong> (Harvey et al., 2018): σ̂ₜ from zero-mean squared returns with a
+          20-day half-life, rebalanced daily. The paper scales on the full sample; here the target is the average of past
+          σ̂ only, which is the real-time standard Cederburg et al. (2020) argue for.
+        </p>
+        <p>
+          Test (Moreira & Muir): regress fᵗᵐ = α + β·f + ε, Newey-West t on α. A higher Sharpe alone isn't the test; α is.
         </p>
         <Table
-          head={["Variant", "Sharpe ± SE", "Max drawdown", "α t (choice)", "t (hold-out)", "Avg exposure", "Max exposure"]}
-          rows={[
-            ["Variance-managed", vm],
-            ["Volatility target", vt],
-          ]
-            .filter(([, r]) => r)
-            .map(([n, r]) => {
-              const x = r as Result;
-              return [
-                n as string,
-                `${fixed(s(x)?.sharpe)} ± ${fixed(s(x)?.sharpe_se)}`,
-                pct(s(x)?.max_drawdown),
-                fixed(m(x, "choice_t")),
-                fixed(m(x, "holdout_t")),
-                `${fixed(m(x, "average_exposure"))}×`,
-                `${fixed(m(x, "max_exposure"))}×`,
-              ];
-            })
-            .concat(vm ? [["Unmanaged", `${fixed(b(vm)?.sharpe)} ± ${fixed(b(vm)?.sharpe_se)}`, pct(b(vm)?.max_drawdown), "—", "—", "1.00×", "1.00×"]] : [])}
+          head={["Version", "Sharpe ± SE", "Max drawdown", "α t (choice)", "t (hold-out)", "Avg exposure", "Max exposure"]}
+          rows={versions
+            .map(([n, x]) => [
+              n,
+              `${fixed(s(x)?.sharpe)} ± ${fixed(s(x)?.sharpe_se)}`,
+              pct(s(x)?.max_drawdown),
+              fixed(m(x, "choice_t")),
+              fixed(m(x, "holdout_t")),
+              `${fixed(m(x, "average_exposure"))}×`,
+              `${fixed(m(x, "max_exposure"))}×`,
+            ])
+            .concat(base ? [["Unmanaged", `${fixed(b(base)?.sharpe)} ± ${fixed(b(base)?.sharpe_se)}`, pct(b(base)?.max_drawdown), "—", "—", "1.00×", "1.00×"]] : [])}
         />
         <p>
-          {lower(b(vm)?.max_drawdown, s(vm)?.max_drawdown)
-            ? "Reading: the smaller drawdown is close to mechanical. Volatility persists, so exposure is already low when a sell-off deepens. "
-            : "Reading: "}
-          α needs more than lower risk: average returns must not rise in step with variance. Later work (DeMiguel et al.,
-          2024) re-examines when this holds.
+          Reading: drawdown cuts are close to mechanical, because volatility persists and exposure is already low when a
+          sell-off deepens. α needs more: average returns must not rise in step with variance. Periods differ slightly by
+          version, because each needs its own warm-up.
         </p>
       </>
     ),

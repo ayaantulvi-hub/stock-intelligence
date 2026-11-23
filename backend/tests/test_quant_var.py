@@ -51,13 +51,17 @@ def test_a_correct_model_passes_and_calm_then_wild_data_breaks_the_plain_normal_
     assert ewma["christoffersen_p"] > plain["christoffersen_p"]
 
 
-def test_value_at_risk_uses_only_earlier_days():
+@pytest.mark.parametrize(
+    "method", ["historical", "normal", "ewma", "filtered historical", "gjr-garch t"]
+)
+def test_value_at_risk_uses_only_earlier_days(method):
     rng = np.random.default_rng(1)
     r = _series(rng.normal(0, 0.01, 800))
-    before = var.forecasts(r, "historical")
+    before = var.forecasts(r, method)
     changed = r.copy()
     changed.iloc[700:] = -0.5
-    after = var.forecasts(changed, "historical")
+    after = var.forecasts(changed, method)
+    assert before.iloc[500:701].notna().all()
     pd.testing.assert_series_equal(before.iloc[:701], after.iloc[:701])
 
 
@@ -87,3 +91,34 @@ def test_conditional_coverage_rejects_bunched_breaches():
     for start in range(0, 1000, 100):
         hits[start : start + 5] = True  # 5% of days, always in runs of five.
     assert var.conditional_coverage(hits) < 0.001
+
+
+def _gjr_world(days: int, seed: int) -> tuple[pd.Series, np.ndarray]:
+    """TEST FIXTURE: returns from a known GJR-GARCH(1,1) with Student-t shocks (dof 6)."""
+    rng = np.random.default_rng(seed)
+    omega, alpha, gamma, beta, dof = 0.02, 0.03, 0.10, 0.90, 6.0
+    variance, eps = omega / (1 - alpha - gamma / 2 - beta), 0.0
+    out, vols = np.empty(days), np.empty(days)
+    for t in range(days):
+        variance = omega + (alpha + gamma * (eps < 0)) * eps**2 + beta * variance
+        vols[t] = math.sqrt(variance)
+        eps = vols[t] * rng.standard_t(dof) * math.sqrt((dof - 2) / dof)
+        out[t] = eps
+    return _series(out / 100), vols / 100
+
+
+def test_garch_tracks_the_true_volatility_of_a_garch_world():
+    r, true_vol = _gjr_world(2000, seed=7)
+    fitted, failures = var.garch_volatility(r)
+    known = fitted["volatility"].notna().to_numpy()
+    assert failures == 0
+    assert np.corrcoef(fitted["volatility"].to_numpy()[known], true_vol[known])[0, 1] > 0.9
+
+
+def test_volatility_aware_models_beat_the_plain_normal_model_in_a_garch_world():
+    r, _ = _gjr_world(3000, seed=11)
+    plain = var.backtest(r, var.forecasts(r, "normal"))
+    for method in ("filtered historical", "gjr-garch t"):
+        better = var.backtest(r, var.forecasts(r, method))
+        assert better["breach_rate"] == pytest.approx(0.05, abs=0.015)
+        assert better["breach_rate_after_a_breach"] < plain["breach_rate_after_a_breach"]
