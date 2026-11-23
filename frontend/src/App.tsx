@@ -2,9 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PASSING, type Coverage, type Feed, type Result } from "./api";
 import Code from "./Code";
 import { explain, type Mode } from "./explain";
-import { NOT_VERIFIED } from "./format";
+import { NOT_VERIFIED, pct } from "./format";
 import snippets from "./snippets.json";
-import { anyPass, decidingStat, NAMES, STUDIES, useLoad, view, type StudyInfo } from "./studies";
+import { anyPass, decidingStat, NAMES, protection, STUDIES, useLoad, view, type StudyInfo } from "./studies";
 
 /** A terminal-style layout: a fixed list of screens on the left, one screen at a time on the
  * right, every piece of information in its own labelled panel. */
@@ -73,7 +73,7 @@ function Overview({ data, byStudy, coverage, feeds, go }: {
           <span>{data.length} tests.</span> <span className={passed ? "tone-green" : "tone-red"}>{passed} passed.</span>
         </h1>
         <p className="lede">
-          Five classic quant ideas, built from scratch and tested the hard way: after costs, on years they never saw, with a
+          Classic quant ideas, built from scratch and tested the hard way: after costs, on years they never saw, with a
           t-score of 3 to pass.
         </p>
       </Panel>
@@ -138,6 +138,50 @@ function Overview({ data, byStudy, coverage, feeds, go }: {
                   );
                 }),
               )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel
+        title="Crash protection"
+        span={12}
+        meta="Added after the results were seen, so it describes and never counts toward the score"
+      >
+        <p className="panel-intro">
+          Some of these strategies are meant to soften crashes more than to earn extra. In the market's worst 10% of months,
+          how much of the fall did each one take? And in the best 10%, how much of the gain did it keep? Below 100% on falls
+          is protection; the price is usually a smaller share of the gains.
+        </p>
+        <div className="scroll">
+          <table className="board">
+            <thead>
+              <tr>
+                <th scope="col">Strategy</th>
+                <th scope="col">Version</th>
+                <th scope="col">Worst fall</th>
+                <th scope="col">Holding</th>
+                <th scope="col">Share of the fall, worst months</th>
+                <th scope="col">Share of the gain, best months</th>
+              </tr>
+            </thead>
+            <tbody>
+              {protection(data).map((p) => {
+                const info = STUDIES.find((s) => s.key === p.study);
+                return (
+                  <tr key={`${p.study}/${p.label}`}>
+                    <th scope="row">
+                      <a href={`#${p.study}`}>
+                        <span className="code-tag">{info?.code}</span> {info?.title}
+                      </a>
+                    </th>
+                    <td>{p.label}</td>
+                    <td className="num">{pct(p.worstFall)}</td>
+                    <td className="num muted">{pct(p.baselineFall)}</td>
+                    <td className={`num ${p.downShare !== null && p.downShare < 1 ? "tone-green" : ""}`}>{pct(p.downShare, 0)}</td>
+                    <td className="num">{pct(p.upShare, 0)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

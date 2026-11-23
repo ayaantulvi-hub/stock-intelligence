@@ -464,7 +464,9 @@ export function decidingStat(r: Result): [string, string] {
     const choice = r.metrics.choice as Record<string, number> | undefined;
     return ["t, choice years", fixed(choice?.t)];
   }
-  return [r.study === "vol_targeting" ? "alpha t, choice years" : "t, choice years", fixed(r.metrics.choice_t)];
+  const byAlpha =
+    r.study === "vol_targeting" || r.study === "low_volatility" || (r.study === "market_century" && r.variant !== "trend 50/200");
+  return [byAlpha ? "alpha t, choice years" : "t, choice years", fixed(r.metrics.choice_t)];
 }
 
 /** Growth of $1 for one managed version, picked with a switch, against the unmanaged market:
@@ -500,4 +502,52 @@ function VolChart({ rows, log = false }: { rows: Result[]; log?: boolean }) {
       )}
     </>
   );
+}
+
+/** Crash protection, measured from stored monthly growth series: in the baseline's worst 10%
+ * of months, the strategy's average return as a share of the baseline's (its share of the
+ * fall), and the same for the best 10% (its share of the gain). Descriptive only: it was added
+ * after the results were seen, so it is never part of the pass count. */
+export type Protection = {
+  study: string;
+  label: string;
+  period: string;
+  worstFall: number | null;
+  baselineFall: number | null;
+  downShare: number | null;
+  upShare: number | null;
+};
+
+export const PROTECTION_STUDIES = ["ma_crossover", "vol_targeting", "low_volatility", "market_century"];
+
+function monthly(growth: number[]): number[] {
+  return growth.slice(1).map((v, i) => v / growth[i] - 1);
+}
+
+function share(strategyMonths: number[], baselineMonths: number[], worst: boolean): number | null {
+  const order = baselineMonths.map((v, i) => [v, i]).sort((a, b) => (worst ? a[0] - b[0] : b[0] - a[0]));
+  const picked = order.slice(0, Math.max(1, Math.round(order.length * 0.1))).map(([, i]) => i);
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const b = mean(picked.map((i) => baselineMonths[i]));
+  return b === 0 ? null : mean(picked.map((i) => strategyMonths[i])) / b;
+}
+
+export function protection(rows: Result[]): Protection[] {
+  return rows
+    .filter((r) => PROTECTION_STUDIES.includes(r.study))
+    .map((r) => {
+      const g = r.metrics.series as Growth | undefined;
+      const ok = g && g.strategy.length > 24 && g.baseline.length === g.strategy.length;
+      const sm = ok ? monthly(g.strategy) : [];
+      const bm = ok ? monthly(g.baseline) : [];
+      return {
+        study: r.study,
+        label: NAMES[r.variant] ?? r.variant,
+        period: r.period,
+        worstFall: strategy(r)?.max_drawdown ?? null,
+        baselineFall: baseline(r)?.max_drawdown ?? null,
+        downShare: ok ? share(sm, bm, true) : null,
+        upShare: ok ? share(sm, bm, false) : null,
+      };
+    });
 }
