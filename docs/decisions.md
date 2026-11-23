@@ -65,8 +65,8 @@ needs at least 30 tested cases that beat the baseline.
 
 - Papers decide which factors are included. The model learns the weights from past data.
 - Published effects are not used as weights. McLean & Pontiff (2016): returns 26% lower out
-  of sample and 58% lower after publication. Hou, Xue & Zhang (2020): 65% of 452 anomalies
-  fail t = 1.96, and 82% fail 2.78. Harvey, Liu & Zhu (2016): new factors need t above 3.0.
+  of sample and 58% lower after publication. Hou, Xue & Zhang: in the NBER version
+  (w23394), 64% of 447 anomalies are insignificant at 5% and 85% at t = 3. Harvey, Liu & Zhu (2016): new factors need t above 3.0.
 - Effect sizes appear only when read from the paper. Other factors cite the paper only.
 - Flat means a next-day move within 0.10%. The 90% range uses the stock's last 250 days.
 - Buy or Sell candidate needs the 20-day ranking to pass walk-forward testing after costs.
@@ -136,7 +136,9 @@ needs at least 30 tested cases that beat the baseline.
 
 - GitHub skipped most scheduled runs, so hourly price runs are started by cron-job.org through
   the GitHub API. It needs a fine-grained token limited to Actions on this repository.
-- A second cron-job.org job runs filings, company data and forecasts at 14:50 Dubai time, Tuesday to Saturday.
+- Since 16 November 2026, one cron-job.org job starts the update hourly, Monday to Saturday. Filings,
+  company data and forecasts run on the first update after 10:50 UTC on each US trading day, so
+  Monday's decisions include weekend news. A GitHub schedule at 11:20 UTC on weekdays is the backup.
 
 ## Stops
 
@@ -338,3 +340,15 @@ needs at least 30 tested cases that beat the baseline.
   count; the details are on the site's Alerts page. Workflows don't run on pull requests.
 - GitHub turns off scheduled workflows in a public repository after 60 days without changes.
   The daily decisions are also started by cron-job.org, which isn't affected.
+
+## Portfolio-piece review (23 November 2026)
+
+- The README reports only stored results, printed by `results_summary.py` (aggregates only, so
+  it is safe for public logs and within data terms). Operations notes moved to
+  `docs/operations.md`.
+- Overrides (`overrides.py`) use t ≥ 2, unlike the t ≥ 3 used everywhere else. Stated openly;
+  not changed, because it would change decisions.
+- Known bug, recorded as an expected test failure: `regime._t` returns about 1e16 when every value
+  is identical. Not fixed, for the same reason.
+- No public material shows Tiingo prices, news headlines or holdings. Screenshots use labelled
+  synthetic data.
