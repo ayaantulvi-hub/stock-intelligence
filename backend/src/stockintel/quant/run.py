@@ -15,7 +15,7 @@ from sqlalchemy.engine import Engine
 
 from stockintel.db import get_engine
 from stockintel.quant import engine as bt
-from stockintel.quant import pairs, studies, var, vol
+from stockintel.quant import pairs, panic, studies, var, vol
 from stockintel.quant.data import industries, panels, risk_free
 from stockintel.quant.evaluate import judge
 
@@ -140,11 +140,30 @@ def value_at_risk(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
         store(engine, "value_at_risk", method, result, settings)
 
 
+def panic_detector(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    returns = prices.pct_change(fill_method=None).where(mask)
+    market = bt.run(studies.equal_weight(mask), prices.pct_change(fill_method=None)).net
+    read = panic.readings(returns)
+    result = panic.test(panic.shift_signal(read["absorption_ratio"]), market)
+    result["average_correlation_median"] = float(read["average_correlation"].median())
+    result["average_correlation_max"] = float(read["average_correlation"].max())
+    result["average_correlation_max_date"] = read["average_correlation"].idxmax().date().isoformat()
+    result["top_eigenvalue_share_median"] = float(read["top_eigenvalue_share"].median())
+    settings = {
+        "window_days": panic.WINDOW,
+        "eigenvectors": "top fifth of stocks",
+        "shift": "15-day mean >= 1 sd above 1-year mean",
+        "ahead_days": panic.AHEAD,
+    }
+    store(engine, "panic_detector", "absorption ratio shift", result, settings)
+
+
 STUDIES = {
     "ma_crossover": ma_crossover,
     "vol_targeting": vol_targeting,
     "pairs_trading": pairs_trading,
     "value_at_risk": value_at_risk,
+    "panic_detector": panic_detector,
 }
 MIN_STOCKS = 50
 
