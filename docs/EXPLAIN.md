@@ -1,96 +1,122 @@
 # Explaining this project: 15 likely interview questions
 
-Short answers to learn and then say in your own words. Numbers come from the stored test run
-of 21 November 2026 (see the README's Results section).
+Short answers to learn and then say in your own words. Numbers come from the stored run of
+23 November 2026: [QUANT.md](QUANT.md) has the full tables and
+[RESEARCH.md](RESEARCH.md) the two written-up findings.
 
 **1. What does it do, in one sentence?**
-It collects free official market data every day, gives each of about 480 US stocks one call,
-and, most importantly, tests whether the method behind that call actually works.
+It takes five well-known quant ideas, builds each from scratch in Python, and tests them on
+16 years of daily prices for 480 large US companies, after costs, on years they weren't
+designed on, with a t-score of 3 to pass.
 
-**2. What is look-ahead bias?**
-Using information in a test that you wouldn't have had at the time. For example, using a
-company's annual profit on the day the year ends, when the report came out two months later.
-It makes a backtest look far better than real trading would. I prevent it in three ways:
-- figures count only from the day after they were filed;
-- economic readings are lagged until they were published;
-- a test plants future data and checks that it gets caught.
+**2. What did you find?**
+13 tests, 1 passed: the EWMA Value at Risk model. Every trading idea, including trend
+following, pairs trading and four kinds of volatility targeting, showed no reliable edge after
+costs. That is the expected result for well-known, free-data ideas, and the project reports it
+rather than hiding it.
 
-**3. Why walk-forward testing instead of one train/test split?**
-Markets change. Walk-forward trains only on data before each test year, then moves forward a
-year and repeats. That copies what you could really have done at each point. It also shows
-whether results hold across many different years or depend on one lucky period. I leave a
-gap between training and test data so 20-day outcomes don't overlap.
+**3. What is look-ahead bias, and how do you stop it?**
+Using information you wouldn't have had at the time. It makes backtests look far better than
+real trading. I stop it in four ways:
+- a position decided at one day's close only earns the next day's return;
+- an automatic test flips the sign of every later return and checks that earlier decisions
+  don't change, and a planted cheating rule fails it;
+- company sizes from SEC filings count only from the April after the year they describe;
+- models that are fitted, like GARCH, refit only on data before each refit date.
 
-**4. Why keep two years completely held back?**
-I compared eight models. If you test eight, one will look good by luck. So the models are
-chosen on the earlier years, and the winner gets one final check on the two held-back years.
-Using those years to choose would make that final check meaningless.
+**4. Why a t-score of 3 and not 1.96?**
+1.96 is fine for one test. But thousands of trading ideas have been tried, so some pass 1.96
+by luck. Harvey, Liu and Zhu argue a new factor needs a t-score above 3. I use 3 for every
+idea, and I set it before seeing any result.
 
-**5. Why a t-score of 3 and not 1.96?**
-1.96 is fine for a single test. But thousands of trading ideas have been tried, so some will
-pass at 1.96 by chance. Harvey, Liu and Zhu argue new factors need t above 3. Hou, Xue and
-Zhang found 85% of 447 published anomalies fail at that bar. A strict bar means fewer false
-discoveries, at the cost of missing some weak real effects.
+**5. Why Newey-West standard errors?**
+Daily returns aren't independent: volatile days cluster, and some tests use overlapping
+21-day windows. Ordinary standard errors assume independence, so they're too small and
+t-scores too big. Newey-West corrects for that.
 
-**6. Why did most patterns fail?**
-- **Many traders already use them,** so any easy edge gets traded away.
-- **Costs eat what's left:** even 0.10% per trade removes a small edge.
-- **The baseline is tough:** I compared each signal with holding the *same stocks over the
-  same days*, not with doing nothing, so a pattern that only rides the market's general rise
-  gets no credit.
+**6. Why keep two years held back?**
+To check a result on data that played no part in judging it. A pass needs t ≥ 3 on the
+earlier years and a positive result on the last two calendar years.
 
-None of 64 candlestick tests, covering 716,629 signals, reached t = 3.
+**7. What is survivorship bias, and is it still in your data?**
+Testing only on companies that survived, which flatters results because the failures are
+missing. I reduce it by letting a stock trade only in years when SEC filings show it was large
+at the time. It isn't removed: the list is still today's companies, because the free data has
+no list of delisted stocks. I say so on every results page.
 
-**7. What is survivorship bias, and how did you handle it?**
-If you test only on companies that exist today, you leave out the ones that went bust. That
-flatters any strategy, especially buying beaten-down stocks. I used SEC public-float filings
-to rebuild which companies were large in each past year, so today's winners aren't tested
-before they were big. I couldn't add companies that failed, because free data doesn't list
-them. So some bias remains, and I say so.
+**8. Your Value at Risk models got the number of bad days right. Why were two rejected?**
+Counting breaches is the Kupiec test. It's blind to timing. The Christoffersen test checks
+whether one breach makes the next more likely. With historical simulation, the day after a
+breach had a 16.6% chance of another, against 5% expected. The bad days came in runs, exactly
+when risk was highest, which is when a risk model matters most.
 
-**8. What did the stop-loss study show?**
-Across 50,557 simulated trades, wider stops did better, and no stop had the best average
-return (+1.34% against +0.68% for the tightest). But stops cut the worst single loss from −88%
-to between −44% and −59%. And survivorship bias favours "no stop", because the collapses are missing. So
-the honest answer is that it's a trade-off, not a free win.
+**9. Why does EWMA pass when historical simulation fails?**
+Historical simulation treats every one of the last 500 days equally, so after a shock it takes
+weeks to catch up. EWMA puts about 6% of its weight on yesterday, so its estimate rises within
+days. It had a breach rate of 5.4% and a bunching-test p-value of 0.063, so it passes both
+tests.
 
-**9. Your best model didn't pass. Isn't that a failure?**
-The tool's job is to tell the truth, so finding no edge is a valid result. The chosen model's
-top-ranked stocks beat the average 54% of the time against 48% for the bottom-ranked, but the
-statistical test said that gap wasn't reliable. Most real strategies fail. Being able to show
-*why* matters more than claiming a win.
+**10. You added GARCH with fat tails. Why didn't it pass?**
+It had the best timing of all five models, but too many breaches: 6.5% against 5%. One
+mechanical reason: at the 95% level, a fat-tailed Student-t with the same variance puts its
+5% cut-off nearer zero than a normal curve does (about −1.59 against −1.64 standard
+deviations at 6 degrees of freedom), so the line sits slightly too shallow. I reported that
+rather than adjusting it, because changing a model after seeing its test result is the
+mistake the test exists to catch.
 
-**10. Why did all models look positive on the held-back years but not on earlier ones?**
-That's a warning sign, not good news. If every model, even a weak one, does well in the same
-two years, the likely cause is something about those years: the market environment, or
-survivorship bias being strongest in recent data. It isn't skill. That's why the rule needs
-both the early test and the held-back check to pass.
+**11. How does pairs trading work, and why did it fail?**
+Find two stocks that move together, and when they drift apart, buy the cheaper and sell the
+pricier, betting the gap closes. I tested two ways of choosing pairs: the distance method from
+Gatev, Goetzmann and Rouwenhorst, and cointegration. The better one made 3.9% a year before
+costs, but trading and borrowing costs took 1.5%, and its Sharpe ratio was 0.22 ± 0.25. For a
+bet meant to be market-neutral, it also fell 43.6% at its worst.
 
-**11. How do you stop yourself editing forecasts after the fact?**
-Each forecast is written before the market opens, and the database itself rejects any later
-change or deletion. A trigger also refuses any forecast created after its outcome was known.
-So the live track record can't be tidied up.
+**12. Pairs trading did well on the held-back years. Why not claim that?**
+Its Sharpe ratio was 1.39 on 2025–26, but −0.82 on 2011–15. Picking the good stretch after
+seeing the results is data snooping. The rule was set in advance: the full earlier period must
+pass too, and it didn't (t = 0.31).
 
-**12. What is calibration?**
-Whether stated chances match reality. If the app says "54% chance of beating the average", then
-about 54 in 100 such stocks should. I measure it on years the model never trained on, and show
-the plain rate rather than the model's raw score.
+**13. Volatility targeting cut the worst fall from −38.8% to −21.8%. Isn't that a success?**
+It's real, but it's close to mechanical: volatility persists, so exposure is already low when
+a sell-off deepens. The question Moreira and Muir ask is whether it earns more for its risk,
+measured by alpha against just holding the market. The best version's alpha t-score was 1.12,
+far from 3. I also used only past data to set the target. Cederburg and colleagues found that,
+done in real time like this, volatility management often harms performance.
 
-**13. What would you do with paid data?**
-- **Delisted stocks:** to remove the remaining survivorship bias. That's the biggest improvement.
-- **Analyst forecast revisions:** one of the better-supported signals, with no free source.
-- **Options data:** for the market's own estimate of how much a stock might move.
-- **Full intraday data:** for proper day-trading tests, instead of one exchange's prices.
+**14. 12 of your 13 tests failed. Isn't the project a failure?**
+No. The aim was to build a test strict enough to tell real effects from luck, and to show it
+working. A tool that only reports wins isn't evidence of anything. The one pass also shows the test
+isn't simply rejecting everything.
 
-**14. What was the hardest engineering problem?**
-Staying inside free limits. The database host suspended the database twice after jobs read
-over a million price rows on every run. I fixed it by caching the append-only tables in
-GitHub Actions and fetching only new rows. GitHub also skipped most scheduled runs, so an
-outside scheduler now triggers them.
+**15. What would you do with more time or paid data?**
+Add delisted companies to remove survivorship bias, use intraday data so entries and exits
+aren't limited to closing prices, and measure trading costs per stock instead of assuming
+0.10%. I'd also add an Expected Shortfall backtest, because Value at Risk says how often a
+loss is exceeded but not by how much.
 
-**15. What would you do differently?**
-- **Write the evaluation rules first.** The t ≥ 3 bar, costs and hold-out years would come
-  before any strategy. I mostly did, but one rule (the caution test) still uses t ≥ 2, which
-  I'd make consistent.
-- **Start the live record earlier.** It needs months of evidence, and it had run for under
-  60 days at the time of writing.
+## How I checked the numbers
+
+- The metrics are hand-written and checked in the tests against the independent `empyrical`
+  library.
+- The GARCH model is tested on simulated data with a known volatility path, and tracks it with
+  a correlation above 0.9.
+- 90 automated tests run on every change, including the look-ahead check for every strategy.
+
+## For a CV or application
+
+Each claim below is traceable to the stored results.
+
+- Built a quantitative research lab in Python that tests five classic strategies on 16 years
+  of daily prices for 480 US companies, with walk-forward rules, trading costs, Newey-West
+  t-scores and a t ≥ 3 bar set in advance.
+- Found that only 1 of 13 tests passed: an EWMA Value at Risk model. Two standard models got
+  the number of bad days right but were rejected because breaches clustered, with a 16.6%
+  chance of a breach the day after one, against 5% expected.
+- Engineered automatic data collection from the SEC, the Federal Reserve and licensed price
+  feeds, with 90 automated tests, including one that plants future data to prove the backtests
+  can't cheat.
+
+**One line for a personal statement:**
+"I built a lab to test well-known trading strategies the way a sceptical reviewer would, and
+the most useful result was a failure: 12 of 13 tests found no reliable edge, which taught me
+how easily patterns that look real turn out to be luck."

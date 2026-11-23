@@ -352,3 +352,30 @@ needs at least 30 tested cases that beat the baseline.
   is identical. Not fixed, for the same reason.
 - No public material shows Tiingo prices, news headlines or holdings. Screenshots use labelled
   synthetic data.
+
+## The Quant Lab replaces the stock app (23 November 2026)
+
+- **Why:** the owner's view was that an algorithm can't judge many real-world factors behind a
+  stock, so the project became a lab for testing well-known quant ideas honestly instead.
+- **Removed:** all code of the stock-decision app, its workflows, and unused data readers
+  (SEC filings, company facts, fund holdings, insider trades, Tiingo live quotes). Its database
+  tables are kept as an archive; no code reads them. `overrides.py` and `regime.py`, mentioned
+  in the section above, no longer exist.
+- **Studies:** trend following, volatility targeting, pairs trading (distance and
+  cointegration), Monte Carlo Value at Risk and a market panic detector. Black-Scholes, market
+  making and order-book work were left for later.
+- **One rule for every test, set before any result:** 0.10% a trade, 0.5% a year to borrow
+  shares; a Newey-West t-score of at least 3 on the earlier years and a positive result on the
+  last two calendar years. Risk models pass when both the Kupiec and Christoffersen tests are
+  above p = 0.05. Christoffersen's joint test is reported, not used for the verdict.
+- **Improved volatility models:** two Value at Risk models (filtered historical simulation and
+  GJR-GARCH with Student-t shocks) and two targeting rules (conditional, and daily EWMA with a
+  past-only target). Each uses its paper's settings, fixed before running, and counts as a new
+  test. None passed; the totals are now 13 tests, 1 passed.
+- **Data fixes:** a likely split refused from Alpaca no longer fails the hourly job; missing
+  industry codes are filled from the SEC, so no stock silently drops out of pairs trading.
+- **Dependencies:** `arch` is pinned to 8.0.0, because 7.2.0 doesn't work with pandas 3 and
+  9.0.0 was under two weeks old.
+- **Dashboard:** terminal-style layout, one study per screen, every figure in its own panel,
+  with a plain-English and a quant-detail explanation. Every number comes from stored results,
+  and result-dependent sentences are chosen by the verdict.
