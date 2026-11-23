@@ -77,11 +77,15 @@ borrowing fees take the rest.
 Each day, 10,000 simulated next-day returns are drawn from the past 500 days, giving the 95%
 Value at Risk of the all-stocks portfolio. Over 3,686 days:
 
-| Simulation | Breach rate (target 5%) | Breach-rate test (Kupiec) | Bunching test (Christoffersen) | Verdict |
-|---|---|---|---|---|
-| Historical bootstrap | 4.9% | p = 0.86 | p < 0.001 | Rejected: breaches bunch together |
-| Normal | 4.8% | p = 0.58 | p < 0.001 | Rejected: breaches bunch together |
-| EWMA normal (RiskMetrics 0.94) | 5.4% | p = 0.24 | p = 0.063 | Not rejected |
+| Simulation | Breach rate (target 5%) | Breach-rate test (Kupiec) | Bunching test (Christoffersen) | Both together (conditional coverage) | Verdict |
+|---|---|---|---|---|---|
+| Historical bootstrap | 4.9% | p = 0.86 | p < 0.001 | p < 0.001 | Rejected: breaches bunch together |
+| Normal | 4.8% | p = 0.58 | p < 0.001 | p < 0.001 | Rejected: breaches bunch together |
+| EWMA normal (RiskMetrics 0.94) | 5.4% | p = 0.24 | p = 0.063 | p = 0.089 | Not rejected |
+
+The "both together" column is Christoffersen's (1998) joint test, added on 23 November 2026 and
+reported for reference only: the verdict still uses the two separate tests, as set before the
+results were seen. It agrees with them.
 
 This is the clearest finding in the lab. All three models get the *number* of bad days about
 right, but the two that weight every past day equally miss *when* they happen: their breaches
