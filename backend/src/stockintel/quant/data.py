@@ -53,3 +53,10 @@ def risk_free(engine: Engine, index: pd.DatetimeIndex) -> pd.Series:
     rate = rate.shift(1, freq="D")  # Published the next day.
     daily = rate.reindex(rate.index.union(index)).ffill().reindex(index)
     return daily / 100 / 252
+
+
+def industries(engine: Engine) -> dict[str, str]:
+    """Ticker -> first two digits of its SEC industry code, for stocks that have one."""
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT ticker, sic FROM securities WHERE sic IS NOT NULL")).all()
+    return {ticker: str(sic).zfill(4)[:2] for ticker, sic in rows}

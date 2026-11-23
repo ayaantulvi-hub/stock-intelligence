@@ -15,8 +15,8 @@ from sqlalchemy.engine import Engine
 
 from stockintel.db import get_engine
 from stockintel.quant import engine as bt
-from stockintel.quant import studies, vol
-from stockintel.quant.data import panels, risk_free
+from stockintel.quant import pairs, studies, vol
+from stockintel.quant.data import industries, panels, risk_free
 from stockintel.quant.evaluate import judge
 
 
@@ -87,7 +87,39 @@ def vol_targeting(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> N
         store(engine, "vol_targeting", label, result, settings)
 
 
-STUDIES = {"ma_crossover": ma_crossover, "vol_targeting": vol_targeting}
+def pairs_trading(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    returns = prices.pct_change(fill_method=None)
+    groups = industries(engine)
+    market = bt.run(studies.equal_weight(mask), returns).net
+    for method in ("distance", "cointegration"):
+        weights, counts = pairs.strategy_weights(method, prices, mask, groups)
+        result_run = bt.run(weights, returns)
+        strategy = result_run.net[result_run.net.index >= weights.index.min()]
+        zero = pd.Series(0.0, index=strategy.index)  # Self-financing: the benchmark is no trade.
+        result = judge(strategy, zero)
+        result["windows"] = len(counts)
+        result["average_pairs"] = float(sum(counts) / len(counts)) if counts else 0.0
+        result["market_correlation"] = float(strategy.corr(market.reindex(strategy.index)))
+        result["gross_annual_return"] = float(result_run.gross.reindex(strategy.index).mean() * 252)
+        settings = {
+            "formation_days": pairs.FORMATION,
+            "trading_days": pairs.TRADING,
+            "pairs": pairs.TOP,
+            "open_at_sd": pairs.OPEN_AT,
+            "wait_one_day": True,
+            "same_industry": "SIC 2-digit",
+            "cost_bps": bt.COST_BPS,
+            "borrow_bps_a_year": bt.BORROW_BPS_A_YEAR,
+            "returns": "committed capital",
+        }
+        store(engine, "pairs_trading", method, result, settings)
+
+
+STUDIES = {
+    "ma_crossover": ma_crossover,
+    "vol_targeting": vol_targeting,
+    "pairs_trading": pairs_trading,
+}
 MIN_STOCKS = 50
 
 
