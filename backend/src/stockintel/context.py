@@ -19,7 +19,15 @@ TONE_GAP = 0.3
 SERIES = ("DGS2", "DGS10", "T10Y3M", "DFF", "USEPUINDXD", "DTWEXBGS")
 
 
-def card(title, reading, state, meaning, source, url, day=None):
+def card(
+    title: str,
+    reading: str,
+    state: str,
+    meaning: str,
+    source: str,
+    url: str | None,
+    day: object = None,
+) -> dict:
     return {
         "title": title,
         "reading": reading,

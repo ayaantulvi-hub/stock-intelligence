@@ -9,7 +9,8 @@ Run the test: python -m stockintel.day_trading test [months]
 import json
 import sys
 import time as clock
-from datetime import UTC, datetime, time, timedelta
+from collections.abc import Sequence
+from datetime import UTC, date, datetime, time, timedelta
 
 import numpy as np
 import pandas as pd
@@ -125,7 +126,13 @@ def universe(engine: Engine, limit: int | None = None) -> list[str]:
         return list(conn.execute(text(query), {"n": limit}).scalars())
 
 
-def fetch(source, tickers, start, end, timeframe):
+def fetch(
+    source: AlpacaProvider,
+    tickers: Sequence[str],
+    start: datetime,
+    end: datetime,
+    timeframe: str,
+) -> tuple[dict[str, pd.DataFrame], object]:
     """Bars for many tickers, a chunk at a time, keyed by our ticker spelling."""
     frames, provenance = {}, None
     for i in range(0, len(tickers), CHUNK):
@@ -465,7 +472,7 @@ def scan_orb(engine: Engine, source, day, now) -> dict:
     }
 
 
-def next_weekday(ny_now: pd.Timestamp):
+def next_weekday(ny_now: pd.Timestamp) -> date:
     """The next trading day whose window hasn't ended, skipping weekends and NYSE holidays."""
     day = ny_now.date()
     if ny_now.time() >= intraday.WINDOW[1]:

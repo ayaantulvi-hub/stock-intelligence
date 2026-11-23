@@ -3,6 +3,7 @@
 import base64
 import binascii
 import secrets
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -45,7 +46,7 @@ def password_matches(header: str | None) -> bool:
 
 
 @app.middleware("http")
-async def require_password(request: Request, call_next):
+async def require_password(request: Request, call_next: Callable) -> Response:
     protected = get_settings().dashboard_password and request.url.path != "/api/health"
     if protected and not password_matches(request.headers.get("authorization")):
         return Response(

@@ -24,7 +24,7 @@ def call_for(rank: float | None, action: str, blocked: str | None) -> str:
     return advice.apply_experts(answer, {"blocked": blocked})["call"]
 
 
-def item(ticker, topic, was, now, why, tone):
+def item(ticker: str, topic: str, was: str, now: str, why: str, tone: str) -> dict:
     return {"ticker": ticker, "topic": topic, "was": was, "now": now, "why": why, "tone": tone}
 
 

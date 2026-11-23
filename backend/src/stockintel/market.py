@@ -10,7 +10,7 @@ PUBLISH_DELAY = timedelta(hours=3)
 _calendar = None
 
 
-def calendar():
+def calendar() -> xcals.ExchangeCalendar:
     global _calendar
     if _calendar is None:
         _calendar = xcals.get_calendar("XNYS")

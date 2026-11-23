@@ -8,6 +8,7 @@ only by passing the same rules.
 Run: python -m stockintel.compare
 """
 
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 
 import numpy as np
@@ -89,13 +90,15 @@ ABLATION_T = 2.0
 CALIBRATION_BINS = 10
 
 
-def build(name: str, dropped: tuple[str, ...] = ()):
+def build(name: str, dropped: tuple[str, ...] = ()) -> object:
     if name in FAMILY_MODELS:
         return FamilyModel(FAMILY_MODELS[name], dropped)
     return MODELS[name]()
 
 
-def fit_ranker(name: str, x: pd.DataFrame, y: pd.Series, dropped: tuple[str, ...] = ()):
+def fit_ranker(
+    name: str, x: pd.DataFrame, y: pd.Series, dropped: tuple[str, ...] = ()
+) -> Callable[[pd.DataFrame], np.ndarray]:
     """Train a named model and return a function giving each stock's chance of beating others."""
     names = list(MODELS) if name == TEAM else [name]
     fitted = [build(item, dropped).fit(x, y) for item in names]
@@ -179,7 +182,9 @@ def has_edge(result: dict) -> bool:
     )
 
 
-def folds(panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR):
+def folds(
+    panel: pd.DataFrame, first_year: int = FIRST_TEST_YEAR
+) -> Iterator[tuple[int, pd.DataFrame, pd.DataFrame]]:
     """Each test year with the training rows before it, leaving a gap so none overlap."""
     data = panel[panel["eligible"]].dropna(subset=["excess_20d"])
     last_year = int(data["date"].dt.year.max())
