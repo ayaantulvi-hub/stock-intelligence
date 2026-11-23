@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import QuantLab from "./QuantLab";
 import ChartPanel from "./ChartPanel";
 import Glossary from "./Glossary";
 import LongTermPanel from "./LongTermPanel";
@@ -149,7 +150,7 @@ function State({ state }: { state: string }) {
   return <span className={state === "ok" ? "ok" : "bad"}>{label(state)}</span>;
 }
 
-const PAGES = ["Trading", "Long-term", "My portfolio", "How reliable?", "Data"];
+const PAGES = ["Quant lab", "Trading", "Long-term", "My portfolio", "How reliable?", "Data"];
 
 const TABS = ["Simple view", "Chart", "Long-term", "All factors", "Filings and prices"];
 
@@ -418,6 +419,7 @@ export default function App() {
         </>
       )}
 
+      {!stock && page === "Quant lab" && <QuantLab />}
       {!stock && page === "Trading" && (
         <>
           <section className="orders">

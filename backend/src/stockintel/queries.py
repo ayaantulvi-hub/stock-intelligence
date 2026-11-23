@@ -74,6 +74,15 @@ def feeds(engine: Engine) -> list[dict]:
     return output
 
 
+def quant_results(engine: Engine) -> list[dict]:
+    """The latest stored result for each quant study and variant."""
+    query = """SELECT DISTINCT ON (study, variant) study, variant, run_at, period, verdict,
+                 metrics, settings
+               FROM quant_results ORDER BY study, variant, run_at DESC"""
+    with engine.connect() as conn:
+        return [dict(row._mapping) for row in conn.execute(text(query))]
+
+
 def names(engine: Engine) -> dict[str, str]:
     """Company name for every ticker, as SEC EDGAR lists it, so lists can show both."""
     with engine.connect() as conn:

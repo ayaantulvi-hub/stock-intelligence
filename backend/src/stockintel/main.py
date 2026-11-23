@@ -78,6 +78,11 @@ def search(q: str = "") -> list[dict]:
     return queries.search(get_engine(), q.strip())
 
 
+@app.get("/api/quant")
+def quant() -> list[dict]:
+    return queries.quant_results(get_engine())
+
+
 @app.get("/api/names")
 def names() -> dict[str, str]:
     return queries.names(get_engine())

@@ -91,3 +91,25 @@ def test_alpha_verdict_credits_lower_risk_not_just_higher_return():
     base = pd.Series(rng.normal(0.0003, 0.01, len(dates)), index=dates)
     scaled = 0.5 * base  # Half the risk, half the return: no alpha.
     assert evaluate.judge(scaled, base, by="alpha")["verdict"] == "No reliable edge"
+
+
+def test_quant_results_route_returns_the_latest_run_per_variant(engine):
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import text
+
+    from stockintel import queries
+
+    now = datetime.now(UTC)
+    with engine.begin() as conn:
+        for at, verdict in ((now - timedelta(days=7), "Edge"), (now, "No reliable edge")):
+            conn.execute(
+                text(
+                    """INSERT INTO quant_results (run_at, study, variant, period, metrics, verdict,
+                         settings) VALUES (:at, 'ma_crossover', '50/200', 'p', :m, :v, '{}')"""
+                ),
+                {"at": at, "m": json.dumps({"verdict": verdict}), "v": verdict},
+            )
+    rows = queries.quant_results(engine)
+    assert len(rows) == 1 and rows[0]["verdict"] == "No reliable edge"
