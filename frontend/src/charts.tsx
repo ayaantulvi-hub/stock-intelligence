@@ -19,11 +19,25 @@ function ticks(min: number, max: number, count = 4): number[] {
   return out;
 }
 
+/** January positions to label, at a round step that keeps about eight labels at most. */
 function yearTicks(months: string[]): number[] {
-  const step = months.length > 120 ? 24 : 12;
+  const years = months.length / 12;
+  const step = [1, 2, 5, 10, 20, 25, 50].find((s) => years / s <= 8) ?? 100;
   return months
-    .map((m, i) => (m.endsWith("-01") && Number(m.slice(0, 4)) % (step / 12) === 0 ? i : -1))
+    .map((m, i) => (m.endsWith("-01") && Number(m.slice(0, 4)) % step === 0 ? i : -1))
     .filter((i) => i >= 0);
+}
+
+/** End-of-line label positions, pushed apart so labels never overlap. */
+function spread(ys: number[], gap = 14): number[] {
+  const order = ys.map((y, i) => [y, i]).sort((a, b) => a[0] - b[0]);
+  const out = [...ys];
+  let previous = -Infinity;
+  for (const [y, i] of order) {
+    out[i] = Math.max(y, previous + gap);
+    previous = out[i];
+  }
+  return out;
 }
 
 function TableView({ caption, months, series, format }: {
@@ -72,6 +86,7 @@ export function LineChart({
   format,
   baseline,
   shade,
+  log = false,
 }: {
   title: string;
   months: string[];
@@ -79,14 +94,20 @@ export function LineChart({
   format: (v: number) => string;
   baseline?: number;
   shade?: (number | null)[];
+  /** Logarithmic y-axis, for growth over long periods. Needs positive values. */
+  log?: boolean;
 }) {
   const id = useId();
   const [hover, setHover] = useState<number | null>(null);
   const values = series.flatMap((s) => s.values).filter(num);
-  const min = Math.min(...values, baseline ?? Infinity);
-  const max = Math.max(...values, baseline ?? -Infinity);
+  const scale = (v: number) => (log ? Math.log10(v) : v);
+  const min = scale(Math.min(...values, baseline ?? Infinity));
+  const max = scale(Math.max(...values, baseline ?? -Infinity));
   const x = (i: number) => PAD.left + (i / Math.max(1, months.length - 1)) * (W - PAD.left - PAD.right);
-  const y = (v: number) => PAD.top + (1 - (v - min) / (max - min || 1)) * (H - PAD.top - PAD.bottom);
+  const y = (v: number) => PAD.top + (1 - (scale(v) - min) / (max - min || 1)) * (H - PAD.top - PAD.bottom);
+  const gridValues = log
+    ? Array.from({ length: Math.floor(max) - Math.ceil(min) + 1 }, (_, i) => 10 ** (Math.ceil(min) + i))
+    : ticks(min, max);
   const paths = useMemo(
     () =>
       series.map((s) =>
@@ -105,6 +126,7 @@ export function LineChart({
     setHover(Math.max(0, Math.min(months.length - 1, i)));
   };
   const last = months.length - 1;
+  const endY = spread(series.map((s) => (num(s.values[last]) ? y(s.values[last] as number) : -Infinity)));
   return (
     <figure className="chart">
       <figcaption id={id}>{title}</figcaption>
@@ -145,7 +167,7 @@ export function LineChart({
               />
             ) : null,
           )}
-          {ticks(min, max).map((t) => (
+          {gridValues.map((t) => (
             <g key={t} className="grid">
               <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} />
               <text x={PAD.left - 8} y={y(t)} dy="0.32em" textAnchor="end">
@@ -164,9 +186,9 @@ export function LineChart({
           {series.map((s, k) => (
             <path key={s.name} d={paths[k]} className={`series ${s.role}`} pathLength={1} />
           ))}
-          {series.map((s) =>
+          {series.map((s, k) =>
             num(s.values[last]) ? (
-              <text key={s.name} className="end-label" x={x(last) + 8} y={y(s.values[last] as number)} dy="0.32em">
+              <text key={s.name} className="end-label" x={x(last) + 8} y={endY[k]} dy="0.32em">
                 {series.length > 1 ? `${s.name} ` : ""}
                 {format(s.values[last] as number)}
               </text>

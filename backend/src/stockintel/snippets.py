@@ -20,6 +20,7 @@ CHOSEN = {
     "pairs_trading": ("pairs.py", ["coint_pairs", "positions"]),
     "value_at_risk": ("var.py", ["garch_volatility", "forecasts"]),
     "panic_detector": ("panic.py", ["readings"]),
+    "market_century": ("studies.py", ["trend_on", "trend_returns"]),
 }
 
 

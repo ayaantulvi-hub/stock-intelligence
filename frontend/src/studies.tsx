@@ -70,6 +70,18 @@ export const STUDIES: StudyInfo[] = [
     ],
   },
   {
+    key: "market_century",
+    code: "100Y",
+    title: "100 years of the market",
+    tagline: "Same rules, a hundred years of data. Does a small edge finally show?",
+    tags: ["Data · US market since 1926", "Test · alpha, Newey-West"],
+    sources: [
+      ["Kenneth R. French Data Library", "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html"],
+      ["Moreira & Muir (2017)", "https://www.nber.org/papers/w22208"],
+      ["Cederburg et al. (2020)", "https://www.lehigh.edu/~xuy219/research/COWY.pdf"],
+    ],
+  },
+  {
     key: "ma_crossover",
     code: "TREND",
     title: "Trend following",
@@ -105,6 +117,7 @@ export const NAMES: Record<string, string> = {
   "volatility target": "Volatility target",
   "conditional (Bongaerts et al.)": "Conditional",
   "daily EWMA (Harvey et al.)": "Daily EWMA",
+  "trend 50/200": "Trend 50/200",
   "absorption ratio shift": "Absorption ratio",
 };
 
@@ -117,6 +130,7 @@ export const VOL_VARIANTS = [
 ];
 
 const money = (v: number) => `$${v.toFixed(2)}`;
+const moneyLong = (v: number) => (v >= 100 ? `$${Math.round(v).toLocaleString("en-GB")}` : `$${v.toFixed(2)}`);
 const strategy = (r?: Result) => r?.metrics.strategy as Summary | undefined;
 const baseline = (r?: Result) => r?.metrics.baseline as Summary | undefined;
 const find = (rows: Result[], variant: string) => rows.find((r) => r.variant === variant);
@@ -273,6 +287,43 @@ export function view(key: string, rows: Result[]): View | null {
       note: `best alpha t = ${fixed(bestT?.metrics.choice_t)}`,
     };
   }
+  if (key === "market_century") {
+    const versions = [...VOL_VARIANTS, "trend 50/200"].map((v) => find(rows, v)).filter(Boolean) as Result[];
+    const targeting = versions.filter((r) => r.variant !== "trend 50/200");
+    const bestT = [...targeting].sort((x, y) => ((y.metrics.choice_t as number) ?? -Infinity) - ((x.metrics.choice_t as number) ?? -Infinity))[0];
+    const cut = (r: Result) => {
+      const a = strategy(r)?.max_drawdown;
+      const c = baseline(r)?.max_drawdown;
+      return typeof a === "number" && typeof c === "number" ? a - c : -Infinity;
+    };
+    const shallowest = [...versions].sort((x, y) => cut(y) - cut(x))[0];
+    const holdoutPositive = versions.filter((r) => typeof r.metrics.holdout_gain_daily === "number" && (r.metrics.holdout_gain_daily as number) > 0);
+    return {
+      tiles: [
+        {
+          value: `t = ${fixed(bestT?.metrics.choice_t)}`,
+          label: `strongest alpha evidence: ${bestT ? NAMES[bestT.variant] : NOT_VERIFIED} (needs 3)`,
+          tone: "amber",
+        },
+        {
+          value: `${pct(strategy(shallowest)?.max_drawdown)} vs ${pct(baseline(shallowest)?.max_drawdown)}`,
+          label: `worst fall, biggest cut: ${shallowest ? NAMES[shallowest.variant] : NOT_VERIFIED} vs holding`,
+          tone: shallower(shallowest) ? "green" : "red",
+        },
+        {
+          value: `${holdoutPositive.length} of ${versions.length}`,
+          label: "versions positive on the two held-back years",
+          tone: holdoutPositive.length ? "blue" : "red",
+        },
+      ],
+      chart: versions.length ? <VolChart rows={versions} log /> : null,
+      caption: `US market excess return, daily · ${versions[0]?.period ?? NOT_VERIFIED} · log scale`,
+      finding: anyPass(rows)
+        ? "With a century of data, a version passed."
+        : "Evidence grew with more data, but nothing reached the bar.",
+      note: `best alpha t = ${fixed(bestT?.metrics.choice_t)}`,
+    };
+  }
   if (key === "ma_crossover") {
     const r = rows[0];
     const g = r?.metrics.series as Growth | undefined;
@@ -348,7 +399,7 @@ export function decidingStat(r: Result): [string, string] {
 
 /** Growth of $1 for one managed version, picked with a switch, against the unmanaged market:
  * two lines at a time stay readable however many versions there are. */
-function VolChart({ rows }: { rows: Result[] }) {
+function VolChart({ rows, log = false }: { rows: Result[]; log?: boolean }) {
   const [pick, setPick] = useState(rows[0].variant);
   const chosen = rows.find((r) => r.variant === pick) ?? rows[0];
   const g = chosen.metrics.series as Growth | undefined;
@@ -364,14 +415,15 @@ function VolChart({ rows }: { rows: Result[] }) {
       {g ? (
         <LineChart
           key={chosen.variant}
-          title="Growth of $1 above the Fed funds rate, after costs"
+          title={log ? "Growth of $1 above Treasury bills, after costs" : "Growth of $1 above the Fed funds rate, after costs"}
           months={g.months}
           series={[
             { name: NAMES[chosen.variant] ?? chosen.variant, values: g.strategy, role: "s1" },
-            { name: "Unmanaged", values: g.baseline, role: "s2" },
+            { name: log ? "Market" : "Unmanaged", values: g.baseline, role: "s2" },
           ]}
-          format={money}
+          format={log ? moneyLong : money}
           baseline={1}
+          log={log}
         />
       ) : (
         <p className="muted">{NOT_VERIFIED}: no stored series for this version.</p>

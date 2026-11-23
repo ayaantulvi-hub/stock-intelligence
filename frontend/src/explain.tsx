@@ -307,6 +307,89 @@ function volTargeting(rows: Result[]): Both {
   };
 }
 
+/** Years of data a t-score would need to reach 3 at the same strength: t grows with the
+ * square root of the sample, so years × (3 / t)². Arithmetic on stored figures only. */
+function yearsToThree(r?: Result): number | null {
+  const t = m(r, "choice_t");
+  const start = r?.period.slice(0, 4);
+  if (!num(t) || t <= 0 || !start) return null;
+  const years = HOLDOUT_START - Number(start);
+  return years * (3 / t) ** 2;
+}
+const HOLDOUT_START = 2025; // The last two calendar years are held back.
+
+function century(rows: Result[]): Both {
+  const versions = [
+    ["Variance-managed", find(rows, "variance-managed (Moreira-Muir)")],
+    ["Volatility target", find(rows, "volatility target")],
+    ["Conditional", find(rows, "conditional (Bongaerts et al.)")],
+    ["Daily EWMA", find(rows, "daily EWMA (Harvey et al.)")],
+    ["Trend 50/200", find(rows, "trend 50/200")],
+  ].filter(([, r]) => r) as [string, Result][];
+  const targeting = versions.filter(([n]) => n !== "Trend 50/200");
+  const best = [...targeting].sort(([, x], [, y]) => ((m(y, "choice_t") as number) ?? -Infinity) - ((m(x, "choice_t") as number) ?? -Infinity))[0];
+  const need = yearsToThree(best?.[1]);
+  const holdoutNegative = versions.filter(([, r]) => num(m(r, "holdout_gain_daily")) && (m(r, "holdout_gain_daily") as number) <= 0).map(([n]) => n);
+  return {
+    plain: (
+      <>
+        <p>
+          On 16 years of data, a small edge can't prove itself: luck alone moves results that much. So we ran exactly the
+          same rules, with the same costs and the same pass mark, on the whole US stock market every day since 1926.
+          Nothing was changed except the amount of history.
+        </p>
+        <p>
+          The best volatility version, {best?.[0] ?? NOT_VERIFIED}, scored{" "}
+          {fixed(m(best?.[1], "choice_t"))} against a pass mark of 3.
+          {need ? ` At that strength it would need roughly ${Math.round(need / 10) * 10} years of data to reach 3.` : ""}
+          {holdoutNegative.length ? ` It also has to do well on the two held-back years, and ${holdoutNegative.join(", ")} didn't.` : ""}
+        </p>
+        <p>
+          {anyPassOf(versions)
+            ? "At least one version passed both checks."
+            : num(m(best?.[1], "choice_t")) && (m(best?.[1], "choice_t") as number) >= 2
+              ? "So the honest reading is: probably a small real effect, but not proven by this test."
+              : "So even a century of data shows no sign of a reliable edge."}
+        </p>
+      </>
+    ),
+    quant: (
+      <>
+        <p>
+          Data: daily Mkt-RF and RF from the Kenneth R. French Data Library (value-weighted CRSP NYSE, AMEX and NASDAQ firms
+          minus the one-month T-bill). The four targeting rules are the same functions as the main study, with the same
+          settings, 2× cap and 10 bp costs. Trend 50/200 holds the market while its 50-day average of total-return level is
+          above the 200-day, else T-bills; it is judged by the mean daily gain over holding, like the stock-level trend
+          study.
+        </p>
+        <p>
+          Same verdict rule: Newey-West t ≥ 3 on the choice years and a positive result on the last two calendar years.
+          Under Newey-West the t-score grows roughly with √T, so for a fixed effect size the years needed scale as
+          T × (3 / t)².
+        </p>
+        <Table
+          head={["Version", "From", "Sharpe ± SE", "Holding", "Max drawdown", "Holding", "t (choice)", "t (hold-out)"]}
+          rows={versions.map(([n, x]) => [
+            n,
+            x.period.slice(0, 4),
+            `${fixed(s(x)?.sharpe)} ± ${fixed(s(x)?.sharpe_se)}`,
+            fixed(b(x)?.sharpe),
+            pct(s(x)?.max_drawdown),
+            pct(b(x)?.max_drawdown),
+            fixed(m(x, "choice_t")),
+            fixed(m(x, "holdout_t")),
+          ])}
+        />
+        <p>
+          Reading: Moreira and Muir report a positive market alpha on similar data, in-sample, with a scale set on the full
+          sample. Here every scale and threshold uses only past data, which Cederburg et al. (2020) found weakens real-time
+          results. The gap between those two is the price of doing it without hindsight.
+        </p>
+      </>
+    ),
+  };
+}
+
 function trend(rows: Result[]): Both {
   const r = rows[0];
   return {
@@ -419,6 +502,7 @@ export function explain(key: string, rows: Result[]): Both | null {
   if (key === "pairs_trading") return pairsTrading(rows);
   if (key === "vol_targeting") return volTargeting(rows);
   if (key === "ma_crossover") return trend(rows);
+  if (key === "market_century") return century(rows);
   if (key === "panic_detector") return panic(rows);
   return null;
 }
