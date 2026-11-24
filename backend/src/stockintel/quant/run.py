@@ -325,6 +325,7 @@ def market_century(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> 
 
 
 PUBLISHED_UNTIL = "2015-12-31"  # Ehsani & Linnainmaa's sample ends here.
+PAPER_FROM = "1964-07-01"  # ...and starts here.
 
 
 def factor_momentum(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
@@ -342,6 +343,17 @@ def factor_momentum(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) ->
         "sharpe": metrics.sharpe(after),
         "t": hac_t(after),
         "annual_return": float(after.mean() * 252),
+    }
+    # Descriptive only, added after the first result: the paper's own period, when most
+    # factors exist. Before 1963 only the US market (and from 1931 long-term reversal) is
+    # available, so early years are close to timing the market alone.
+    paper = strategy[strategy.index >= PAPER_FROM]
+    result["paper_period"] = {
+        "from": str(paper.index.min().date()),
+        "sharpe": metrics.sharpe(paper),
+        "t": hac_t(paper),
+        "annual_return": float(paper.mean() * 252),
+        "average_factors": float(held[held.index >= PAPER_FROM].notna().sum(axis=1).mean()),
     }
     result["average_longs"] = float((held > 0).sum(axis=1).mean())
     result["average_shorts"] = float((held < 0).sum(axis=1).mean())
