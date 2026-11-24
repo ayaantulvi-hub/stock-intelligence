@@ -10,12 +10,17 @@ whole US market's daily returns since 1926. On a hand-written backtest engine, t
 - pairs trading (statistical arbitrage), momentum and low-volatility stocks;
 - trend following;
 - Monte Carlo Value at Risk (five models, including GARCH and filtered historical simulation);
+- factor momentum across 11 investing styles, US and developed markets;
 - a market panic detector built from eigenvalues of the correlation matrix.
 
-**Headline: 20 tests, 1 passed** (EWMA Value at Risk). The most interesting finding is a near
-miss: with 100 years of data instead of 16, the evidence for volatility targeting more than
-doubles (alpha t-score up to 2.55), but it still falls short of the bar of 3 and fails the
-held-back years.
+**What held up** (2 of 21 tests, against a bar set before testing):
+
+- **Factor momentum** (Ehsani & Linnainmaa, 2022), on 11 factors from 1927: t = 4.15 after
+  costs, positive on the held-back years. Over the paper's own period (from 1964) the Sharpe
+  ratio is 0.77 (t = 5.04), and it stayed positive after the paper's data ended in 2015.
+- **EWMA Value at Risk:** the right number of bad days, and no clustering.
+- **Near miss:** volatility targeting on 100 years of data reached an alpha t-score of 2.55,
+  short of 3.
 
 Every idea faces the same test:
 - it is judged on data it was not designed on;
@@ -106,6 +111,7 @@ From the stored run of 23 November 2026, with details and sources in
 | Trend following, 100 years | No reliable edge | Higher Sharpe (0.49 vs 0.45) and worst fall −64% vs −85%, but less return |
 | Momentum (months t-12 to t-2) | No reliable edge | Sharpe −0.05 after costs |
 | Low volatility (calmest 10%) | No reliable edge | Sharpe 0.67 vs 0.93, alpha t −0.19 |
+| **Factor momentum, 11 factors** | **Edge** | **t = 4.15 from 1927; Sharpe 0.77 and t = 5.04 from 1964** |
 | Pairs trading, distance | No reliable edge | Sharpe −0.11 after costs |
 | Pairs trading, cointegration | No reliable edge | Sharpe 0.22 ± 0.25, and a −43.6% fall |
 | Value at Risk, historical | Rejected | Right number of breaches, but they bunch together |

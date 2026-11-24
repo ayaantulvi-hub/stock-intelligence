@@ -220,6 +220,31 @@ against all stocks above the Fed funds rate: **Sharpe 0.67 against 0.93, worst f
 against −38.8%, alpha t = −0.19. No reliable edge** over 2013–2026, a period in which the
 market as a whole rose strongly.
 
+### 9. Factor momentum: passed
+
+At each month's last close, go long every factor whose return over the past 12 months was
+positive and short every one whose return was negative, equal weight, held through the next
+month ([Ehsani & Linnainmaa, 2022](https://www.nber.org/papers/w25551)). Factors: the 11
+non-momentum factors in the French library, US (market, SMB, HML, RMW, CMA, long-term reversal)
+and developed ex US (market, SMB, HML, RMW, CMA). Short-term reversal was left out before
+testing because it turns over monthly and the library's returns exclude trading costs. Each
+change in a factor position costs 10 bp; the factors' own trading costs are not modelled.
+
+| Period | Sharpe | t-score | Return a year |
+|---|---|---|---|
+| Verdict sample, 1927–2024 | 0.45 | **4.15** | 3.7% |
+| Held-back years, 2025–26 | — | 1.46 (positive) | — |
+| Paper's period, from July 1964 (described after the first result) | 0.77 | 5.04 | 3.1% |
+| After the paper's data, 2016 on | 0.48 | 1.58 | 2.1% |
+
+**Edge.** It clears the bar and stays positive on the held-back years. Two checks a reviewer
+would ask for: before 1963 only the US market and long-term reversal exist, so the early
+decades are close to timing the market, yet the paper's own period, with about 9 factors on
+average, is stronger, not weaker. And after the paper's data ends it still made money, though
+ten years alone is too short to prove it. The paper reports a Sharpe ratio of 0.98 before costs
+with up to 20 factors; ours is lower with 11 factors and costs charged. On the synthetic demo
+data, which has no persistence built in, the same code finds no edge (t = 1.40).
+
 ### Crash protection (added after the results, not part of the score)
 
 For the strategies meant to soften crashes (trend, volatility targeting and low volatility,

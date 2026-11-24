@@ -10,10 +10,11 @@ years of daily prices for 480 large US companies and on 100 years of US market r
 after costs, on years they weren't designed on, with a t-score of 3 to pass.
 
 **2. What did you find?**
-20 tests, 1 passed: the EWMA Value at Risk model. Every trading idea, including trend
-following, pairs trading, momentum, low volatility and volatility targeting, showed no reliable
-edge after costs. The closest miss: on 100 years of data, volatility targeting reached an alpha
-t-score of 2.55. That is the expected result for well-known, free-data ideas, and the project reports it
+21 tests, 2 passed. Factor momentum passed with t = 4.15 after costs, and stayed positive
+after the paper's data ended. EWMA Value at Risk passed both risk tests. Stock-level ideas such
+as trend following, pairs trading, momentum and low volatility showed no reliable edge after
+costs on 2011–2026 large US stocks. The closest miss: on 100 years of data, volatility
+targeting reached an alpha t-score of 2.55. That is the expected result for well-known, free-data ideas, and the project reports it
 rather than hiding it.
 
 **3. What is look-ahead bias, and how do you stop it?**
@@ -86,12 +87,18 @@ measured by alpha against just holding the market. The best version's alpha t-sc
 far from 3. I also used only past data to set the target. Cederburg and colleagues found that,
 done in real time like this, volatility management often harms performance.
 
-**14. 19 of your 20 tests failed. Isn't the project a failure?**
+**14. Most of your tests failed. Isn't the project a failure?**
 No. The aim was to build a test strict enough to tell real effects from luck, and to show it
 working. A tool that only reports wins isn't evidence of anything. The one pass also shows the test
 isn't simply rejecting everything.
 
-**15. What would you do with more time or paid data?**
+**15. Which result are you most confident in, and why?**
+Factor momentum. It passed a bar set in advance, it was stronger over the paper's own period
+than over my longer sample, it stayed positive after the paper's data ended, and on random data
+the same code finds nothing. The paper's Sharpe ratio was 0.98; mine is 0.77 with fewer
+factors and costs charged, which is the kind of shrinkage you'd expect from an honest copy.
+
+**16. What would you do with more time or paid data?**
 Add delisted companies to remove survivorship bias, use intraday data so entries and exits
 aren't limited to closing prices, and measure trading costs per stock instead of assuming
 0.10%. I'd also add an Expected Shortfall backtest, because Value at Risk says how often a
@@ -112,7 +119,10 @@ Each claim below is traceable to the stored results.
 - Built a quantitative research lab in Python that tests eight classic strategies on 16 years
   of daily prices for 480 US companies and 100 years of US market returns, with walk-forward
   rules, trading costs, Newey-West t-scores and a t ≥ 3 bar set in advance.
-- Found that only 1 of 20 tests passed: an EWMA Value at Risk model. Two standard models got
+- Replicated time-series factor momentum (Ehsani & Linnainmaa, 2022) on 11 factors since 1927:
+  t = 4.15 after costs, Sharpe 0.77 over the paper's period, and still positive in the ten
+  years after its data ended. 2 of 21 tests passed a t ≥ 3 bar set in advance; the other
+  pass was an EWMA Value at Risk model. Two standard models got
   the number of bad days right but were rejected because breaches clustered, with a 16.6%
   chance of a breach the day after one, against 5% expected.
 - Engineered automatic data collection from the SEC, the Federal Reserve and licensed price
@@ -121,5 +131,5 @@ Each claim below is traceable to the stored results.
 
 **One line for a personal statement:**
 "I built a lab to test well-known trading strategies the way a sceptical reviewer would, and
-the most useful result was a failure: 19 of 20 tests found no reliable edge, which taught me
-how easily patterns that look real turn out to be luck."
+the most useful lesson was how few survive: of 21 tests, two held up, which taught me how
+easily patterns that look real turn out to be luck, and how to recognise the ones that don't."
