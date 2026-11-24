@@ -98,3 +98,34 @@ def low_volatility(prices: pd.DataFrame, mask: pd.DataFrame, share: float = 0.1)
             row[calm] = 1.0 / len(calm)
         rows.append(row)
     return _monthly_to_daily(pd.DataFrame(rows, index=closes.index), prices.index)
+
+
+def factor_momentum(
+    factors: pd.DataFrame, months: int = 12, cost_bps: float = COST_BPS
+) -> tuple[pd.Series, pd.DataFrame]:
+    """Time-series factor momentum (Ehsani & Linnainmaa, 2022): at each month's last close, go
+    long every factor whose return over the past 12 months was positive and short every factor
+    whose return was negative, equal weight across all of them, held through the next month.
+    A factor joins once it has 12 full months of history. Returns (daily return after costs,
+    position held each day). Flipping a factor's side costs cost_bps per unit traded."""
+    growth = (1 + factors.fillna(0)).cumprod().where(factors.notna())
+    month_end = factors.index.to_series().groupby(factors.index.to_period("M")).max()
+    ends = pd.DatetimeIndex(month_end.values)
+    rows = []
+    for i, end in enumerate(ends):
+        row = pd.Series(np.nan, index=factors.columns)
+        if i >= months:
+            # Growth over the 12 months up to this close: NaN unless the factor already had
+            # data at the window's start, so a factor joins only with a full year behind it.
+            past = growth.loc[end] / growth.loc[ends[i - months]] - 1
+            row[past > 0] = 1.0
+            row[past < 0] = -1.0
+        rows.append(row)
+    signs = pd.DataFrame(rows, index=ends)
+    held = signs.reindex(factors.index).ffill().shift(1)
+    active = held.notna().sum(axis=1)
+    weights = held.div(active.where(active > 0), axis=0)
+    gross = (weights * factors).sum(axis=1, min_count=1)
+    cost = weights.fillna(0).diff().abs().sum(axis=1) * cost_bps / 10_000
+    out = (gross - cost)[active > 0]
+    return out, held.loc[out.index]

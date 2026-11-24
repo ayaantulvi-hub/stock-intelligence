@@ -15,9 +15,9 @@ from sqlalchemy.engine import Engine
 
 from stockintel.db import get_engine
 from stockintel.quant import engine as bt
-from stockintel.quant import pairs, panic, studies, var, vol
-from stockintel.quant.data import industries, market_history, panels, risk_free
-from stockintel.quant.evaluate import judge
+from stockintel.quant import metrics, pairs, panic, studies, var, vol
+from stockintel.quant.data import factor_history, industries, market_history, panels, risk_free
+from stockintel.quant.evaluate import hac_t, judge
 from stockintel.quant.metrics import summary
 
 
@@ -324,6 +324,40 @@ def market_century(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> 
     store(engine, "market_century", "trend 50/200", result, settings)
 
 
+PUBLISHED_UNTIL = "2015-12-31"  # Ehsani & Linnainmaa's sample ends here.
+
+
+def factor_momentum(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    """Self-financing, so judged against doing nothing. Also reports the years after the
+    paper's sample ended, the cleanest test of whether a published effect survives."""
+    factors = factor_history(engine)
+    if factors.empty or len(factors.columns) < 6:
+        raise SystemExit("Not verified: factor history has not been loaded")
+    strategy, held = studies.factor_momentum(factors)
+    zero = pd.Series(0.0, index=strategy.index)
+    result = judge(strategy, zero)
+    after = strategy[strategy.index > PUBLISHED_UNTIL]
+    result["after_publication"] = {
+        "from": str(after.index.min().date()),
+        "sharpe": metrics.sharpe(after),
+        "t": hac_t(after),
+        "annual_return": float(after.mean() * 252),
+    }
+    result["average_longs"] = float((held > 0).sum(axis=1).mean())
+    result["average_shorts"] = float((held < 0).sum(axis=1).mean())
+    result["factors"] = list(factors.columns)
+    result["series"] = growth_series(strategy, zero)
+    settings = {
+        "signal": "sign of past 12-month return",
+        "weights": "equal",
+        "rebalance": "monthly",
+        "cost_bps_per_flip": bt.COST_BPS,
+        "factors": "French library, non-momentum, "
+        "US and developed ex US; short-term reversal left out for its turnover",
+    }
+    store(engine, "factor_momentum", "time-series, 11 factors", result, settings)
+
+
 STUDIES = {
     "ma_crossover": ma_crossover,
     "vol_targeting": vol_targeting,
@@ -333,6 +367,7 @@ STUDIES = {
     "market_century": market_century,
     "momentum": momentum,
     "low_volatility": low_volatility,
+    "factor_momentum": factor_momentum,
 }
 MIN_STOCKS = 50
 

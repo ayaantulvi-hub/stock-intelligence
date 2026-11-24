@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 from stockintel.ingest import run_market_history
 from stockintel.providers.base import FeedError, Provenance
-from stockintel.providers.french import MIN_ROWS, parse_daily
+from stockintel.providers.french import FILES, MIN_ROWS, parse_columns, parse_daily
 from stockintel.quant import studies
 
 NOW = datetime(2026, 11, 23, tzinfo=UTC)
@@ -46,7 +46,8 @@ def test_reads_percent_as_decimals_and_skips_notes():
     [
         (b"not a zip", "readable zip"),
         (_file(100), "only 100 daily rows"),
-        (_zip(["no header here"] + _rows(MIN_ROWS)), "no Mkt-RF column"),
+        (_zip(["no header here"] + _rows(MIN_ROWS)), "no Mkt-RF, RF column"),
+        (_zip([",Mkt-RF,SMB"] + _rows(MIN_ROWS)), "no RF column"),
     ],
 )
 def test_broken_files_raise_instead_of_storing_bad_data(content, problem):
@@ -55,14 +56,21 @@ def test_broken_files_raise_instead_of_storing_bad_data(content, problem):
 
 
 class FixtureFrench:
-    """TEST FIXTURE: stands in for the library download."""
+    """TEST FIXTURE: stands in for the library download. Market rows are (day, mkt_rf, rf);
+    other files return `extra` rows of (day, {series: value}) or fail with `error`."""
 
-    def __init__(self, rows):
-        self.rows = rows
+    def __init__(self, rows, extra=None, error=None):
+        self.rows, self.extra, self.error = rows, extra or {}, error
 
-    def daily_market(self):
-        return self.rows, Provenance(
-            "Kenneth R. French Data Library", "https://fixture.test/ff.zip", NOW, "end_of_day"
+    def daily(self, name):
+        if name == self.error:
+            raise FeedError("French library: HTTP 503")
+        if name == "market":
+            rows = [(d, {"mkt_rf": m, "rf": r}) for d, m, r in self.rows]
+        else:
+            rows = self.extra.get(name, [])
+        return rows, Provenance(
+            "Kenneth R. French Data Library", f"https://fixture.test/{name}.zip", NOW, "end_of_day"
         )
 
 
@@ -90,7 +98,31 @@ def test_stores_once_and_keeps_old_values_when_the_library_revises(engine):
             )
         ).scalar()
     assert stored == [-0.02, -0.019]
-    assert source == "https://fixture.test/ff.zip"
+    assert source == "https://fixture.test/market.zip"
+
+
+def test_one_failing_file_is_reported_and_the_others_still_load(engine):
+    rows = [(date(2020, 1, 1), 0.01, 0.0001)]
+    extra = {"us five factors": [(date(2020, 1, 1), {"us_smb": 0.002})]}
+    status = run_market_history(engine, FixtureFrench(rows, extra, error="developed ex US"))
+    assert status == "partial"
+    with engine.connect() as conn:
+        names = set(conn.execute(text("SELECT DISTINCT series FROM factor_returns")).scalars())
+    assert names == {"mkt_rf", "rf", "us_smb"}
+
+
+def test_reads_named_columns_from_other_factor_files():
+    lines = [",SMB,HML,RMW,CMA,RF"] + [
+        f"{d:%Y%m%d},0.20,-0.10,0.05,0.01,0.01"
+        for d in pd.bdate_range("1963-07-01", periods=10_000)
+    ]
+    rows = parse_columns(_zip(lines), FILES["us five factors"][1], 10_000)
+    assert rows[0][1] == {
+        "us_smb": pytest.approx(0.002),
+        "us_hml": pytest.approx(-0.001),
+        "us_rmw": pytest.approx(0.0005),
+        "us_cma": pytest.approx(0.0001),
+    }
 
 
 def test_trend_rule_waits_for_200_days_and_never_looks_ahead():
@@ -129,3 +161,47 @@ def test_century_study_runs_end_to_end_and_stores_every_version(engine):
             .all()
         )
     assert variants == [label for _, label in run.CENTURY_VERSIONS] + ["trend 50/200"]
+
+
+def _factors(seed: int = 4) -> pd.DataFrame:
+    """TEST FIXTURE: three invented factors; one starts later than the others."""
+    rng = np.random.default_rng(seed)
+    days = pd.bdate_range("2000-01-03", "2006-12-29")
+    f = pd.DataFrame(rng.normal(0, 0.005, (len(days), 3)), index=days, columns=["a", "b", "c"])
+    f["a"] += 0.0008  # Always rising: should always be held long.
+    f["b"] -= 0.0008  # Always falling: should always be held short.
+    f.loc[:"2003-06-30", "c"] = np.nan  # Joins only after a full year of its own history.
+    return f
+
+
+def test_factor_momentum_goes_with_each_factors_past_year():
+    returns, held = studies.factor_momentum(_factors())
+    assert returns.index[0] > pd.Timestamp("2001-01-01")  # Needs 12 months first.
+    late = held.loc["2006"]
+    assert (late["a"] == 1).all() and (late["b"] == -1).all()
+    assert held.loc[:"2004-06-30", "c"].isna().all()  # c started mid-2003: no full year yet.
+    assert held.loc["2004-08":, "c"].notna().all()
+
+
+def test_factor_momentum_uses_only_the_past():
+    factors = _factors()
+    returns, _ = studies.factor_momentum(factors)
+    changed = factors.copy()
+    cut = changed.index.get_loc(pd.Timestamp("2004-03-15"))
+    changed.iloc[cut + 1 :] *= -5
+    again, _ = studies.factor_momentum(changed)
+    pd.testing.assert_series_equal(
+        returns.loc[: factors.index[cut]], again.loc[: factors.index[cut]]
+    )
+
+
+def test_factor_momentum_charges_for_each_flip():
+    factors = _factors()
+    free, _ = studies.factor_momentum(factors, cost_bps=0)
+    paid, held = studies.factor_momentum(factors, cost_bps=10)
+    flips_cost = (free - paid).sum()
+    assert flips_cost > 0
+    # Costs fall only on days a position changes: entering, flipping, or a factor joining.
+    changed = held.fillna(0).diff().abs().sum(axis=1)
+    changed.iloc[0] = held.iloc[0].abs().sum()
+    assert (free - paid)[(free - paid) > 1e-12].index.isin(changed.index[changed > 0]).all()

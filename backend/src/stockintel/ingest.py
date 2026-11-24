@@ -328,15 +328,13 @@ def run_history(engine: Engine, provider, now: datetime) -> str:
 
 
 def run_market_history(engine: Engine, provider) -> str:
-    """Daily US market excess return and risk-free return since 1926 (French library). Only
-    new days and changed values are stored, so a revision keeps the earlier value."""
+    """Daily factor returns from the French library: the US market since 1926 and the factors
+    used by factor momentum. Only new days and changed values are stored, so a revision keeps
+    the earlier value. One file failing doesn't stop the others."""
+    from stockintel.providers.french import FILES
+
     run = Run(engine, "market history")
-    run.attempted = 1
-    try:
-        rows, provenance = provider.daily_market()
-    except FeedError as exc:
-        return run.finish(str(exc))
-    with engine.begin() as conn:
+    with engine.connect() as conn:
         current = {
             (r.series, r.market_date): r.value
             for r in conn.execute(
@@ -346,22 +344,31 @@ def run_market_history(engine: Engine, provider) -> str:
                 )
             )
         }
+    for name in FILES:
+        run.attempted += 1
+        try:
+            rows, provenance = provider.daily(name)
+        except FeedError as exc:
+            run.errors.append(f"{name}: {exc}")
+            continue
         new = [
             {"series": series, "day": day, "value": value}
-            for day, market, rf in rows
-            for series, value in (("mkt_rf", market), ("rf", rf))
+            for day, values in rows
+            for series, value in values.items()
             if current.get((series, day)) != value
         ]
         if new:
-            fetch_id = add_fetch(conn, provenance)
-            conn.execute(
-                text(
-                    """INSERT INTO factor_returns (fetch_id, series, market_date, value)
-                       VALUES (:fetch_id, :series, :day, :value)"""
-                ),
-                [{**row, "fetch_id": fetch_id} for row in new],
-            )
-    run.ok, run.added = 1, len(new)
+            with engine.begin() as conn:
+                fetch_id = add_fetch(conn, provenance)
+                conn.execute(
+                    text(
+                        """INSERT INTO factor_returns (fetch_id, series, market_date, value)
+                           VALUES (:fetch_id, :series, :day, :value)"""
+                    ),
+                    [{**row, "fetch_id": fetch_id} for row in new],
+                )
+        run.ok += 1
+        run.added += len(new)
     return run.finish()
 
 

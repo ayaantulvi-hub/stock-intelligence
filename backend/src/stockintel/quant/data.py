@@ -74,3 +74,34 @@ def market_history(engine: Engine) -> pd.DataFrame:
     wide = frame.pivot(index="day", columns="series", values="value")
     wide.index = pd.to_datetime(wide.index)
     return wide.sort_index()[["mkt_rf", "rf"]].dropna()
+
+
+FACTORS = (
+    "mkt_rf",
+    "us_smb",
+    "us_hml",
+    "us_rmw",
+    "us_cma",
+    "us_lt_rev",
+    "devx_mkt_rf",
+    "devx_smb",
+    "devx_hml",
+    "devx_rmw",
+    "devx_cma",
+)
+
+
+def factor_history(engine: Engine) -> pd.DataFrame:
+    """Daily returns of the factors used by factor momentum, latest stored version of each
+    day; a factor is NaN before its data starts."""
+    query = """SELECT DISTINCT ON (series, market_date) series, market_date, value
+               FROM factor_returns WHERE series = ANY(:names)
+               ORDER BY series, market_date, id DESC"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(query), {"names": list(FACTORS)}).all()
+    if not rows:
+        return pd.DataFrame(columns=list(FACTORS))
+    frame = pd.DataFrame(rows, columns=["series", "day", "value"])
+    wide = frame.pivot(index="day", columns="series", values="value")
+    wide.index = pd.to_datetime(wide.index)
+    return wide.sort_index().reindex(columns=[f for f in FACTORS if f in wide.columns])
