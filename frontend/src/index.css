@@ -297,3 +297,9 @@ main > .panels > .panel:nth-child(n + 5) { animation-delay: 0.16s; }
 .plain-list { margin: 0 0 12px; padding-left: 20px; max-width: 72ch; }
 .plain-list li { margin: 0 0 6px; font-size: 16px; line-height: 1.6; }
 .panel-intro { margin: 0 0 12px; max-width: 90ch; font-size: 14px; color: var(--ink-2); }
+.held-up { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 2px; }
+.held-up li { display: grid; grid-template-columns: 22px auto 1fr; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); font-size: 18px; }
+.held-up li:last-child { border-bottom: 0; }
+.held-up a { text-decoration: none; font-weight: 600; }
+.held-up .num { font-size: 13px; text-align: right; }
+.mark.near { color: var(--amber); }

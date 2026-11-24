@@ -65,16 +65,55 @@ function Overview({ data, byStudy, coverage, feeds, go }: {
 }) {
   const passed = data.filter((r) => PASSING.has(r.verdict)).length;
   const years = data.flatMap((r) => r.period.match(/\d{4}/g)?.map(Number) ?? []);
+  const winners = data.filter((r) => PASSING.has(r.verdict));
+  // A near miss: failed, but its deciding t-score reached 2. Shown as "close, not proven".
+  const nearMisses = data.filter((r) => {
+    const t = r.metrics.choice_t;
+    return !PASSING.has(r.verdict) && typeof t === "number" && t >= 2;
+  });
+  const rowsOf = (study: string) => data.filter((r) => r.study === study).length;
   const ok = feeds?.filter((f) => f.status === "ok").length;
   return (
     <div className="panels">
       <Panel title="Score" span={8} className="hero" meta={years.length ? `${Math.min(...years)}–${Math.max(...years)}` : NOT_VERIFIED}>
-        <h1>
-          <span>{data.length} tests.</span> <span className={passed ? "tone-green" : "tone-red"}>{passed} passed.</span>
-        </h1>
+        <h1>What held up.</h1>
+        <ul className="held-up">
+          {winners.map((r) => {
+            const info = STUDIES.find((s) => s.key === r.study);
+            const [label, value] = decidingStat(r);
+            return (
+              <li key={`${r.study}/${r.variant}`}>
+                <Mark pass />
+                <a href={`#${r.study}`}>
+                  {info?.title}
+                  {info && rowsOf(r.study) > 1 ? `: ${NAMES[r.variant] ?? r.variant}` : ""}
+                </a>
+                <span className="num muted">
+                  {label} {value}
+                </span>
+              </li>
+            );
+          })}
+          {nearMisses.map((r) => {
+            const info = STUDIES.find((s) => s.key === r.study);
+            const [label, value] = decidingStat(r);
+            return (
+              <li key={`${r.study}/${r.variant}`} className="near">
+                <span className="mark near" aria-label="close, not proven">≈</span>
+                <a href={`#${r.study}`}>
+                  {info?.title}: {NAMES[r.variant] ?? r.variant}
+                </a>
+                <span className="num muted">
+                  {label} {value} · close, not proven
+                </span>
+              </li>
+            );
+          })}
+          {!winners.length && !nearMisses.length && <li className="muted">Nothing has cleared the bar yet.</li>}
+        </ul>
         <p className="lede">
-          Classic quant ideas, built from scratch and tested the hard way: after costs, on years they never saw, with a
-          t-score of 3 to pass.
+          {passed} of {data.length} tests cleared a bar set before testing: a t-score of 3 after costs, and positive on years
+          held back. Every test, pass or fail, is listed below.
         </p>
       </Panel>
       <Panel title="Data" span={4} meta={<a href="#data">Details</a>}>

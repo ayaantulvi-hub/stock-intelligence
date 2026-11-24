@@ -489,6 +489,70 @@ function lowVolatility(rows: Result[]): Both {
   };
 }
 
+function factorMomentumStudy(rows: Result[]): Both {
+  const r = rows[0];
+  const paper = m(r, "paper_period") as Record<string, number> | undefined;
+  const after = m(r, "after_publication") as Record<string, number> | undefined;
+  const factors = (m(r, "factors") as string[] | undefined)?.length;
+  return {
+    plain: (
+      <>
+        <p>
+          A "factor" is an investing style, such as buying cheap companies over expensive ones, or small over large.
+          Styles go through good and bad years, and the paper found those spells tend to last. So each month we back every style that
+          made money over the past year and bet against every style that lost, spread equally across{" "}
+          {factors ?? NOT_VERIFIED} styles in the US and other developed markets.
+        </p>
+        <p>
+          {pass(r)
+            ? `It passed: a score of ${fixed(m(r, "choice_t"))} against the bar of 3, and it was still positive on the two held-back years.`
+            : `It needed a score of 3 and got ${fixed(m(r, "choice_t"))}.`}{" "}
+          Over the paper's own years, from 1964, it scored {fixed(paper?.t)}. The cleanest check is what happened after
+          the paper's data ended in 2015, because nobody could have fitted to those years:{" "}
+          {num(after?.annual_return) && (after?.annual_return as number) > 0
+            ? `it kept making money, ${pct(after?.annual_return)} a year`
+            : `it lost ${pct(Math.abs((after?.annual_return as number) ?? NaN))} a year`}
+          , though that stretch alone is too short to prove much (score {fixed(after?.t)}).
+        </p>
+      </>
+    ),
+    quant: (
+      <>
+        <p>
+          Time-series factor momentum (Ehsani & Linnainmaa, 2022): at each month-end close, wᵢ = sign(∏(1 + rᵢ) − 1 over
+          the past 12 months) / Nₜ, held through the next month. Nₜ counts factors with a full year of history. Factors:
+          the {factors ?? NOT_VERIFIED} non-momentum factors in the French library, US (market, SMB, HML, RMW, CMA,
+          long-term reversal) and developed ex US (market, SMB, HML, RMW, CMA). Short-term reversal is left out because it
+          turns over monthly and the library's returns exclude trading costs; that was decided before testing. Entering,
+          flipping or rebalancing a factor costs 10 bp per unit traded. The factors' own internal trading costs are not
+          modelled, so returns are somewhat overstated.
+        </p>
+        <p>
+          Differences from the paper: 11 factors from one library instead of up to 20 from three, and costs charged. The
+          paper reports a Sharpe ratio of 0.98 and t = 7.04 over July 1964 to December 2015.
+        </p>
+        <Table
+          head={["Period", "From", "Sharpe", "t", "Return / yr"]}
+          rows={[
+            ["Verdict sample", r?.period.slice(0, 4) ?? NOT_VERIFIED, fixed(s(r)?.sharpe), fixed(m(r, "choice_t")), pct(s(r)?.annual_return)],
+            ["Paper's period (descriptive)", paper ? "1964" : NOT_VERIFIED, fixed(paper?.sharpe), fixed(paper?.t), pct(paper?.annual_return)],
+            ["After publication", after ? "2016" : NOT_VERIFIED, fixed(after?.sharpe), fixed(after?.t), pct(after?.annual_return)],
+            ["Held-back years", "2025", "—", fixed(m(r, "holdout_t")), "—"],
+          ]}
+        />
+        <p>
+          Reading: before 1963 only the US market and, from 1931, long-term reversal exist, so the early decades are close
+          to timing the market. The paper-period row was added after the first result, as a description only. With about{" "}
+          {fixed(paper?.average_factors, 1)} factors on average, its t-score is{" "}
+          {num(paper?.t) && num(m(r, "choice_t")) && (paper?.t as number) > (m(r, "choice_t") as number)
+            ? "higher, so the pass does not depend on the early decades."
+            : "not higher, so part of the pass comes from the early decades."}
+        </p>
+      </>
+    ),
+  };
+}
+
 function trend(rows: Result[]): Both {
   const r = rows[0];
   return {
@@ -604,6 +668,7 @@ export function explain(key: string, rows: Result[]): Both | null {
   if (key === "market_century") return century(rows);
   if (key === "momentum") return momentumStudy(rows);
   if (key === "low_volatility") return lowVolatility(rows);
+  if (key === "factor_momentum") return factorMomentumStudy(rows);
   if (key === "panic_detector") return panic(rows);
   return null;
 }

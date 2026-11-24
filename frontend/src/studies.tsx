@@ -109,6 +109,17 @@ export const STUDIES: StudyInfo[] = [
     sources: [["Blitz & van Vliet (2007)", "https://core.ac.uk/download/18510017.pdf"]],
   },
   {
+    key: "factor_momentum",
+    code: "FMOM",
+    title: "Factor momentum",
+    tagline: "Back the investing styles that worked last year, bet against the ones that didn't.",
+    tags: ["Data · 11 factors, US and developed markets", "Test · walk-forward, after costs"],
+    sources: [
+      ["Ehsani & Linnainmaa (2022)", "https://www.nber.org/papers/w25551"],
+      ["Kenneth R. French Data Library", "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html"],
+    ],
+  },
+  {
     key: "panic_detector",
     code: "PANIC",
     title: "Panic detector",
@@ -139,6 +150,7 @@ export const NAMES: Record<string, string> = {
   "trend 50/200": "Trend 50/200",
   "12-1 long-short": "Momentum 12-1",
   "calmest 10%": "Calmest 10%",
+  "time-series, 11 factors": "Time-series, 11 factors",
   "absorption ratio shift": "Absorption ratio",
 };
 
@@ -392,6 +404,32 @@ export function view(key: string, rows: Result[]): View | null {
           ? "Smaller falls, but no extra return for the risk."
           : "No extra return for the risk.",
       note: `alpha t = ${fixed(r?.metrics.choice_t)}`,
+    };
+  }
+  if (key === "factor_momentum") {
+    const r = rows[0];
+    const g = r?.metrics.series as Growth | undefined;
+    const paper = r?.metrics.paper_period as Record<string, number> | undefined;
+    const after = r?.metrics.after_publication as Record<string, number> | undefined;
+    return {
+      tiles: [
+        { value: `t = ${fixed(r?.metrics.choice_t)}`, label: "test score on the choice years (needs 3)", tone: anyPass(rows) ? "green" : "amber" },
+        { value: `${fixed(paper?.sharpe)} (t = ${fixed(paper?.t)})`, label: "Sharpe ratio over the paper's own years, from 1964", tone: "blue" },
+        { value: `${fixed(after?.sharpe)} (t = ${fixed(after?.t)})`, label: "Sharpe ratio after the paper's data ends, 2016 on", tone: "orange" },
+      ],
+      chart: g ? (
+        <LineChart
+          title="Growth of $1 committed, after costs"
+          months={g.months}
+          series={[{ name: "Factor momentum", values: g.strategy, role: "s1" }]}
+          format={(v) => (v >= 100 ? `$${Math.round(v).toLocaleString("en-GB")}` : `$${v.toFixed(2)}`)}
+          baseline={1}
+          log
+        />
+      ) : null,
+      caption: `long factors up over the past year, short those down · equal weight · monthly · ${r?.period ?? NOT_VERIFIED} · log scale`,
+      finding: anyPass(rows) ? "It passed, and stayed positive after publication." : "It didn't clear the bar.",
+      note: `t = ${fixed(r?.metrics.choice_t)} · 1964 on t = ${fixed(paper?.t)}`,
     };
   }
   if (key === "ma_crossover") {

@@ -23,6 +23,7 @@ CHOSEN = {
     "market_century": ("studies.py", ["trend_on", "trend_returns"]),
     "momentum": ("studies.py", ["momentum"]),
     "low_volatility": ("studies.py", ["low_volatility"]),
+    "factor_momentum": ("studies.py", ["factor_momentum"]),
 }
 
 
