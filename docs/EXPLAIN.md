@@ -1,4 +1,4 @@
-# Explaining this project: 15 likely interview questions
+# Explaining this project: 16 likely interview questions
 
 Short answers to learn and then say in your own words. Numbers come from the stored run of
 23 November 2026: [QUANT.md](QUANT.md) has the full tables and
