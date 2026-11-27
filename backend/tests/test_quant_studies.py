@@ -217,3 +217,38 @@ def test_low_volatility_holds_the_calmest_tenth_and_trades_monthly():
     changes = live.diff().abs().sum(axis=1)
     month_ends = set(prices.index.to_series().groupby(prices.index.to_period("M")).max())
     assert set(changes[changes > 0].index) <= month_ends
+
+
+@pytest.mark.parametrize("rule", ["mean_reversion", "breakout"])
+def test_image_strategies_use_only_the_past(rule):
+    returns = _panel()
+
+    def make(r):
+        prices = (1 + r).cumprod()
+        return getattr(studies, rule)(prices, pd.DataFrame(True, index=r.index, columns=r.columns))
+
+    assert engine.look_ahead_check(make, returns, cut=700) is True
+
+
+def _path(values):
+    """TEST FIXTURE: one invented stock price path."""
+    return pd.DataFrame({"S": values}, index=pd.bdate_range("2020-01-01", periods=len(values)))
+
+
+def test_mean_reversion_buys_a_plunge_and_exits_back_at_the_average():
+    flat = [100 + 0.5 * ((-1) ** i) for i in range(40)]
+    path = _path(flat + [90.0] + [100.5, 99.5] * 5)  # A sharp drop, then back to normal.
+    w = studies.mean_reversion(path, pd.DataFrame(True, index=path.index, columns=path.columns))
+    drop = path.index[40]
+    assert w.at[drop, "S"] == 1.0  # z far below -2: long.
+    assert (w.loc[path.index[45] :, "S"] == 0).all()  # Back above the average: closed.
+
+
+def test_breakout_enters_on_a_new_55_day_high_and_exits_on_a_20_day_low():
+    base = [100.0 + (i % 3) for i in range(60)]
+    path = _path(base + [110.0, 111.0, 112.0] + [113.0] * 20 + [90.0])
+    w = studies.breakout(path, pd.DataFrame(True, index=path.index, columns=path.columns))
+    assert w.iloc[59, 0] == 0 and w.iloc[60, 0] == 1.0  # In on the first close above the channel.
+    assert w.iloc[-1, 0] == 0  # Out when the close breaks the 20-day low.
+    on = studies.breakout_on(path["S"])
+    assert on.iloc[:55].isna().all() and on.iloc[60] == 1.0

@@ -69,6 +69,65 @@ def longest_drawdown_days(returns: pd.Series) -> int:
     return longest
 
 
+def downside_deviation(returns: pd.Series, mar: float = 0.0) -> float:
+    """Annualised root-mean-square of returns below a minimum acceptable return (MAR, daily)."""
+    r = returns.dropna()
+    if len(r) < 2:
+        return float("nan")
+    below = np.minimum(r - mar, 0.0)
+    return float(np.sqrt((below**2).mean())) * math.sqrt(DAYS_PER_YEAR)
+
+
+def sortino(returns: pd.Series, mar: float = 0.0) -> float:
+    """Annualised mean return above the MAR over the downside deviation below the SAME MAR, so
+    numerator and denominator share one reference point (Sortino & Price, 1994)."""
+    r = returns.dropna()
+    dd = downside_deviation(r, mar)
+    if len(r) < 2 or not dd:
+        return float("nan")
+    return float((r - mar).mean() * DAYS_PER_YEAR / dd)
+
+
+def calmar(returns: pd.Series) -> float:
+    """Compound annual return over the size of the worst drawdown."""
+    mdd = max_drawdown(returns)
+    return annual_return(returns) / abs(mdd) if mdd and not math.isnan(mdd) else float("nan")
+
+
+def information_ratio(returns: pd.Series, benchmark: pd.Series) -> float:
+    """Annualised active return over annualised tracking error."""
+    active = (returns - benchmark).dropna()
+    if len(active) < 2 or active.std(ddof=1) == 0:
+        return float("nan")
+    return float(active.mean() / active.std(ddof=1)) * math.sqrt(DAYS_PER_YEAR)
+
+
+def capture(returns: pd.Series, benchmark: pd.Series) -> tuple[float, float]:
+    """(up capture, down capture): the strategy's average monthly return in the benchmark's
+    up months over the benchmark's, and the same for down months. Below 1 on the down side
+    means it lost less than the benchmark when the benchmark fell."""
+    both = pd.concat([returns, benchmark], axis=1, keys=["s", "b"]).dropna()
+    if both.empty:
+        return float("nan"), float("nan")
+    monthly = (1 + both).groupby(both.index.to_period("M")).prod() - 1
+    up, down = monthly[monthly["b"] > 0], monthly[monthly["b"] < 0]
+    ratio = lambda part: float(part["s"].mean() / part["b"].mean()) if len(part) else float("nan")
+    return ratio(up), ratio(down)
+
+
+def relative(returns: pd.Series, benchmark: pd.Series) -> dict:
+    """Figures that only make sense against a benchmark that moves (not a zero line)."""
+    b = benchmark.dropna()
+    if b.empty or (b == 0).all():
+        return {}
+    up, down = capture(returns, benchmark)
+    return {
+        "information_ratio": information_ratio(returns, benchmark),
+        "up_capture": up,
+        "down_capture": down,
+    }
+
+
 def summary(returns: pd.Series, turnover: pd.Series | None = None) -> dict:
     """The standard figures for one strategy, with the Sharpe ratio's uncertainty."""
     r = returns.dropna()
@@ -83,6 +142,8 @@ def summary(returns: pd.Series, turnover: pd.Series | None = None) -> dict:
         "sharpe": sr,
         "sharpe_se": se,
         "sharpe_t": sr / se if se and not math.isnan(se) else float("nan"),
+        "sortino": sortino(r),
+        "calmar": calmar(r),
         "max_drawdown": max_drawdown(r),
         "longest_drawdown_days": longest_drawdown_days(r),
         "hit_rate": float((r > 0).mean()) if len(r) else float("nan"),

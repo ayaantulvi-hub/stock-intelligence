@@ -9,6 +9,8 @@ export type Summary = {
   sharpe: number | null;
   sharpe_se: number | null;
   max_drawdown: number | null;
+  sortino?: number | null;
+  calmar?: number | null;
 };
 
 export type Growth = { months: string[]; strategy: number[]; baseline: number[] };

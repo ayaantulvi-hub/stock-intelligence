@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
-from stockintel.quant.metrics import summary
+from stockintel.quant.metrics import relative, summary
 
 T_BAR = 3.0
 HOLDOUT_YEARS = 2
@@ -70,6 +70,7 @@ def judge(strategy: pd.Series, baseline: pd.Series, by: str = "difference") -> d
         "holdout_t": late_t,
         "strategy": summary(strategy),
         "baseline": summary(baseline),
+        "relative": relative(strategy, baseline),
         "strategy_holdout": summary(late_s),
         "baseline_holdout": summary(late_b),
     }

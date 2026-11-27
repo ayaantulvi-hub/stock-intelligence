@@ -325,8 +325,9 @@ function century(rows: Result[]): Both {
     ["Conditional", find(rows, "conditional (Bongaerts et al.)")],
     ["Daily EWMA", find(rows, "daily EWMA (Harvey et al.)")],
     ["Trend 50/200", find(rows, "trend 50/200")],
+    ["Breakout 55/20", find(rows, "breakout 55/20")],
   ].filter(([, r]) => r) as [string, Result][];
-  const targeting = versions.filter(([n]) => n !== "Trend 50/200");
+  const targeting = versions.filter(([n]) => n !== "Trend 50/200" && n !== "Breakout 55/20");
   const best = [...targeting].sort(([, x], [, y]) => ((m(y, "choice_t") as number) ?? -Infinity) - ((m(x, "choice_t") as number) ?? -Infinity))[0];
   const need = yearsToThree(best?.[1]);
   const holdoutNegative = versions.filter(([, r]) => num(m(r, "holdout_gain_daily")) && (m(r, "holdout_gain_daily") as number) <= 0).map(([n]) => n);
@@ -553,6 +554,88 @@ function factorMomentumStudy(rows: Result[]): Both {
   };
 }
 
+function meanReversionStudy(rows: Result[]): Both {
+  const r = rows[0];
+  return {
+    plain: (
+      <>
+        <p>
+          The idea: when a stock moves unusually far from its average over the last month, it tends to come back. We
+          measure "unusually far" in standard deviations. Two below the average, we buy; two above, we sell; and we close
+          once the price is back at its average.
+        </p>
+        <p>
+          Before costs it made {pct(m(r, "gross_annual_return"))} a year; after costs, {pct(averageNet(r))}. It trades a
+          lot, about {fixed(m(r, "annual_turnover"), 0)} times its whole portfolio a year, so small costs add up. To pass it
+          needed a score of 3; it got {fixed(m(r, "choice_t"))}.
+        </p>
+      </>
+    ),
+    quant: (
+      <>
+        <p>
+          Signal: zᵢ,ₜ = (Pᵢ,ₜ − MA₂₀) / σ₂₀ on closes. Long when z &lt; −2 until z ≥ 0; short when z &gt; 2 until z ≤ 0.
+          Equal weight across open positions, gross exposure 1, decided at each close, held from the next day, 10 bp per
+          unit traded and 50 bp a year to borrow. Self-financing, so judged against zero. The 20-day window and 2-sd bands
+          are Bollinger's standard settings, fixed before testing.
+        </p>
+        <Table
+          head={["Gross / yr", "Costs / yr", "Net avg / yr", "Turnover / yr", "Max drawdown", "t (choice)", "t (hold-out)"]}
+          rows={[[
+            pct(m(r, "gross_annual_return")),
+            pct(m(r, "cost_drag_annual")),
+            pct(averageNet(r)),
+            `${fixed(m(r, "annual_turnover"), 0)}×`,
+            pct(s(r)?.max_drawdown),
+            fixed(m(r, "choice_t")),
+            fixed(m(r, "holdout_t")),
+          ]]}
+        />
+      </>
+    ),
+  };
+}
+
+function breakoutStudy(rows: Result[]): Both {
+  const r = rows[0];
+  return {
+    plain: (
+      <>
+        <p>
+          A classic trader's rule, made famous by the "Turtle" traders: buy a stock the day it closes higher than at any
+          point in the last 55 days, and sell when it closes lower than at any point in the last 20. Money not in a
+          breakout sits in cash.
+        </p>
+        <p>
+          It earned {lower(s(r)?.sharpe, b(r)?.sharpe) ? "less" : "more"} per unit of risk than holding everything (
+          {fixed(s(r)?.sharpe)} vs {fixed(b(r)?.sharpe)}), with a worst fall of {pct(s(r)?.max_drawdown)} against{" "}
+          {pct(b(r)?.max_drawdown)}. To pass it needed a score of 3; it got {fixed(m(r, "choice_t"))}.
+        </p>
+      </>
+    ),
+    quant: (
+      <>
+        <p>
+          Entry: Pᵢ,ₜ &gt; max(Pᵢ,ₜ₋₅₅ … Pᵢ,ₜ₋₁); exit: Pᵢ,ₜ &lt; min(Pᵢ,ₜ₋₂₀ … Pᵢ,ₜ₋₁), on adjusted closes (the Turtle
+          rules use daily highs and lows). Long only, equal weight across names in a breakout, cash otherwise, 10 bp per
+          unit traded. Judged by mean daily gain over the equal-weight universe, like trend following. The same rule on the
+          US market since 1926 is on the 100-year screen.
+        </p>
+        <Table
+          head={["", "Annual return", "Volatility", "Sharpe ± SE", "Max drawdown"]}
+          rows={[
+            ["Breakout", pct(s(r)?.annual_return), pct(s(r)?.annual_volatility), `${fixed(s(r)?.sharpe)} ± ${fixed(s(r)?.sharpe_se)}`, pct(s(r)?.max_drawdown)],
+            ["Hold all", pct(b(r)?.annual_return), pct(b(r)?.annual_volatility), `${fixed(b(r)?.sharpe)} ± ${fixed(b(r)?.sharpe_se)}`, pct(b(r)?.max_drawdown)],
+          ]}
+        />
+        <p>
+          t (choice) = {fixed(m(r, "choice_t"))}, t (hold-out) = {fixed(m(r, "holdout_t"))}.
+        </p>
+      </>
+    ),
+  };
+}
+
 function trend(rows: Result[]): Both {
   const r = rows[0];
   return {
@@ -669,6 +752,36 @@ export function explain(key: string, rows: Result[]): Both | null {
   if (key === "momentum") return momentumStudy(rows);
   if (key === "low_volatility") return lowVolatility(rows);
   if (key === "factor_momentum") return factorMomentumStudy(rows);
+  if (key === "mean_reversion") return meanReversionStudy(rows);
+  if (key === "breakout") return breakoutStudy(rows);
   if (key === "panic_detector") return panic(rows);
   return null;
+}
+
+/** Standard risk-adjusted ratios for every version of a study, shown under the quant detail.
+ * All from the stored summaries; ratios that need a moving benchmark are blank otherwise. */
+export function RatioTable({ rows, names }: { rows: Result[]; names: Record<string, string> }) {
+  const have = rows.filter((r) => num(s(r)?.sortino));
+  if (!have.length) return null;
+  const rel = (r: Result) => m(r, "relative") as Record<string, number> | undefined;
+  return (
+    <>
+      <p>
+        <strong>Risk-adjusted ratios</strong> (Sortino with a zero threshold; Calmar = CAGR / |max drawdown|; IR and capture
+        against the benchmark, monthly):
+      </p>
+      <Table
+        head={["Version", "Sharpe", "Sortino", "Calmar", "Information ratio", "Up capture", "Down capture"]}
+        rows={have.map((r) => [
+          names[r.variant] ?? r.variant,
+          fixed(s(r)?.sharpe),
+          fixed(s(r)?.sortino),
+          fixed(s(r)?.calmar),
+          num(rel(r)?.information_ratio) ? fixed(rel(r)?.information_ratio) : "—",
+          num(rel(r)?.up_capture) ? pct(rel(r)?.up_capture, 0) : "—",
+          num(rel(r)?.down_capture) ? pct(rel(r)?.down_capture, 0) : "—",
+        ])}
+      />
+    </>
+  );
 }

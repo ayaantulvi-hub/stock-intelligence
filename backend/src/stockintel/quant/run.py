@@ -146,6 +146,50 @@ def low_volatility(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> 
     store(engine, "low_volatility", "calmest 10%", result, settings)
 
 
+def mean_reversion(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    """Long/short and self-financing, so judged against doing nothing."""
+    returns = prices.pct_change(fill_method=None)
+    weights = studies.mean_reversion(prices, mask)
+    result_run = bt.run(weights, returns)
+    first = weights.index[weights.abs().sum(axis=1) > 0].min()
+    strategy = result_run.net[result_run.net.index > first]
+    zero = pd.Series(0.0, index=strategy.index)
+    result = judge(strategy, zero)
+    result["gross_annual_return"] = float(result_run.gross.reindex(strategy.index).mean() * 252)
+    result["cost_drag_annual"] = float(
+        (result_run.gross - result_run.net).reindex(strategy.index).mean() * 252
+    )
+    result["annual_turnover"] = float(result_run.turnover.reindex(strategy.index).mean() * 252)
+    result["series"] = growth_series(strategy, zero)
+    settings = {
+        "signal": "z = (P - MA20) / sd20",
+        "entry": "beyond +/-2",
+        "exit": "z crosses 0",
+        "weights": "equal across open positions",
+        "cost_bps": bt.COST_BPS,
+    }
+    store(engine, "mean_reversion", "Bollinger 20, 2 sd", result, settings)
+
+
+def breakout(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
+    """Long-only timing, judged like trend following: mean gain over holding every stock."""
+    returns = prices.pct_change(fill_method=None)
+    weights = studies.breakout(prices, mask)
+    first = weights.index[weights.abs().sum(axis=1) > 0].min()  # First day anything is held.
+    strategy = bt.run(weights, returns).net
+    baseline = bt.run(studies.equal_weight(mask), returns).net
+    strategy, baseline = strategy[strategy.index > first], baseline[baseline.index > first]
+    result = judge(strategy, baseline)
+    result["series"] = growth_series(strategy, baseline)
+    settings = {
+        "entry": "close above prior 55-day high",
+        "exit": "close below prior 20-day low",
+        "weights": "equal, cash otherwise",
+        "cost_bps": bt.COST_BPS,
+    }
+    store(engine, "breakout", "Donchian 55/20", result, settings)
+
+
 def vol_targeting(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> None:
     returns = prices.pct_change(fill_method=None)
     market = bt.run(studies.equal_weight(mask), returns).net
@@ -322,6 +366,19 @@ def market_century(engine: Engine, prices: pd.DataFrame, mask: pd.DataFrame) -> 
         "cost_bps": bt.COST_BPS,
     }
     store(engine, "market_century", "trend 50/200", result, settings)
+    on = studies.breakout_on(level)
+    strategy = studies.trend_returns(on, excess)
+    baseline = excess.reindex(strategy.index)
+    result = judge(strategy, baseline)
+    result["share_of_days_invested"] = float(on.shift(1).reindex(strategy.index).mean())
+    result["series"] = growth_series(strategy, baseline)
+    settings = {
+        "data": "US market, French library, daily",
+        "entry": 55,
+        "exit": 20,
+        "cost_bps": bt.COST_BPS,
+    }
+    store(engine, "market_century", "breakout 55/20", result, settings)
 
 
 PUBLISHED_UNTIL = "2015-12-31"  # Ehsani & Linnainmaa's sample ends here.
@@ -380,6 +437,8 @@ STUDIES = {
     "momentum": momentum,
     "low_volatility": low_volatility,
     "factor_momentum": factor_momentum,
+    "mean_reversion": mean_reversion,
+    "breakout": breakout,
 }
 MIN_STOCKS = 50
 

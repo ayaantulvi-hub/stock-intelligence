@@ -120,6 +120,22 @@ export const STUDIES: StudyInfo[] = [
     ],
   },
   {
+    key: "mean_reversion",
+    code: "MREV",
+    title: "Mean reversion",
+    tagline: "When a stock stretches far from its recent average, bet on it snapping back.",
+    tags: ["Signal · Bollinger z-score, 20 days", "Test · walk-forward, after costs"],
+    sources: [["Bollinger bands (20-day, 2 sd)", "https://en.wikipedia.org/wiki/Bollinger_Bands"]],
+  },
+  {
+    key: "breakout",
+    code: "BRK",
+    title: "Breakout",
+    tagline: "Buy a stock the day it closes at a new 55-day high; sell when it breaks its 20-day low.",
+    tags: ["Rule · Donchian 55/20 (Turtle System 2)", "Test · vs holding everything"],
+    sources: [["Donchian channels", "https://en.wikipedia.org/wiki/Donchian_channel"]],
+  },
+  {
     key: "panic_detector",
     code: "PANIC",
     title: "Panic detector",
@@ -148,6 +164,9 @@ export const NAMES: Record<string, string> = {
   "conditional (Bongaerts et al.)": "Conditional",
   "daily EWMA (Harvey et al.)": "Daily EWMA",
   "trend 50/200": "Trend 50/200",
+  "breakout 55/20": "Breakout 55/20",
+  "Bollinger 20, 2 sd": "Bollinger 20, 2 sd",
+  "Donchian 55/20": "Donchian 55/20",
   "12-1 long-short": "Momentum 12-1",
   "calmest 10%": "Calmest 10%",
   "time-series, 11 factors": "Time-series, 11 factors",
@@ -321,8 +340,8 @@ export function view(key: string, rows: Result[]): View | null {
     };
   }
   if (key === "market_century") {
-    const versions = [...VOL_VARIANTS, "trend 50/200"].map((v) => find(rows, v)).filter(Boolean) as Result[];
-    const targeting = versions.filter((r) => r.variant !== "trend 50/200");
+    const versions = [...VOL_VARIANTS, "trend 50/200", "breakout 55/20"].map((v) => find(rows, v)).filter(Boolean) as Result[];
+    const targeting = versions.filter((r) => r.variant !== "trend 50/200" && r.variant !== "breakout 55/20");
     const bestT = [...targeting].sort((x, y) => ((y.metrics.choice_t as number) ?? -Infinity) - ((x.metrics.choice_t as number) ?? -Infinity))[0];
     const cut = (r: Result) => {
       const a = strategy(r)?.max_drawdown;
@@ -430,6 +449,51 @@ export function view(key: string, rows: Result[]): View | null {
       caption: `long factors up over the past year, short those down · equal weight · monthly · ${r?.period ?? NOT_VERIFIED} · log scale`,
       finding: anyPass(rows) ? "It passed, and stayed positive after publication." : "It didn't clear the bar.",
       note: `t = ${fixed(r?.metrics.choice_t)} · 1964 on t = ${fixed(paper?.t)}`,
+    };
+  }
+  if (key === "mean_reversion") {
+    const r = rows[0];
+    const g = r?.metrics.series as Growth | undefined;
+    return {
+      tiles: [
+        { value: `${fixed(strategy(r)?.sharpe)} ± ${fixed(strategy(r)?.sharpe_se)}`, label: "Sharpe ratio, after costs", tone: "blue" },
+        { value: `${pct(r?.metrics.gross_annual_return)} → ${pct(averageNet(r))}`, label: "average a year, before → after costs", tone: "orange" },
+        { value: `${fixed(r?.metrics.annual_turnover, 0)}×`, label: "portfolio traded per year", tone: "amber" },
+      ],
+      chart: g ? <LineChart title="Growth of $1 committed, after costs" months={g.months} series={[{ name: "Mean reversion", values: g.strategy, role: "s1" }]} format={money} baseline={1} /> : null,
+      caption: `long below z = −2, short above +2, close at 0 · equal weight · daily · ${r?.period ?? NOT_VERIFIED}`,
+      finding: anyPass(rows) ? "Stretched prices snapped back, after costs." : "Any snap-back was eaten by trading costs.",
+      note: `t = ${fixed(r?.metrics.choice_t)}`,
+    };
+  }
+  if (key === "breakout") {
+    const r = rows[0];
+    const g = r?.metrics.series as Growth | undefined;
+    return {
+      tiles: [
+        { value: `${fixed(strategy(r)?.sharpe)} vs ${fixed(baseline(r)?.sharpe)}`, label: "Sharpe ratio, breakout vs holding everything", tone: "blue" },
+        {
+          value: `${pct(strategy(r)?.max_drawdown)} vs ${pct(baseline(r)?.max_drawdown)}`,
+          label: "worst fall, breakout vs holding everything",
+          tone: shallower(r) ? "green" : "red",
+        },
+        { value: `t = ${fixed(r?.metrics.choice_t)}`, label: "gain over holding (needs +3)", tone: "amber" },
+      ],
+      chart: g ? (
+        <LineChart
+          title="Growth of $1 after costs"
+          months={g.months}
+          series={[
+            { name: "Breakout", values: g.strategy, role: "s1" },
+            { name: "Hold all", values: g.baseline, role: "s2" },
+          ]}
+          format={money}
+          baseline={1}
+        />
+      ) : null,
+      caption: `in above the prior 55-day high, out below the prior 20-day low · equal weight · ${r?.period ?? NOT_VERIFIED}`,
+      finding: anyPass(rows) ? "It beat holding everything." : "It didn't beat holding everything.",
+      note: `t = ${fixed(r?.metrics.choice_t)}`,
     };
   }
   if (key === "ma_crossover") {

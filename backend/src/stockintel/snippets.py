@@ -24,6 +24,8 @@ CHOSEN = {
     "momentum": ("studies.py", ["momentum"]),
     "low_volatility": ("studies.py", ["low_volatility"]),
     "factor_momentum": ("studies.py", ["factor_momentum"]),
+    "mean_reversion": ("studies.py", ["mean_reversion"]),
+    "breakout": ("studies.py", ["_channel", "breakout"]),
 }
 
 

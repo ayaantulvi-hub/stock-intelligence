@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { PASSING, type Coverage, type Feed, type Result } from "./api";
 import Code from "./Code";
-import { explain, type Mode } from "./explain";
+import { explain, RatioTable, type Mode } from "./explain";
 import { NOT_VERIFIED, pct } from "./format";
 import snippets from "./snippets.json";
 import { anyPass, decidingStat, NAMES, protection, STUDIES, useLoad, view, type StudyInfo } from "./studies";
@@ -317,7 +317,14 @@ function Study({ info, rows, mode, setMode }: {
                 </span>
               }
             >
-              {mode === "plain" ? words.plain : words.quant}
+              {mode === "plain" ? (
+                words.plain
+              ) : (
+                <>
+                  {words.quant}
+                  <RatioTable rows={rows ?? []} names={NAMES} />
+                </>
+              )}
             </Panel>
           )}
         </>

@@ -160,7 +160,7 @@ def test_century_study_runs_end_to_end_and_stores_every_version(engine):
             .scalars()
             .all()
         )
-    assert variants == [label for _, label in run.CENTURY_VERSIONS] + ["trend 50/200"]
+    assert variants == [label for _, label in run.CENTURY_VERSIONS] + ["trend 50/200", "breakout 55/20"]
 
 
 def _factors(seed: int = 4) -> pd.DataFrame:

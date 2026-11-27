@@ -129,3 +129,65 @@ def factor_momentum(
     cost = weights.fillna(0).diff().abs().sum(axis=1) * cost_bps / 10_000
     out = (gross - cost)[active > 0]
     return out, held.loc[out.index]
+
+
+def mean_reversion(
+    prices: pd.DataFrame, mask: pd.DataFrame, window: int = 20, entry: float = 2.0
+) -> pd.DataFrame:
+    """Bollinger-band mean reversion. z = (P - MA20) / sd20 of closes. Long a stock when z
+    falls below -2, short when it rises above +2, and close each position when z crosses back
+    through 0. Equal weight across open positions, gross exposure 1. Decided at each close."""
+    ma = prices.rolling(window, min_periods=window).mean()
+    sd = prices.rolling(window, min_periods=window).std()
+    z = ((prices - ma) / sd).where(mask.reindex_like(prices).fillna(False).astype(bool))
+    values = z.to_numpy()
+    state = np.zeros(values.shape[1])
+    out = np.zeros_like(values)
+    for t in range(values.shape[0]):
+        zt = values[t]
+        known = np.isfinite(zt)
+        state[~known] = 0.0  # No reading (or not eligible): no position.
+        state[known & (state == 1) & (zt >= 0)] = 0.0
+        state[known & (state == -1) & (zt <= 0)] = 0.0
+        state[known & (state == 0) & (zt < -entry)] = 1.0
+        state[known & (state == 0) & (zt > entry)] = -1.0
+        active = np.abs(state).sum()
+        out[t] = state / active if active else 0.0
+    return pd.DataFrame(out, index=prices.index, columns=prices.columns)
+
+
+def _channel(values: np.ndarray, entry: int, exit_: int) -> np.ndarray:
+    """1 while in a Donchian breakout: in when the close beats the highest close of the prior
+    `entry` days, out when it falls below the lowest close of the prior `exit_` days."""
+    frame = pd.DataFrame(values)
+    high = frame.rolling(entry, min_periods=entry).max().shift(1).to_numpy()
+    low = frame.rolling(exit_, min_periods=exit_).min().shift(1).to_numpy()
+    state = np.zeros(values.shape[1])
+    out = np.zeros_like(values, dtype=float)
+    for t in range(values.shape[0]):
+        p = values[t]
+        known = np.isfinite(p) & np.isfinite(high[t]) & np.isfinite(low[t])
+        state[~np.isfinite(p)] = 0.0
+        state[known & (state == 1) & (p < low[t])] = 0.0
+        state[known & (state == 0) & (p > high[t])] = 1.0
+        out[t] = state
+    return out
+
+
+def breakout(
+    prices: pd.DataFrame, mask: pd.DataFrame, entry: int = 55, exit_: int = 20
+) -> pd.DataFrame:
+    """Donchian channel breakout (the Turtle rules' System 2: 55-day entry, 20-day exit), on
+    closes, long only. Equal weight across stocks in a breakout; the rest is cash."""
+    on = pd.DataFrame(
+        _channel(prices.to_numpy(), entry, exit_), index=prices.index, columns=prices.columns
+    )
+    on = on.where(mask.reindex_like(prices).fillna(False).astype(bool), 0.0)
+    count = on.sum(axis=1)
+    return on.div(count.where(count > 0), axis=0).fillna(0.0)
+
+
+def breakout_on(level: pd.Series, entry: int = 55, exit_: int = 20) -> pd.Series:
+    """The same breakout rule on one index level: 1.0 in, 0.0 out, NaN until 55 days exist."""
+    on = _channel(level.to_numpy().reshape(-1, 1), entry, exit_)[:, 0]
+    return pd.Series(on, index=level.index).where(np.arange(len(level)) >= entry)

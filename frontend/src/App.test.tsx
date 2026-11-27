@@ -74,7 +74,7 @@ describe("Quant Lab terminal", () => {
   it("marks studies that haven't run instead of inventing results", async () => {
     await open();
     const notRun = [...document.querySelectorAll(".side a")].filter((a) => a.querySelector('[aria-label="not run"]'));
-    expect(notRun.map((a) => a.getAttribute("href"))).toEqual(["#pairs_trading", "#vol_targeting", "#market_century", "#momentum", "#low_volatility", "#factor_momentum", "#panic_detector"]);
+    expect(notRun.map((a) => a.getAttribute("href"))).toEqual(["#pairs_trading", "#vol_targeting", "#market_century", "#momentum", "#low_volatility", "#factor_momentum", "#mean_reversion", "#breakout", "#panic_detector"]);
     cleanup();
     await open("#pairs_trading");
     expect(screen.getByText(/this study hasn't run yet/)).toBeTruthy();
@@ -90,7 +90,7 @@ describe("Quant Lab terminal", () => {
   it("builds the findings from verdicts", async () => {
     await open();
     const marks = [...document.querySelectorAll(".findings li .mark")].map((m) => m.getAttribute("aria-label"));
-    expect(marks).toEqual(["passed", "not run", "not run", "not run", "failed", "not run", "not run", "not run", "not run"]);
+    expect(marks).toEqual(["passed", "not run", "not run", "not run", "failed", "not run", "not run", "not run", "not run", "not run", "not run"]);
     expect(document.querySelector(".findings")?.textContent).toContain("didn't beat holding everything");
   });
 

@@ -28,6 +28,34 @@ def test_metrics_match_the_independent_empyrical_library():
     assert metrics.annual_return(r) == pytest.approx(empyrical.annual_return(r), rel=1e-9)
 
 
+def test_new_ratios_match_empyrical():
+    rng = np.random.default_rng(12)
+    r = pd.Series(rng.normal(0.0004, 0.011, 1500), index=pd.bdate_range("2015-01-01", periods=1500))
+    b = pd.Series(rng.normal(0.0003, 0.010, 1500), index=r.index)
+    assert metrics.sortino(r) == pytest.approx(empyrical.sortino_ratio(r), rel=1e-9)
+    assert metrics.calmar(r) == pytest.approx(empyrical.calmar_ratio(r), rel=1e-9)
+    assert metrics.information_ratio(r, b) == pytest.approx(
+        empyrical.excess_sharpe(r, b) * np.sqrt(252), rel=1e-9
+    )
+
+
+def test_worked_examples_from_the_performance_and_risk_skills():
+    # historical-risk skill, example 2: NAV 120, 135, 150, 130, 105, 125 -> max drawdown 30%.
+    nav = pd.Series([120, 135, 150, 130, 105, 125], index=pd.bdate_range("2020-01-01", periods=6))
+    assert metrics.max_drawdown(nav.pct_change().fillna(0)) == pytest.approx(-0.30)
+    # performance-metrics skill: a portfolio moving half as much as its benchmark captures
+    # 50% of the benchmark's up months and 50% of its down months.
+    rng = np.random.default_rng(3)
+    days = pd.bdate_range("2018-01-01", periods=750)
+    bench = pd.Series(rng.normal(0, 0.01, len(days)), index=days)
+    monthly_b = (1 + bench).groupby(days.to_period("M")).prod() - 1
+    half = []  # Spread half of each benchmark month evenly over that month's days.
+    for month, g in bench.groupby(days.to_period("M")):
+        half += [(1 + monthly_b[month] / 2) ** (1 / len(g)) - 1] * len(g)
+    up, down = metrics.capture(pd.Series(half, index=days), bench)
+    assert up == pytest.approx(0.5) and down == pytest.approx(0.5)
+
+
 def test_drawdown_by_hand():
     r = pd.Series([0.10, -0.50, 0.20, 1.0], index=pd.bdate_range("2021-01-01", periods=4))
     # Wealth 1.10, 0.55, 0.66, 1.32: deepest fall 0.55 / 1.10 - 1 = -50%, below the peak 2 days.
