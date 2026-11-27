@@ -11,9 +11,10 @@ whole US market's daily returns since 1926. On a hand-written backtest engine, t
 - trend following;
 - Monte Carlo Value at Risk (five models, including GARCH and filtered historical simulation);
 - factor momentum across 11 investing styles, US and developed markets;
+- mean reversion (Bollinger bands) and breakout (Donchian channels, the Turtle rules);
 - a market panic detector built from eigenvalues of the correlation matrix.
 
-**What held up** (2 of 21 tests, against a bar set before testing):
+**What held up** (2 of 23 tests, against a bar set before testing):
 
 - **Factor momentum** (Ehsani & Linnainmaa, 2022), on 11 factors from 1927: t = 4.15 after
   costs, positive on the held-back years. Over the paper's own period (from 1964) the Sharpe
@@ -98,7 +99,7 @@ flowchart LR
 
 ## Results
 
-From the stored run of 23 November 2026, with details and sources in
+From the stored run of 27 November 2026, with details and sources in
 [docs/QUANT.md](docs/QUANT.md):
 
 | Study | Verdict | In one line |
@@ -112,6 +113,9 @@ From the stored run of 23 November 2026, with details and sources in
 | Momentum (months t-12 to t-2) | No reliable edge | Sharpe −0.05 after costs |
 | Low volatility (calmest 10%) | No reliable edge | Sharpe 0.67 vs 0.93, alpha t −0.19 |
 | **Factor momentum, 11 factors** | **Edge** | **t = 4.15 from 1927; Sharpe 0.77 and t = 5.04 from 1964** |
+| Mean reversion (Bollinger 20, 2 sd) | No reliable edge | Sharpe −0.19 after costs, worst fall −56% |
+| Breakout (Donchian 55/20) | No reliable edge | Sharpe 0.79 vs 1.06 for holding everything |
+| Breakout, 100 years | No reliable edge | Sharpe 0.61 vs 0.45 and worst fall −29% vs −85%, but less return |
 | Pairs trading, distance | No reliable edge | Sharpe −0.11 after costs |
 | Pairs trading, cointegration | No reliable edge | Sharpe 0.22 ± 0.25, and a −43.6% fall |
 | Value at Risk, historical | Rejected | Right number of breaches, but they bunch together |

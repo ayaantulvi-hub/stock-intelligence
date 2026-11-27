@@ -1,7 +1,7 @@
-# Explaining this project: 16 likely interview questions
+# Explaining this project: 17 likely interview questions
 
 Short answers to learn and then say in your own words. Numbers come from the stored run of
-23 November 2026: [QUANT.md](QUANT.md) has the full tables and
+27 November 2026: [QUANT.md](QUANT.md) has the full tables and
 [RESEARCH.md](RESEARCH.md) the two written-up findings.
 
 **1. What does it do, in one sentence?**
@@ -10,9 +10,9 @@ years of daily prices for 480 large US companies and on 100 years of US market r
 after costs, on years they weren't designed on, with a t-score of 3 to pass.
 
 **2. What did you find?**
-21 tests, 2 passed. Factor momentum passed with t = 4.15 after costs, and stayed positive
+23 tests, 2 passed. Factor momentum passed with t = 4.15 after costs, and stayed positive
 after the paper's data ended. EWMA Value at Risk passed both risk tests. Stock-level ideas such
-as trend following, pairs trading, momentum and low volatility showed no reliable edge after
+as trend following, breakout, mean reversion, pairs trading, momentum and low volatility showed no reliable edge after
 costs on 2011–2026 large US stocks. The closest miss: on 100 years of data, volatility
 targeting reached an alpha t-score of 2.55. That is the expected result for well-known, free-data ideas, and the project reports it
 rather than hiding it.
@@ -98,7 +98,14 @@ than over my longer sample, it stayed positive after the paper's data ended, and
 the same code finds nothing. The paper's Sharpe ratio was 0.98; mine is 0.77 with fewer
 factors and costs charged, which is the kind of shrinkage you'd expect from an honest copy.
 
-**16. What would you do with more time or paid data?**
+**16. Breakout looks great over 100 years. Why is it a fail?**
+On the US market since 1926, the 55/20 breakout rule had a higher Sharpe ratio than holding
+(0.61 against 0.45) and its worst fall was −29% against −85%, because it moves to cash after a
+20-day low and so avoided most of the market's worst fall. But it was out of the market a lot and earned less in total (t = −1.67).
+The test asks whether it made more money than holding, decided in advance, so it fails. It's a
+fair example of a risk-reduction rule, not a return edge.
+
+**17. What would you do with more time or paid data?**
 Add delisted companies to remove survivorship bias, use intraday data so entries and exits
 aren't limited to closing prices, and measure trading costs per stock instead of assuming
 0.10%. I'd also add an Expected Shortfall backtest, because Value at Risk says how often a
@@ -110,26 +117,26 @@ loss is exceeded but not by how much.
   library.
 - The GARCH model is tested on simulated data with a known volatility path, and tracks it with
   a correlation above 0.9.
-- 90 automated tests run on every change, including the look-ahead check for every strategy.
+- 121 automated tests (113 backend, 8 dashboard) run on every change, including the look-ahead check for every strategy.
 
 ## For a CV or application
 
 Each claim below is traceable to the stored results.
 
-- Built a quantitative research lab in Python that tests eight classic strategies on 16 years
+- Built a quantitative research lab in Python that tests ten classic strategies on 16 years
   of daily prices for 480 US companies and 100 years of US market returns, with walk-forward
   rules, trading costs, Newey-West t-scores and a t ≥ 3 bar set in advance.
 - Replicated time-series factor momentum (Ehsani & Linnainmaa, 2022) on 11 factors since 1927:
   t = 4.15 after costs, Sharpe 0.77 over the paper's period, and still positive in the ten
-  years after its data ended. 2 of 21 tests passed a t ≥ 3 bar set in advance; the other
+  years after its data ended. 2 of 23 tests passed a t ≥ 3 bar set in advance; the other
   pass was an EWMA Value at Risk model. Two standard models got
   the number of bad days right but were rejected because breaches clustered, with a 16.6%
   chance of a breach the day after one, against 5% expected.
 - Engineered automatic data collection from the SEC, the Federal Reserve and licensed price
-  feeds, with 90 automated tests, including one that plants future data to prove the backtests
+  feeds, with 121 automated tests, including one that plants future data to prove the backtests
   can't cheat.
 
 **One line for a personal statement:**
 "I built a lab to test well-known trading strategies the way a sceptical reviewer would, and
-the most useful lesson was how few survive: of 21 tests, two held up, which taught me how
+the most useful lesson was how few survive: of 23 tests, two held up, which taught me how
 easily patterns that look real turn out to be luck, and how to recognise the ones that don't."

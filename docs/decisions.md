@@ -394,3 +394,19 @@ needs at least 30 tested cases that beat the baseline.
   counts toward the score.
 - **Not done, on purpose:** lowering the t ≥ 3 bar or changing settings after seeing results.
 - **Totals:** 20 tests, 1 passed.
+
+## Classic trader rules and extra ratios (27 November 2026)
+
+- **Asked for:** strategies that work, using public research and code where possible.
+- **Added:** mean reversion (Bollinger 20 days, ±2 sd, exit at the mean) and breakout
+  (Donchian 55-day entry, 20-day exit, the Turtle System 2 rule), on stocks and, for breakout,
+  on the US market since 1926. Settings are the published defaults, fixed before testing.
+- **Not added:** market making. It needs order-book or intraday data; daily closes can't test
+  it honestly.
+- **Ratios:** Sortino, Calmar, Information Ratio and up/down capture, following the MIT-licensed
+  performance-metrics and historical-risk skills in JoelLewis/finance_skills, credited in the
+  code and docs. Descriptive only; verdicts are unchanged.
+- **Not used:** a liquidity skill that pulls data from Yahoo Finance, the lowest-ranked source.
+- **Not done, on purpose:** keeping only the strategies that pass. Both new rules failed and
+  are shown; hiding failures would make the passes meaningless.
+- **Totals:** 23 tests, 2 passed (factor momentum and EWMA Value at Risk).

@@ -195,6 +195,7 @@ copyright notice and no licence, so only summary results are published.
 | Variance-managed | 2.24 | 0.50 | 0.45 | −82.7% | −84.9% |
 | Conditional (from 1931) | 1.53 | 0.51 | 0.48 | −57.6% | −67.5% |
 | Trend 50/200 (gain over holding) | −1.24 | 0.49 | 0.45 | −63.7% | −84.9% |
+| Breakout 55/20 (gain over holding, added 27 Nov) | −1.67 | 0.61 | 0.45 | −29.2% | −84.9% |
 
 **No reliable edge, but much stronger evidence.** Every targeting rule's t-score at least
 doubled with the longer history, and every one had a higher Sharpe ratio and a smaller worst
@@ -244,6 +245,42 @@ average, is stronger, not weaker. And after the paper's data ends it still made 
 ten years alone is too short to prove it. The paper reports a Sharpe ratio of 0.98 before costs
 with up to 20 factors; ours is lower with 11 factors and costs charged. On the synthetic demo
 data, which has no persistence built in, the same code finds no edge (t = 1.40).
+
+### 10. Mean reversion (added 27 November 2026)
+
+Bollinger's standard settings, fixed before testing: z = (price − 20-day average) / 20-day
+standard deviation. Long when z falls below −2, short when it rises above +2, close each
+position when z crosses back to 0. Equal weight across open positions, gross exposure 1,
+decided at the close and held from the next day, after costs and borrowing. Judged against
+zero: **Sharpe −0.19, t = −0.87, worst fall −56.0%. No reliable edge.** Short-term reversal is
+a documented effect, but at a 20-day horizon on large US stocks it did not survive costs here.
+
+### 11. Breakout (added 27 November 2026)
+
+The Turtle traders' System 2 rule, also fixed before testing: buy when a stock closes above its
+highest close of the prior 55 days, sell when it closes below its lowest of the prior 20. Long
+only, equal weight across stocks in a breakout, cash otherwise, judged against holding every
+tradeable stock.
+
+| | Breakout | Hold every tradeable stock |
+|---|---|---|
+| Sharpe ratio | 0.79 | 1.06 |
+| Worst fall | −33.6% | −38.7% |
+
+**No reliable edge.** It earned significantly less than holding (t = −3.28) and lost on the
+held-back years. On 100 years of the US market (section 6) the same rule had a higher Sharpe
+ratio (0.61 against 0.45) and cut the worst fall from −84.9% to −29.2%, because it sits in
+cash through long declines; but it earned less in total (t = −1.67), so it does not pass.
+
+### Risk-adjusted ratios (added 27 November 2026, descriptive)
+
+Every result now also stores the Sortino ratio (downside deviation below 0), the Calmar ratio
+(annual growth over worst fall), and against its benchmark the Information Ratio and up/down
+capture from monthly compounded returns. The formulas follow the MIT-licensed
+`performance-metrics` and `historical-risk` skills in
+[JoelLewis/finance_skills](https://github.com/JoelLewis/finance_skills) and are tested against
+`empyrical` and the skills' worked examples. They describe results; they never change a
+verdict.
 
 ### Crash protection (added after the results, not part of the score)
 
