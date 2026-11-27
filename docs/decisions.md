@@ -398,6 +398,10 @@ needs at least 30 tested cases that beat the baseline.
 ## Classic trader rules and extra ratios (27 November 2026)
 
 - **Asked for:** strategies that work, using public research and code where possible.
+- **Factor momentum (added 24 November):** Ehsani & Linnainmaa (2022), time-series version, on
+  11 factors from the French library since 1927; settings from the paper, fixed before testing.
+  Passed (t = 4.15). The paper-period and after-publication splits were added after the first
+  result, so they are described, not scored.
 - **Added:** mean reversion (Bollinger 20 days, ±2 sd, exit at the mean) and breakout
   (Donchian 55-day entry, 20-day exit, the Turtle System 2 rule), on stocks and, for breakout,
   on the US market since 1926. Settings are the published defaults, fixed before testing.
